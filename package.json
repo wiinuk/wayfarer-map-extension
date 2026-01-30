@@ -5,8 +5,11 @@
   "devDependencies": {
     "@types/google.maps": "^3.58.1",
     "@types/node": "^25.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "chokidar": "^3.6.0",
     "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "ws": "^8.19.0"
@@ -14,7 +17,9 @@
   "scripts": {
     "build": "node build.mjs",
     "debug": "node build.mjs --watch --debug",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix"
   },
   "keywords": [],
   "author": "",

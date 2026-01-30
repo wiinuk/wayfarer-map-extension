@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
 import * as fs from 'fs/promises';
+import { exec } from 'child_process';
 
 const mainFile = './main.user.ts';
 const args = process.argv.slice(2);
@@ -7,6 +8,23 @@ const watchMode = args.includes('--watch');
 const debugMode = args.includes('--debug');
 const wsHost = process.env.WS_HOST || '127.0.0.1';
 const wsPort = Number(process.env.WS_PORT || 35729);
+
+async function runEslint() {
+  console.log('[lint] Running ESLint...');
+  return new Promise((resolve) => {
+    exec('eslint . --ext .ts', (error, stdout, stderr) => {
+      if (stdout) console.log(stdout);
+      if (stderr) console.error(stderr);
+      if (error) {
+        console.error('[lint] ESLint found errors!');
+        resolve(false);
+      } else {
+        console.log('[lint] ESLint passed.');
+        resolve(true);
+      }
+    });
+  });
+}
 
 async function startWsServer() {
   try {
@@ -61,6 +79,12 @@ async function build() {
       }
       building = true;
       try {
+        const lintPassed = await runEslint();
+        if (!lintPassed) {
+          console.error('Build aborted due to linting errors.');
+          return;
+        }
+
         await esbuild.build(baseOptions);
         console.log('Build succeeded');
         if (wss) {
@@ -91,6 +115,11 @@ async function build() {
     // keep process alive
     process.stdin.resume();
   } else {
+    const lintPassed = await runEslint();
+    if (!lintPassed) {
+      console.error('Build aborted due to linting errors.');
+      process.exit(1);
+    }
     await esbuild.build(baseOptions);
     if (wss) {
       try {
