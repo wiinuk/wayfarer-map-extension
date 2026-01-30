@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "devDependencies": {
+    "@types/google.maps": "^3.58.1",
     "@types/node": "^25.1.0",
     "chokidar": "^3.6.0",
     "esbuild": "^0.27.2",
