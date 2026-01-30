@@ -4,12 +4,15 @@
   "main": "index.js",
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "chokidar": "^3.6.0",
     "esbuild": "^0.27.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "ws": "^8.19.0"
   },
   "scripts": {
     "build": "node build.mjs",
+    "debug": "node build.mjs --watch --debug",
     "test": "vitest run"
   },
   "keywords": [],
