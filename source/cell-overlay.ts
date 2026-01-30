@@ -3,9 +3,9 @@ import { collectCoveringS2Cells } from "./s2-hittest";
 import { raise } from "./standard-extensions";
 
 interface GridOptions {
-  level: number;
-  color: string;
-  zIndex?: number;
+    level: number;
+    color: string;
+    zIndex?: number;
 }
 
 export function addS2Overlay(map: google.maps.Map, ...gridOptions: GridOptions[]) {
@@ -41,7 +41,7 @@ class S2Overlay {
     until(conditionFunction: (map: google.maps.Map) => boolean, map: google.maps.Map): Promise<void> {
         const poll = (resolve: () => void) => {
             if (conditionFunction(map)) resolve();
-            else setTimeout((_) => poll(resolve), 400);
+            else setTimeout(() => poll(resolve), 400);
         };
         return new Promise(poll);
     }

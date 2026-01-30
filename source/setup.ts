@@ -1,54 +1,16 @@
 import { addS2Overlay } from "./cell-overlay";
 import { awaitElement } from "./standard-extensions";
 
-interface MapMarkers {
-  selected: { readonly markers: readonly SelectedMarker[]; };
-  nearby: { readonly markers: readonly NearbyMarker[]; };
-}
-interface SelectedMarker {
-  clickable: boolean;
-  icon: MarkerIcon;
-  latitude: number;
-  longitude: number;
-  zIndex: number;
-}
-interface NearbyMarker extends SelectedMarker {
-  id: string;
-  infoWindowComponentData: NearbyData;
-  openInfoWindow: boolean;
-};
-
-interface NearbyData {
-  title: string;
-  description: string;
-  imageUrl: string;
-}
-
-interface SpotData {
-  guid: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  lat: number;
-  lng: number;
-}
-interface MarkerIcon {
-  url: string;
-  centerOnLocation: boolean;
-  size: IconSize;
-}
-interface IconSize {
-  width: number;
-  height: number;
-}
-
-
 async function getGMapObject(): Promise<google.maps.Map> {
     return await awaitElement(() => {
         try {
+            // 実行時エラーは catch で無視する
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const e: any = document.querySelector("app-wf-base-map");
             return e.__ngContext__[27];
-        } catch {}
+        } catch {
+            return null;
+        }
     });
 }
 
@@ -102,16 +64,16 @@ async function onPageUpdated() {
 }
 
 export function setup() {
-  // スクリプト開始
-  // URL変更を検知して再実行する簡易的な仕組み
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-      const url = location.href;
-      if (url !== lastUrl) {
-          lastUrl = url;
-          onPageUpdated();
-      }
-  }).observe(document, { subtree: true, childList: true });
+    // スクリプト開始
+    // URL変更を検知して再実行する簡易的な仕組み
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+        const url = location.href;
+        if (url !== lastUrl) {
+            lastUrl = url;
+            onPageUpdated();
+        }
+    }).observe(document, { subtree: true, childList: true });
 
-  onPageUpdated();
+    onPageUpdated();
 }
