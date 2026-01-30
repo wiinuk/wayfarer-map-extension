@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         My User Script
+// @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  try to take over the world!
-// @author       You
-// @match        http://*/*
+// @description  A user script that extends the official Niantic Wayfarer map.
+// @author       Wiinuk
+// @match        https://wayfarer.nianticlabs.com/new/mapview
 // @grant        none
 // ==/UserScript==
 
