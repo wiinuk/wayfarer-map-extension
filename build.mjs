@@ -36,7 +36,7 @@ async function build() {
     wss = await startWsServer();
   }
 
-  const clientSnippet = debugMode ? `;(function(){try{var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){setTimeout(function(){location.reload();},100);} );}catch(e){console.warn('dev reload ws failed',e);} })();` : '';
+  const clientSnippet = debugMode ? `;(function(){try{let connected = false; var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('open', () => {connected = true;});ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){if(connected){setTimeout(function(){location.reload();},100);}} );}catch(e){console.warn('dev reload ws failed',e);} })();` : '';
 
   const baseOptions = {
     entryPoints: [mainFile],
