@@ -1,16 +1,17 @@
+/* eslint-disable */
 //@ts-nocheck
 
 export interface S2Namespace {
-  S2Cell: S2CellNamespace;
-  MAX_LEVEL: 30;
+    S2Cell: S2CellNamespace;
+    MAX_LEVEL: 30;
 }
 export type LatLng = google.maps.LatLngLiteral;
 export interface S2CellNamespace {
-  FromLatLng: (latLng: LatLng, level: number) => S2Cell;
+    FromLatLng: (latLng: LatLng, level: number) => S2Cell;
 }
 export interface S2Cell {
-  getNeighbors: () => readonly S2Cell[];
-  getCornerLatLngs: () => LatLng[];
+    getNeighbors: () => readonly S2Cell[];
+    getCornerLatLngs: () => LatLng[];
 }
 
 function exposeS2Module(exports: any) {
@@ -282,7 +283,7 @@ function exposeS2Module(exports: any) {
 
     // S2Cell class
 
-    S2.S2Cell = function () {};
+    S2.S2Cell = function () { };
 
     S2.S2Cell.FromHilbertQuadKey = function (hilbertQuadkey) {
         var parts = hilbertQuadkey.split("/");
@@ -487,56 +488,56 @@ function exposeS2Module(exports: any) {
     S2.facePosLevelToId =
         S2.S2Cell.facePosLevelToId =
         S2.fromFacePosLevel =
-            function (faceN, posS, levelN) {
-                var Long =
-                    (exports.dcodeIO && exports.dcodeIO.Long) ||
-                    eval(`require("long")`);
-                var faceB;
-                var posB;
-                var bin;
+        function (faceN, posS, levelN) {
+            var Long =
+                (exports.dcodeIO && exports.dcodeIO.Long) ||
+                eval(`require("long")`);
+            var faceB;
+            var posB;
+            var bin;
 
-                if (!levelN) {
-                    levelN = posS.length;
-                }
-                if (posS.length > levelN) {
-                    posS = posS.substr(0, levelN);
-                }
+            if (!levelN) {
+                levelN = posS.length;
+            }
+            if (posS.length > levelN) {
+                posS = posS.substr(0, levelN);
+            }
 
-                // 3-bit face value
-                faceB = Long.fromString(faceN.toString(10), true, 10).toString(
-                    2
-                );
-                while (faceB.length < S2.FACE_BITS) {
-                    faceB = "0" + faceB;
-                }
+            // 3-bit face value
+            faceB = Long.fromString(faceN.toString(10), true, 10).toString(
+                2
+            );
+            while (faceB.length < S2.FACE_BITS) {
+                faceB = "0" + faceB;
+            }
 
-                // 60-bit position value
-                posB = Long.fromString(posS, true, 4).toString(2);
-                while (posB.length < 2 * levelN) {
-                    posB = "0" + posB;
-                }
+            // 60-bit position value
+            posB = Long.fromString(posS, true, 4).toString(2);
+            while (posB.length < 2 * levelN) {
+                posB = "0" + posB;
+            }
 
-                bin = faceB + posB;
-                // 1-bit lsb marker
-                bin += "1";
-                // n-bit padding to 64-bits
-                while (bin.length < S2.FACE_BITS + S2.POS_BITS) {
-                    bin += "0";
-                }
+            bin = faceB + posB;
+            // 1-bit lsb marker
+            bin += "1";
+            // n-bit padding to 64-bits
+            while (bin.length < S2.FACE_BITS + S2.POS_BITS) {
+                bin += "0";
+            }
 
-                return Long.fromString(bin, true, 2).toString(10);
-            };
+            return Long.fromString(bin, true, 2).toString(10);
+        };
 
     S2.keyToId =
         S2.S2Cell.keyToId =
         S2.toId =
         S2.toCellId =
         S2.fromKey =
-            function (key) {
-                var parts = key.split("/");
+        function (key) {
+            var parts = key.split("/");
 
-                return S2.fromFacePosLevel(parts[0], parts[1], parts[1].length);
-            };
+            return S2.fromFacePosLevel(parts[0], parts[1], parts[1].length);
+        };
 
     S2.idToKey =
         S2.S2Cell.idToKey =
@@ -546,34 +547,34 @@ function exposeS2Module(exports: any) {
         S2.fromCellId =
         S2.S2Cell.toHilbertQuadkey =
         S2.toHilbertQuadkey =
-            function (idS) {
-                var Long =
-                    (exports.dcodeIO && exports.dcodeIO.Long) ||
-                    eval(`require("long")`);
-                var bin = Long.fromString(idS, true, 10).toString(2);
+        function (idS) {
+            var Long =
+                (exports.dcodeIO && exports.dcodeIO.Long) ||
+                eval(`require("long")`);
+            var bin = Long.fromString(idS, true, 10).toString(2);
 
-                while (bin.length < S2.FACE_BITS + S2.POS_BITS) {
-                    bin = "0" + bin;
-                }
+            while (bin.length < S2.FACE_BITS + S2.POS_BITS) {
+                bin = "0" + bin;
+            }
 
-                // MUST come AFTER binstr has been left-padded with '0's
-                var lsbIndex = bin.lastIndexOf("1");
-                // substr(start, len)
-                // substring(start, end) // includes start, does not include end
-                var faceB = bin.substring(0, 3);
-                // posB will always be a multiple of 2 (or it's invalid)
-                var posB = bin.substring(3, lsbIndex);
-                var levelN = posB.length / 2;
+            // MUST come AFTER binstr has been left-padded with '0's
+            var lsbIndex = bin.lastIndexOf("1");
+            // substr(start, len)
+            // substring(start, end) // includes start, does not include end
+            var faceB = bin.substring(0, 3);
+            // posB will always be a multiple of 2 (or it's invalid)
+            var posB = bin.substring(3, lsbIndex);
+            var levelN = posB.length / 2;
 
-                var faceS = Long.fromString(faceB, true, 2).toString(10);
-                var posS = Long.fromString(posB, true, 2).toString(4);
+            var faceS = Long.fromString(faceB, true, 2).toString(10);
+            var posS = Long.fromString(posB, true, 2).toString(4);
 
-                while (posS.length < levelN) {
-                    posS = "0" + posS;
-                }
+            while (posS.length < levelN) {
+                posS = "0" + posS;
+            }
 
-                return faceS + "/" + posS;
-            };
+            return faceS + "/" + posS;
+        };
 
     S2.keyToLatLng = S2.S2Cell.keyToLatLng = function (key) {
         var cell2 = S2.S2Cell.FromHilbertQuadKey(key);
@@ -588,20 +589,20 @@ function exposeS2Module(exports: any) {
     S2.S2Cell.latLngToKey =
         S2.latLngToKey =
         S2.latLngToQuadkey =
-            function (lat, lng, level) {
-                if (isNaN(level) || level < 1 || level > 30) {
-                    throw new Error(
-                        "'level' is not a number between 1 and 30 (but it should be)"
-                    );
-                }
-                return S2.S2Cell.FromLatLng(
-                    {
-                        lat: lat,
-                        lng: lng,
-                    },
-                    level
-                ).toHilbertQuadkey();
-            };
+        function (lat, lng, level) {
+            if (isNaN(level) || level < 1 || level > 30) {
+                throw new Error(
+                    "'level' is not a number between 1 and 30 (but it should be)"
+                );
+            }
+            return S2.S2Cell.FromLatLng(
+                {
+                    lat: lat,
+                    lng: lng,
+                },
+                level
+            ).toHilbertQuadkey();
+        };
 
     S2.stepKey = function (key, num) {
         var Long = (exports.dcodeIO && exports.dcodeIO.Long) || eval(`require("long")`);

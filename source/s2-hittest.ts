@@ -116,7 +116,7 @@ export function collectCoveringS2Cells(center: google.maps.LatLng | LatLng, boun
         S2.S2Cell.FromLatLng(getLatLngPoint(center), level),
     ];
     const seenCellIds = new Set();
-    for (let cell; (cell = remainingCells.pop()); ) {
+    for (let cell; (cell = remainingCells.pop());) {
         const cellId = cell.toString();
         if (seenCellIds.has(cellId)) continue;
         seenCellIds.add(cellId);
