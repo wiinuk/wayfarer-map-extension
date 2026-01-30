@@ -8,9 +8,9 @@
 // @grant        none
 // ==/UserScript==
 
-import { sayHello } from './source/lib';
+import { setup } from './source/setup';
 
 (function() {
     'use strict';
-    console.log(sayHello('World'));
+    setup();
 })();
