@@ -41,7 +41,12 @@ export default defineConfig([
             "eslint:recommended",
             "plugin:@typescript-eslint/recommended",
         ),
-        rules: {},
+        rules: {
+            "@typescript-eslint/no-unused-vars": [
+                "error",
+                { argsIgnorePattern: "^_" },
+            ],
+        },
     },
     globalIgnores(["**/node_modules/", "**/*.user.js", "**/build.mjs"]),
 ]);
