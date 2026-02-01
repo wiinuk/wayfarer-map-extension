@@ -21,3 +21,16 @@ export function raise(
 ): never {
     throw new Error(String.raw(templateStringsArray, ...substitutions));
 }
+class AbortError extends Error {
+    override name = "AbortError";
+    constructor(message: string) {
+        super(message);
+    }
+}
+export function newAbortError(message = "The operation was aborted.") {
+    if (typeof DOMException === "function") {
+        return new DOMException(message, "AbortError");
+    } else {
+        return new AbortError(message);
+    }
+}
