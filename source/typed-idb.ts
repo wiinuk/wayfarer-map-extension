@@ -289,15 +289,16 @@ export type IndexKey<
 >;
 
 export type AllValue = null;
+type KeyOrRange<TSchema extends DatabaseSchemaKind, TStoreName extends keyof TSchema & string> =
+    | StoreKey<TSchema, TStoreName>
+    | KeyRange<StoreKey<TSchema, TStoreName>>
 
 export function* getValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string
 >(
     store: Store<TSchema, TStoreName>,
-    query:
-        | StoreKey<TSchema, TStoreName>
-        | KeyRange<StoreKey<TSchema, TStoreName>>
+    query: KeyOrRange<TSchema, TStoreName>
 ) {
     return (yield store.get(query)) as
         | UnwrapId<TSchema[TStoreName]["recordType"]>
@@ -327,16 +328,39 @@ export function* putValue<
     yield store.put(value);
     return value;
 }
+export function* putValues<TSchema extends DatabaseSchemaKind, TStoreName extends keyof TSchema & string>(
+    store: Store<TSchema, TStoreName>, values: Iterable<UnwrapId<TSchema[TStoreName]["recordType"]>>): TransactionScope<void> {
+    let lastRequest;
+    for (const value of values) {
+        lastRequest = store.put(value);
+    }
+    if (lastRequest != null) {
+        yield lastRequest;
+    }
+}
 export function* deleteValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string
 >(
     store: Store<TSchema, TStoreName>,
-    query:
-        | StoreKey<TSchema, TStoreName>
-        | KeyRange<StoreKey<TSchema, TStoreName>>
+    query: KeyOrRange<TSchema, TStoreName>
 ): TransactionScope<void> {
     yield store.delete(query);
+}
+export function* deleteValues<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string
+>(
+    store: Store<TSchema, TStoreName>,
+    queries: Iterable<KeyOrRange<TSchema, TStoreName>>
+): TransactionScope<void> {
+    let lastRequest;
+    for (const query of queries) {
+        lastRequest = store.delete(query);
+    }
+    if (lastRequest != null) {
+        yield lastRequest;
+    }
 }
 
 export function* iterateValues<
@@ -345,8 +369,7 @@ export function* iterateValues<
 >(
     store: Store<TSchema, TStoreName>,
     query:
-        | StoreKey<TSchema, TStoreName>
-        | KeyRange<StoreKey<TSchema, TStoreName>>
+        | KeyOrRange<TSchema, TStoreName>
         | AllValue
         | undefined,
     action: (
