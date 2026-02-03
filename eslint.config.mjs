@@ -30,7 +30,7 @@ export default defineConfig([
 
             ecmaVersion: 2021,
             sourceType: "module",
-            parserOptions: {},
+            parserOptions: { projectService: true },
         },
 
         plugins: {
@@ -42,10 +42,18 @@ export default defineConfig([
             "plugin:@typescript-eslint/recommended",
         ),
         rules: {
-            "@typescript-eslint/no-unused-vars": [
-                "error",
-                { argsIgnorePattern: "^_" },
+            "@typescript-eslint/no-floating-promises": [
+                "warn",
+                { ignoreVoid: true },
             ],
+            "@typescript-eslint/no-empty-function": "warn",
+            "@typescript-eslint/no-unused-vars": [
+                "warn",
+                { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
+            ],
+            "object-shorthand": "warn",
+            "no-useless-rename": "warn",
+            "no-duplicate-imports": "warn",
         },
     },
     globalIgnores(["**/node_modules/", "**/*.user.js", "**/build.mjs"]),

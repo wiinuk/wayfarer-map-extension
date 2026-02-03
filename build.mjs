@@ -1,136 +1,146 @@
-import * as esbuild from 'esbuild';
-import * as fs from 'fs/promises';
-import { exec } from 'child_process';
+import * as esbuild from "esbuild";
+import * as fs from "fs/promises";
+import { exec } from "child_process";
 
-const mainFile = './main.user.ts';
+const mainFile = "./main.user.ts";
 const args = process.argv.slice(2);
-const watchMode = args.includes('--watch');
-const debugMode = args.includes('--debug');
-const wsHost = process.env.WS_HOST || '127.0.0.1';
+const watchMode = args.includes("--watch");
+const debugMode = args.includes("--debug");
+const wsHost = process.env.WS_HOST || "127.0.0.1";
 const wsPort = Number(process.env.WS_PORT || 35729);
 
 async function runEslint() {
-  console.log('[lint] Running ESLint...');
-  return new Promise((resolve) => {
-    exec('eslint . --ext .ts', (error, stdout, stderr) => {
-      if (stdout) console.log(stdout);
-      if (stderr) console.error(stderr);
-      if (error) {
-        console.error('[lint] ESLint found errors!');
-        resolve(false);
-      } else {
-        console.log('[lint] ESLint passed.');
-        resolve(true);
-      }
+    console.log("[lint] Running ESLint...");
+    return new Promise((resolve) => {
+        exec("eslint . --ext .ts", (error, stdout, stderr) => {
+            if (stdout) console.log(stdout);
+            if (stderr) console.error(stderr);
+            if (error) {
+                console.error("[lint] ESLint found errors!");
+                resolve(false);
+            } else {
+                console.log("[lint] ESLint passed.");
+                resolve(true);
+            }
+        });
     });
-  });
 }
 
 async function startWsServer() {
-  try {
-    const { WebSocketServer } = await import('ws');
-    const wss = new WebSocketServer({ host: wsHost, port: wsPort });
-    wss.on('connection', () => {
-      console.log('[dev] ws client connected');
-    });
-    console.log(`[dev] WebSocket server listening on ws://${wsHost}:${wsPort}`);
-    return wss;
-  } catch (e) {
-    console.error('[dev] failed to start ws server:', e);
-    return null;
-  }
+    try {
+        const { WebSocketServer } = await import("ws");
+        const wss = new WebSocketServer({ host: wsHost, port: wsPort });
+        wss.on("connection", () => {
+            console.log("[dev] ws client connected");
+        });
+        console.log(
+            `[dev] WebSocket server listening on ws://${wsHost}:${wsPort}`,
+        );
+        return wss;
+    } catch (e) {
+        console.error("[dev] failed to start ws server:", e);
+        return null;
+    }
 }
 
 async function build() {
-  const mainContent = await fs.readFile(mainFile, 'utf-8');
-  const headerMatch = mainContent.match(/\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/);
-  if (!headerMatch) {
-    throw new Error('Userscript header not found in main.user.ts');
-  }
-  const banner = headerMatch[0];
+    const mainContent = await fs.readFile(mainFile, "utf-8");
+    const headerMatch = mainContent.match(
+        /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/,
+    );
+    if (!headerMatch) {
+        throw new Error("Userscript header not found in main.user.ts");
+    }
+    const banner = headerMatch[0];
 
-  let wss = null;
-  if (debugMode) {
-    wss = await startWsServer();
-  }
+    let wss = null;
+    if (debugMode) {
+        wss = await startWsServer();
+    }
 
-  const clientSnippet = debugMode ? `;(function(){try{let connected = false; var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('open', () => {connected = true;});ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){if(connected){setTimeout(function(){location.reload();},100);}} );}catch(e){console.warn('dev reload ws failed',e);} })();` : '';
+    const clientSnippet = debugMode
+        ? `;(function(){try{let connected = false; var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('open', () => {connected = true;});ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){if(connected){setTimeout(function(){location.reload();},100);}} );}catch(e){console.warn('dev reload ws failed',e);} })();`
+        : "";
 
-  const baseOptions = {
-    entryPoints: [mainFile],
-    bundle: true,
-    outfile: './main.user.js',
-    banner: { js: banner },
-    footer: debugMode ? { js: clientSnippet } : undefined,
-    sourcemap: debugMode ? 'inline' : false,
-  };
-
-  if (watchMode) {
-    // esbuild version in this project doesn't support `watch` option reliably.
-    // Use chokidar to watch files and re-run a build on changes.
-    const { watch } = await import('chokidar');
-    let building = false;
-    let scheduled = false;
-
-    const runBuild = async () => {
-      if (building) {
-        scheduled = true;
-        return;
-      }
-      building = true;
-      try {
-        const lintPassed = await runEslint();
-        if (!lintPassed) {
-          console.error('Build aborted due to linting errors.');
-          return;
-        }
-
-        await esbuild.build(baseOptions);
-        console.log('Build succeeded');
-        if (wss) {
-          try {
-            for (const c of wss.clients) c.send('reload');
-          } catch (e) {}
-        }
-      } catch (err) {
-        console.error('Build failed:', err);
-      } finally {
-        building = false;
-        if (scheduled) {
-          scheduled = false;
-          runBuild();
-        }
-      }
+    const baseOptions = {
+        entryPoints: [mainFile],
+        bundle: true,
+        outfile: "./main.user.js",
+        banner: { js: banner },
+        footer: debugMode ? { js: clientSnippet } : undefined,
+        sourcemap: debugMode ? "inline" : false,
     };
 
-    // initial build
-    await runBuild();
+    if (watchMode) {
+        // esbuild version in this project doesn't support `watch` option reliably.
+        // Use chokidar to watch files and re-run a build on changes.
+        const { watch } = await import("chokidar");
+        let building = false;
+        let scheduled = false;
 
-    const watcher = watch([mainFile, './source/**/*'], { ignoreInitial: true });
-    watcher.on('all', (ev, path) => {
-      console.log('[dev] file change', ev, path);
-      runBuild();
-    });
-    console.log('Watching for changes...');
-    // keep process alive
-    process.stdin.resume();
-  } else {
-    const lintPassed = await runEslint();
-    if (!lintPassed) {
-      console.error('Build aborted due to linting errors.');
-      process.exit(1);
+        const runBuild = async () => {
+            if (building) {
+                scheduled = true;
+                return;
+            }
+            building = true;
+            try {
+                if (!debugMode) {
+                    const lintPassed = await runEslint();
+                    if (!lintPassed) {
+                        console.error("Build aborted due to linting errors.");
+                        return;
+                    }
+                }
+
+                await esbuild.build(baseOptions);
+                console.log("Build succeeded");
+                if (wss) {
+                    try {
+                        for (const c of wss.clients) c.send("reload");
+                    } catch (e) {}
+                }
+            } catch (err) {
+                console.error("Build failed:", err);
+            } finally {
+                building = false;
+                if (scheduled) {
+                    scheduled = false;
+                    runBuild();
+                }
+            }
+        };
+
+        // initial build
+        await runBuild();
+
+        const watcher = watch([mainFile, "./source/**/*"], {
+            ignoreInitial: true,
+        });
+        watcher.on("all", (ev, path) => {
+            console.log("[dev] file change", ev, path);
+            runBuild();
+        });
+        console.log("Watching for changes...");
+        // keep process alive
+        process.stdin.resume();
+    } else {
+        const lintPassed = await runEslint();
+        if (!lintPassed) {
+            console.error("Build aborted due to linting errors.");
+            process.exit(1);
+        }
+        await esbuild.build(baseOptions);
+        if (wss) {
+            try {
+                for (const c of wss.clients) c.send("reload");
+            } catch (e) {}
+            wss.close();
+        }
     }
-    await esbuild.build(baseOptions);
-    if (wss) {
-      try {
-        for (const c of wss.clients) c.send('reload');
-      } catch (e) {}
-      wss.close();
-    }
-  }
 }
 
 build().catch((e) => {
-  console.error(e);
-  process.exit(1);
+    console.error(e);
+    process.exit(1);
 });
