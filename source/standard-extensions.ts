@@ -5,7 +5,7 @@ export type UnwrapId<TId extends Id<any>> = TId extends Id<infer T> ? T : never;
 export function id<T>(value: T): T {
     return value;
 }
-export function ignore<T>(_: T): void {
+export function ignore(..._: unknown[]): void {
     // do nothing
 }
 export type UnwrapPromise<T> = T extends Promise<infer U> ? U : T;
@@ -66,5 +66,31 @@ export function newAbortError(message = "The operation was aborted.") {
         return new DOMException(message, "AbortError");
     } else {
         return new AbortError(message);
+    }
+}
+
+function cancelToReject<T>(
+    promise: Promise<T>,
+    onCancel: () => T
+): Promise<T>;
+function cancelToReject(promise: Promise<void>): Promise<void>;
+function cancelToReject<T>(
+    promise: Promise<T>,
+    onCancel: () => void = ignore
+) {
+    return promise.catch((e) => {
+        if (e instanceof Error && e.name === "AbortError") {
+            return onCancel();
+        }
+        throw e;
+    });
+}
+export function createAsyncCancelScope(asyncErrorHandler: (reason: unknown) => void): (cancelableProcess: (signal: AbortSignal) => Promise<void>) => void {
+    let lastCancel: AbortController | undefined;
+
+    return (process) => {
+        lastCancel?.abort(newAbortError())
+        lastCancel = new AbortController();
+        cancelToReject(process(lastCancel.signal)).catch(asyncErrorHandler)
     }
 }

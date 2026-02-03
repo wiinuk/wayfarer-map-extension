@@ -1,5 +1,6 @@
-// spell-checker: ignore pois lngs
-import type { Poi } from "./gcs-schema";
+// spell-checker: ignore pois lngs pokestop
+import type { EntityKind, Gmo, Poi } from "./gcs-schema";
+import { toLatLngLiteral } from "./geometry";
 import { id, type UnwrapPromise } from "./standard-extensions";
 import * as Idb from "./typed-idb";
 import {
@@ -181,12 +182,8 @@ function boundsIncludesCell<TLevel extends number>(
     return true;
 }
 
-function toLatLngLiteral(latLng: LatLng): LatLngLiteral {
-    return { lat: latLng.lat(), lng: latLng.lng() };
-}
-
 /** 指定された領域に近いセルを返す */
-function getNearlyCellsForBounds<TLevel extends number>(
+export function getNearlyCellsForBounds<TLevel extends number>(
     bounds: LatLngBounds,
     level: TLevel
 ) {
@@ -321,27 +318,33 @@ export async function updateRecordsOfReceivedPois(
     });
 }
 
+export interface CellStatistic<TLevel extends number> {
+    readonly center: Readonly<LatLngLiteral>;
+    readonly cell: Cell<TLevel>;
+    count: number;
+}
 type CellStatisticMap<TLevel extends number> = Map<
     CellId<TLevel>,
-    {
-        readonly cell: Cell<TLevel>;
-        count: number;
-    }
+    CellStatistic<TLevel>
 >;
 export interface Cell14Statistics {
     readonly cell17s: CellStatisticMap<17>;
     readonly cell16s: CellStatisticMap<16>;
     readonly corner: [LatLngLiteral, LatLngLiteral, LatLngLiteral, LatLngLiteral];
+    readonly center: LatLngLiteral;
     readonly cell: Cell<14>;
     readonly pois: Map<string, PoiRecord>;
+    readonly kindToPois: Map<EntityKind, PoiRecord[]>
 }
 function createEmptyCell14Statistics(cell: Cell<14>): Cell14Statistics {
     return {
         cell,
         pois: new Map(),
         corner: cell.getCornerLatLngs(),
+        center: cell.getLatLng(),
         cell17s: new Map(),
         cell16s: new Map(),
+        kindToPois: new Map(),
     };
 }
 function updateCellStatistics<TLevel extends number>(
@@ -355,33 +358,36 @@ function updateCellStatistics<TLevel extends number>(
         cells.get(key) ??
         setEntry(cells, key, {
             cell,
+            center: cell.getLatLng(),
             count: 0,
         });
     statistics.count++;
 }
-export async function getNearlyCell14s(
-    records: PoiRecords,
-    bounds: LatLngBounds,
-    signal: AbortSignal
-) {
-    const result: Cell14Statistics[] = [];
-    for (const cell of getNearlyCellsForBounds(bounds, 14)) {
-        const cellId = cell.toString();
-        let cell14: Cell14Statistics | undefined;
-        const collectPois = (poi: PoiRecord) => {
-            cell14 ??= createEmptyCell14Statistics(cell);
-            const latLng = new google.maps.LatLng(poi.lat, poi.lng);
-            const coordinateKey = latLng.toString();
-            if (cell14.pois.get(coordinateKey) != null) return "continue";
+function isGymOrPokestop(g: Gmo) {
+    return g.entity === "GYM" || g.entity === "POKESTOP"
+}
+export async function getCell14Stats(records: PoiRecords, lat: number, lng: number, signal: AbortSignal) {
+    const cell = createCellFromCoordinates({ lat, lng }, 14);
+    const cellId = cell.toString();
+    let cell14: Cell14Statistics | undefined;
+    const collectPois = (poi: PoiRecord) => {
+        cell14 ??= createEmptyCell14Statistics(cell);
+        const latLng = new google.maps.LatLng(poi.lat, poi.lng);
+        const coordinateKey = latLng.toString();
+        if (cell14.pois.get(coordinateKey) != null) return "continue";
 
-            cell14.pois.set(coordinateKey, poi);
+        cell14.pois.set(coordinateKey, poi);
+        for (const { entity } of poi.data.gmo) {
+            const pois = cell14.kindToPois.get(entity) ?? setEntry(cell14.kindToPois, entity, [])
+            pois.push(poi)
+        }
+        if (poi.data.gmo.some(isGymOrPokestop)) {
             updateCellStatistics(cell14.cell16s, latLng, 16);
             updateCellStatistics(cell14.cell17s, latLng, 17);
-        };
-        await enterTransactionScope(records, { signal }, function* (store) {
-            yield* iteratePoisInCell(store, cellId, collectPois);
-        });
-        if (cell14) result.push(cell14);
-    }
-    return result;
+        }
+    };
+    await enterTransactionScope(records, { signal }, function* (store) {
+        yield* iteratePoisInCell(store, cellId, collectPois);
+    });
+    return cell14;
 }
