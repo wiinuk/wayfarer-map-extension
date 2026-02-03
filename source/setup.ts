@@ -1,10 +1,9 @@
 // spell-checker: ignore wfmapmods pois
 import { createAsyncQueue, type AsyncQueue } from "./async-queue";
-import { addNavigateListener } from "./dom-extensions";
 import { injectGcsListener } from "./gcs";
 import { GcsQueriesSchema, GcsResponseSchema, type GcsQueries, type GcsResponse, type Poi } from "./gcs-schema";
-import { closeRecords, openRecords, updateRecordsOfReceivedPois, type PoiRecords } from "./poi-records";
-import { awaitElement, newAbortError } from "./standard-extensions";
+import { openRecords, updateRecordsOfReceivedPois, type PoiRecords } from "./poi-records";
+import { awaitElement } from "./standard-extensions";
 
 function handleAsyncError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
