@@ -1,23 +1,14 @@
+const TARGET_PATH = "/api/v1/vault/mapview/gcs";
 
-export function injectGcsListener(listener: (queries: Record<string, string>, response: string) => void) {
-    const TARGET_PATH = "/api/v1/vault/mapview/gcs";
-
-    function normalizeUrl(url: string | URL) {
-        try {
-            return new URL(url, location.origin);
-        } catch {
-            return null;
-        }
+function normalizeUrl(url: string | URL) {
+    try {
+        return new URL(url, location.origin);
+    } catch {
+        return null;
     }
+}
 
-    function parseQueryFromUrl(urlObj: URL) {
-
-        const q: Record<string, string> = {};
-        urlObj.searchParams.forEach((v, k) => {
-            q[k] = v;
-        });
-        return q;
-    }
+export function injectGcsListener(listener: (url: URL, responseJsonText: string) => void) {
 
     const origOpen = XMLHttpRequest.prototype.open;
     const origSend = XMLHttpRequest.prototype.send;
@@ -44,8 +35,7 @@ export function injectGcsListener(listener: (queries: Record<string, string>, re
                     const ct = this.getResponseHeader("content-type") || "";
                     if (!ct.includes("application/json")) return;
 
-                    const queries = parseQueryFromUrl(this[urlObjSymbol]!);
-                    listener(queries, this.responseText);
+                    listener(this[urlObjSymbol]!, this.responseText);
                 } catch (e) {
                     console.warn("[GCS LOGGER] Parse failed", e);
                 }
