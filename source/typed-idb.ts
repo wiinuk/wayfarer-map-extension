@@ -124,7 +124,13 @@ export function enterTransactionScope<
 
         const transaction = database.transaction(storeNames, mode);
 
-        const onAbort = signal ? () => transaction.abort() : ignore;
+        const onAbort = signal
+            ? () => {
+                if (!hasResult) {
+                    transaction.abort();
+                }
+            }
+            : ignore;
         transaction.addEventListener("complete", () => {
             signal?.removeEventListener("abort", onAbort);
             if (hasResult) {
