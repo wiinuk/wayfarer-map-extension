@@ -50,34 +50,38 @@ async function clearMarkers(page: PageResource, scheduler: Scheduler) {
 }
 
 const baseZIndex = 3100;
-const cell17Options = Object.freeze({
-    strokeColor: null,
-    strokeOpacity: 0.7,
-    strokeWeight: 2,
-    fillColor: "#7eb97e",
-    fillOpacity: 0.4,
+
+const cell17EmptyOptions = Object.freeze({
+    strokeColor: "rgba(253, 255, 114, 0.6)",
+    strokeWeight: 1,
+    fillColor: "#00000056",
     clickable: false,
-    zIndex: baseZIndex + 1
+    zIndex: baseZIndex,
+} satisfies google.maps.PolygonOptions)
+
+const cell17Options = Object.freeze({
+    ...cell17EmptyOptions,
+
+    fillColor: "rgba(0, 191, 255, 0.69)",
+    zIndex: baseZIndex + 1,
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options = Object.freeze({
-    strokeColor: "#c54545",
-    strokeOpacity: 0.7,
+    strokeColor: "#c54545b0",
     strokeWeight: 2,
     fillColor: "transparent",
-    fillOpacity: 0.2,
     clickable: false,
-    zIndex: baseZIndex
+    zIndex: baseZIndex + 2
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options1 = Object.freeze({
     ...cell14Options,
-    fillColor: "#dd7676"
+    fillColor: "#dd7676da"
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options2 = Object.freeze({
     ...cell14Options,
-    fillColor: "#d3b717"
+    fillColor: "#d3b717da"
 } satisfies google.maps.PolygonOptions)
 
 const cell17CountMarkerOptions = Object.freeze({
@@ -97,7 +101,7 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     return (kindToPois.get("GYM")?.length ?? 0)
         + (kindToPois.get("POKESTOP")?.length ?? 0)
 }
-function fillCell14(page: PageResource, cell14: Cell14Statistics) {
+function renderCell14(page: PageResource, cell14: Cell14Statistics) {
     if (cell14.pois.size === 0) return;
 
     const entityCount = sumGymAndPokestopCount(cell14)
@@ -105,11 +109,14 @@ function fillCell14(page: PageResource, cell14: Cell14Statistics) {
     const polygon = allocatePolygonAtMap(page.overlay, options)
     polygon.setPath(cell14.corner);
 }
-function fillCell17(page: PageResource, cell17: CellStatistic<17>) {
-    const polygon = allocatePolygonAtMap(page.overlay, cell17Options)
+function renderCell17(page: PageResource, cell17: CellStatistic<17>) {
+    const options = cell17.count === 0 ? cell17EmptyOptions : cell17Options
+    const polygon = allocatePolygonAtMap(page.overlay, options)
     polygon.setPath(cell17.cell.getCornerLatLngs())
 }
 function renderCell17CountLabel(page: PageResource, cell14: Cell14Statistics) {
+    if (cell14.pois.size === 0) return
+
     const countMarker = allocateMarkerAtMap(page.overlay, cell17CountMarkerOptions);
     countMarker.setPosition(cell14.cell.getLatLng())
     countMarker.setLabel(`${sumGymAndPokestopCount(cell14)}`)
@@ -138,7 +145,7 @@ async function renderPoiAndCells(page: PageResource, scheduler: Scheduler, signa
         const cell14 = await getCell14Stats(records, lat, lng, signal)
         if (cell14 == null) continue;
 
-        fillCell14(page, cell14);
+        renderCell14(page, cell14);
 
         if (13 < zoom) {
             renderCell17CountLabel(page, cell14)
@@ -147,7 +154,7 @@ async function renderPoiAndCells(page: PageResource, scheduler: Scheduler, signa
             const cell17s = [...cell14.cell17s.values()]
             cell17s.sort(compareByDistanceToMapCenter)
             for (const cell17 of cell17s.values()) {
-                fillCell17(page, cell17);
+                renderCell17(page, cell17);
             }
         }
     }
