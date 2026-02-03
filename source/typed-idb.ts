@@ -1,4 +1,11 @@
-import { ignore, newAbortError, withTag, type Id, type Tagged, type UnwrapId } from "./standard-extensions";
+import {
+    ignore,
+    newAbortError,
+    withTag,
+    type Id,
+    type Tagged,
+    type UnwrapId,
+} from "./standard-extensions";
 
 export interface IndexSchemaKind {
     readonly key: string | readonly string[];
@@ -27,14 +34,14 @@ export type Database<TSchema extends DatabaseSchemaKind> = Tagged<
 
 function defineDatabase<TSchema extends DatabaseSchemaKind>(
     database: IDBDatabase,
-    schema: TSchema
+    schema: TSchema,
 ) {
     for (const [storeName, storeSchema] of Object.entries(schema)) {
         const store = database.createObjectStore(storeName, {
             keyPath: storeSchema.key.slice(),
         });
         for (const [indexName, options] of Object.entries(
-            storeSchema.indexes
+            storeSchema.indexes,
         )) {
             store.createIndex(indexName, options.key, options);
         }
@@ -44,24 +51,24 @@ function defineDatabase<TSchema extends DatabaseSchemaKind>(
 export function openDatabase<TSchema extends DatabaseSchemaKind>(
     databaseName: string,
     databaseVersion: number | undefined,
-    databaseSchema: TSchema
+    databaseSchema: TSchema,
 ) {
     return new Promise<Database<TSchema>>((resolve, reject) => {
         const request = window.indexedDB.open(databaseName, databaseVersion);
         request.addEventListener("upgradeneeded", () =>
-            defineDatabase(request.result, databaseSchema)
+            defineDatabase(request.result, databaseSchema),
         );
         request.addEventListener("blocked", () =>
-            reject(new Error("database blocked"))
+            reject(new Error("database blocked")),
         );
         request.addEventListener("error", () => reject(request.error));
         request.addEventListener("success", () =>
-            resolve(withTag(request.result))
+            resolve(withTag(request.result)),
         );
     });
 }
 export function closeDatabase<TSchema extends DatabaseSchemaKind>(
-    database: Database<TSchema>
+    database: Database<TSchema>,
 ) {
     database.close();
 }
@@ -85,20 +92,20 @@ export type TransactionScope<R> = Generator<
 
 export type Store<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 > = Tagged<IDBObjectStore, [TSchema, TStoreName]>;
 
 export type Stores<
     TSchema extends DatabaseSchemaKind,
-    TStoreNames extends readonly (keyof TSchema & string)[]
+    TStoreNames extends readonly (keyof TSchema & string)[],
 > = {
-        [p in TStoreNames[number]]: Store<TSchema, As<p, keyof TSchema & string>>;
-    };
+    [p in TStoreNames[number]]: Store<TSchema, As<p, keyof TSchema & string>>;
+};
 
 export function enterTransactionScope<
     TSchema extends DatabaseSchemaKind,
     TStoreNames extends readonly (keyof TSchema & string)[],
-    TResult
+    TResult,
 >(
     database: Database<TSchema>,
     {
@@ -109,7 +116,7 @@ export function enterTransactionScope<
         signal?: AbortSignal;
     },
     scope: (
-        stores: Readonly<Stores<TSchema, TStoreNames>>
+        stores: Readonly<Stores<TSchema, TStoreNames>>,
     ) => TransactionScope<TResult>,
     ...storeNames: TStoreNames
 ): Promise<TResult> {
@@ -126,10 +133,10 @@ export function enterTransactionScope<
 
         const onAbort = signal
             ? () => {
-                if (!hasResult) {
-                    transaction.abort();
-                }
-            }
+                  if (!hasResult) {
+                      transaction.abort();
+                  }
+              }
             : ignore;
         transaction.addEventListener("complete", () => {
             signal?.removeEventListener("abort", onAbort);
@@ -151,7 +158,7 @@ export function enterTransactionScope<
         }
 
         const iterator = scope(
-            stores as Readonly<Stores<TSchema, TStoreNames>>
+            stores as Readonly<Stores<TSchema, TStoreNames>>,
         );
 
         type ResolvingStateKind = "Request" | "OpenCursor";
@@ -168,7 +175,6 @@ export function enterTransactionScope<
                     r = iterator.next();
                     break;
                 case "Request": {
-
                     const result = request_request!.result;
                     stateKind = undefined;
                     request_request = undefined;
@@ -176,11 +182,9 @@ export function enterTransactionScope<
                     break;
                 }
                 case "OpenCursor": {
-
                     const cursor = openCursor_request!.result;
                     if (
                         cursor === null ||
-
                         openCursor_action!(cursor.value) === "break"
                     ) {
                         stateKind = undefined;
@@ -221,15 +225,15 @@ export function enterTransactionScope<
 export type Index<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
-    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 > = Tagged<IDBIndex, [TSchema, TStoreName, TIndexName]>;
 export function getIndex<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
-    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 >(
     store: Store<TSchema, TStoreName>,
-    indexName: TIndexName
+    indexName: TIndexName,
 ): Index<TSchema, TStoreName, TIndexName> {
     return withTag(store.index(indexName));
 }
@@ -241,38 +245,38 @@ type unwrapMultiEntry<key> = key extends readonly (infer e)[]
 type resolveRecordKey<
     propertyName extends string,
     multiEntry extends boolean,
-    recordType
+    recordType,
 > = propertyName extends keyof recordType
     ? multiEntry extends true
-    ? unwrapMultiEntry<recordType[propertyName]>
-    : cast<recordType[propertyName], IDBValidKey>
+        ? unwrapMultiEntry<recordType[propertyName]>
+        : cast<recordType[propertyName], IDBValidKey>
     : error<`property "${propertyName}" does not exist in record type`>;
 
 type resolveRecordKeyArray<
     propertyNames extends readonly string[],
-    recordType
+    recordType,
 > = {
-        -readonly [i in keyof propertyNames]: resolveRecordKey<
-            propertyNames[i],
-            false,
-            recordType
-        >;
-    };
+    -readonly [i in keyof propertyNames]: resolveRecordKey<
+        propertyNames[i],
+        false,
+        recordType
+    >;
+};
 type resolveRecordKeyType<
     keys extends string | readonly string[],
     multiEntry extends boolean,
-    recordType
+    recordType,
 > = keys extends string
     ? resolveRecordKey<keys, multiEntry, recordType>
-    : (keys extends readonly string[]
-        ? (multiEntry extends true
-            ? error<"multiEntry indexes cannot have array keys">
-            : resolveRecordKeyArray<keys, recordType>)
-        : unreachable);
+    : keys extends readonly string[]
+      ? multiEntry extends true
+          ? error<"multiEntry indexes cannot have array keys">
+          : resolveRecordKeyArray<keys, recordType>
+      : unreachable;
 
 export type StoreKey<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 > = resolveRecordKeyType<
     TSchema[TStoreName]["key"],
     false,
@@ -281,25 +285,25 @@ export type StoreKey<
 export type IndexKey<
     schema extends DatabaseSchemaKind,
     storeName extends keyof schema & string,
-    indexName extends keyof schema[storeName]["indexes"] & string
+    indexName extends keyof schema[storeName]["indexes"] & string,
 > = resolveRecordKeyType<
     schema[storeName]["indexes"][indexName]["key"],
-    schema[storeName]["indexes"][indexName]["multiEntry"] extends true ? true : false,
+    schema[storeName]["indexes"][indexName]["multiEntry"] extends true
+        ? true
+        : false,
     UnwrapId<schema[storeName]["recordType"]>
 >;
 
 export type AllValue = null;
-type KeyOrRange<TSchema extends DatabaseSchemaKind, TStoreName extends keyof TSchema & string> =
-    | StoreKey<TSchema, TStoreName>
-    | KeyRange<StoreKey<TSchema, TStoreName>>
+type KeyOrRange<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+> = StoreKey<TSchema, TStoreName> | KeyRange<StoreKey<TSchema, TStoreName>>;
 
 export function* getValue<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
->(
-    store: Store<TSchema, TStoreName>,
-    query: KeyOrRange<TSchema, TStoreName>
-) {
+    TStoreName extends keyof TSchema & string,
+>(store: Store<TSchema, TStoreName>, query: KeyOrRange<TSchema, TStoreName>) {
     return (yield store.get(query)) as
         | UnwrapId<TSchema[TStoreName]["recordType"]>
         | undefined;
@@ -307,12 +311,12 @@ export function* getValue<
 export function* getValueOfIndex<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
-    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 >(
     index: Index<TSchema, TStoreName, TIndexName>,
     query:
         | IndexKey<TSchema, TStoreName, TIndexName>
-        | KeyRange<IndexKey<TSchema, TStoreName, TIndexName>>
+        | KeyRange<IndexKey<TSchema, TStoreName, TIndexName>>,
 ): TransactionScope<UnwrapId<TSchema[TStoreName]["recordType"]> | undefined> {
     return (yield index.get(query)) as
         | UnwrapId<TSchema[TStoreName]["recordType"]>
@@ -320,16 +324,21 @@ export function* getValueOfIndex<
 }
 export function* putValue<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    value: UnwrapId<TSchema[TStoreName]["recordType"]>
+    value: UnwrapId<TSchema[TStoreName]["recordType"]>,
 ): TransactionScope<UnwrapId<TSchema[TStoreName]["recordType"]>> {
     yield store.put(value);
     return value;
 }
-export function* putValues<TSchema extends DatabaseSchemaKind, TStoreName extends keyof TSchema & string>(
-    store: Store<TSchema, TStoreName>, values: Iterable<UnwrapId<TSchema[TStoreName]["recordType"]>>): TransactionScope<void> {
+export function* putValues<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+>(
+    store: Store<TSchema, TStoreName>,
+    values: Iterable<UnwrapId<TSchema[TStoreName]["recordType"]>>,
+): TransactionScope<void> {
     let lastRequest;
     for (const value of values) {
         lastRequest = store.put(value);
@@ -340,19 +349,19 @@ export function* putValues<TSchema extends DatabaseSchemaKind, TStoreName extend
 }
 export function* deleteValue<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    query: KeyOrRange<TSchema, TStoreName>
+    query: KeyOrRange<TSchema, TStoreName>,
 ): TransactionScope<void> {
     yield store.delete(query);
 }
 export function* deleteValues<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    queries: Iterable<KeyOrRange<TSchema, TStoreName>>
+    queries: Iterable<KeyOrRange<TSchema, TStoreName>>,
 ): TransactionScope<void> {
     let lastRequest;
     for (const query of queries) {
@@ -365,16 +374,13 @@ export function* deleteValues<
 
 export function* iterateValues<
     TSchema extends DatabaseSchemaKind,
-    TStoreName extends keyof TSchema & string
+    TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    query:
-        | KeyOrRange<TSchema, TStoreName>
-        | AllValue
-        | undefined,
+    query: KeyOrRange<TSchema, TStoreName> | AllValue | undefined,
     action: (
-        value: UnwrapId<TSchema[TStoreName]["recordType"]>
-    ) => IterationFlow
+        value: UnwrapId<TSchema[TStoreName]["recordType"]>,
+    ) => IterationFlow,
 ): TransactionScope<void> {
     yield { source: store, query, action };
     return;
@@ -382,7 +388,7 @@ export function* iterateValues<
 export function* iterateValuesOfIndex<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
-    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 >(
     index: Index<TSchema, TStoreName, TIndexName>,
     query:
@@ -391,8 +397,8 @@ export function* iterateValuesOfIndex<
         | AllValue
         | undefined,
     action: (
-        value: UnwrapId<TSchema[TStoreName]["recordType"]>
-    ) => IterationFlow
+        value: UnwrapId<TSchema[TStoreName]["recordType"]>,
+    ) => IterationFlow,
 ): TransactionScope<void> {
     yield { source: index, query, action };
     return;
@@ -403,19 +409,19 @@ export function createBound<K extends IDBValidKey>(
     lower: K,
     upper: K,
     lowerOpen?: boolean,
-    upperOpen?: boolean
+    upperOpen?: boolean,
 ) {
     return IDBKeyRange.bound(lower, upper, lowerOpen, upperOpen) as KeyRange<K>;
 }
 export function createUpperBound<K extends IDBValidKey>(
     upper: K,
-    open?: boolean
+    open?: boolean,
 ) {
     return IDBKeyRange.upperBound(upper, open) as KeyRange<K>;
 }
 export function createLowerBound<K extends IDBValidKey>(
     lower: K,
-    open?: boolean
+    open?: boolean,
 ) {
     return IDBKeyRange.lowerBound(lower, open) as KeyRange<K>;
 }

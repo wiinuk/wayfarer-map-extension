@@ -19,18 +19,22 @@ export function withTag<E, M>(value: E) {
 }
 
 // 要素が出現するまで待機するユーティリティ
-export async function awaitElement<T>(get: () => T, options?: { signal?: AbortSignal }): Promise<NonNullable<T>> {
+export async function awaitElement<T>(
+    get: () => T,
+    options?: { signal?: AbortSignal },
+): Promise<NonNullable<T>> {
     let currentInterval = 100;
     const maxInterval = 500;
     while (true) {
         const ref = get();
         if (ref) return ref;
-        await sleep(
-            Math.min((currentInterval *= 2), maxInterval), options
-        );
+        await sleep(Math.min((currentInterval *= 2), maxInterval), options);
     }
 }
-export function sleep(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
+export function sleep(
+    ms: number,
+    options?: { signal?: AbortSignal },
+): Promise<void> {
     return new Promise((resolve, reject) => {
         const handle = setTimeout(() => {
             cleanup();
@@ -69,15 +73,9 @@ export function newAbortError(message = "The operation was aborted.") {
     }
 }
 
-function cancelToReject<T>(
-    promise: Promise<T>,
-    onCancel: () => T
-): Promise<T>;
+function cancelToReject<T>(promise: Promise<T>, onCancel: () => T): Promise<T>;
 function cancelToReject(promise: Promise<void>): Promise<void>;
-function cancelToReject<T>(
-    promise: Promise<T>,
-    onCancel: () => void = ignore
-) {
+function cancelToReject<T>(promise: Promise<T>, onCancel: () => void = ignore) {
     return promise.catch((e) => {
         if (e instanceof Error && e.name === "AbortError") {
             return onCancel();
@@ -85,12 +83,14 @@ function cancelToReject<T>(
         throw e;
     });
 }
-export function createAsyncCancelScope(asyncErrorHandler: (reason: unknown) => void): (cancelableProcess: (signal: AbortSignal) => Promise<void>) => void {
+export function createAsyncCancelScope(
+    asyncErrorHandler: (reason: unknown) => void,
+): (cancelableProcess: (signal: AbortSignal) => Promise<void>) => void {
     let lastCancel: AbortController | undefined;
 
     return (process) => {
-        lastCancel?.abort(newAbortError())
+        lastCancel?.abort(newAbortError());
         lastCancel = new AbortController();
-        cancelToReject(process(lastCancel.signal)).catch(asyncErrorHandler)
-    }
+        cancelToReject(process(lastCancel.signal)).catch(asyncErrorHandler);
+    };
 }

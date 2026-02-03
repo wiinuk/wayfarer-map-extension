@@ -8,20 +8,28 @@ function normalizeUrl(url: string | URL) {
     }
 }
 
-export function injectGcsListener(listener: (url: URL, responseJsonText: string) => void) {
-
+export function injectGcsListener(
+    listener: (url: URL, responseJsonText: string) => void,
+) {
     const origOpen = XMLHttpRequest.prototype.open;
     const origSend = XMLHttpRequest.prototype.send;
 
     const isTargetSymbol = Symbol("_isTarget");
     const urlObjSymbol = Symbol("_urlObj");
-    type XHRWithSymbols = XMLHttpRequest & { [isTargetSymbol]?: boolean, [urlObjSymbol]?: URL | null }
-    XMLHttpRequest.prototype.open = function (this: XHRWithSymbols, method, url, ...rest: [boolean]) {
+    type XHRWithSymbols = XMLHttpRequest & {
+        [isTargetSymbol]?: boolean;
+        [urlObjSymbol]?: URL | null;
+    };
+    XMLHttpRequest.prototype.open = function (
+        this: XHRWithSymbols,
+        method,
+        url,
+        ...rest: [boolean]
+    ) {
         const urlObj = normalizeUrl(url);
 
         this[isTargetSymbol] =
-            method === "GET" &&
-            urlObj?.pathname === TARGET_PATH;
+            method === "GET" && urlObj?.pathname === TARGET_PATH;
 
         this[urlObjSymbol] = urlObj;
 
@@ -43,5 +51,5 @@ export function injectGcsListener(listener: (url: URL, responseJsonText: string)
         }
 
         return origSend.apply(this, args);
-    }
+    };
 }

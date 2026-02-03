@@ -1,4 +1,3 @@
-
 export function addNavigateListener(onHistoryChanged: () => void) {
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
@@ -22,7 +21,10 @@ export interface Scheduler {
     yield(): Promise<void> | null;
 }
 
-export function createScheduler(signal: AbortSignal, thresholdMs = 10): Scheduler {
+export function createScheduler(
+    signal: AbortSignal,
+    thresholdMs = 10,
+): Scheduler {
     let startTime = performance.now();
     let lastHandle: number | undefined;
 
@@ -34,10 +36,10 @@ export function createScheduler(signal: AbortSignal, thresholdMs = 10): Schedule
         get isYieldRequested() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if ((navigator as any).scheduling?.isInputPending?.()) {
-                return true
+                return true;
             }
             const now = performance.now();
-            return (now - startTime >= thresholdMs);
+            return now - startTime >= thresholdMs;
         },
 
         yield() {
@@ -50,6 +52,6 @@ export function createScheduler(signal: AbortSignal, thresholdMs = 10): Schedule
                     resolve();
                 });
             });
-        }
+        },
     };
 }
