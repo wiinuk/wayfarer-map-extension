@@ -38,7 +38,24 @@ async function processGcsRequest(page: PageResource, queries: GcsQueries, respon
     for (const cellData of response.result.data) {
         pois.push(...cellData.pois);
     }
+    console.debug(`gcs poi count: ${pois.length}`);
+    performance.mark("start save")
     await updateRecordsOfReceivedPois(page.records, pois, bounds, Date.now(), signal);
+    performance.mark("end save")
+
+
+    performance.measure("parse", "start json parse", "end json parse")
+    performance.measure("save", "start save", "end save")
+
+    performance.measure("nearly cells calculation", "begin nearly cells calculation", "end nearly cells calculation")
+    performance.measure("remove deleted pois", "begin remove deleted pois", "begin remove deleted pois")
+    performance.measure("update cells", "begin update cells", "end update cells")
+    performance.measure("update pois", "begin update pois", "end update pois")
+
+
+    for (const m of performance.getEntriesByType("measure")) {
+        console.debug(`${m.name}: ${m.duration}ms`)
+    }
 }
 
 function parseQueryFromUrl(urlObj: URL) {
@@ -61,15 +78,20 @@ async function asyncSetup(signal: AbortSignal) {
     }
 
     const gcsQueue: AsyncQueue<{ url: URL, responseText: string }> = createAsyncQueue(async (items) => {
+        const jsonLength = items.reduce((n, x) => x.responseText.length + n, 0)
+        console.debug(`gcs batch process: items.length = ${items.length}, json length: ${jsonLength}`)
+
         for (const { url, responseText } of items) {
-const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
+            performance.mark("start json parse")
+            const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
             const response = GcsResponseSchema.parse(JSON.parse(responseText));
+            performance.mark("end json parse")
             await processGcsRequest(page, queries, response, signal);
         }
     }, handleAsyncError);
 
     injectGcsListener((url, responseText) => {
-                gcsQueue.push({ url, responseText });
+        gcsQueue.push({ url, responseText });
     });
 
     setupPoiRecordOverlay(page)

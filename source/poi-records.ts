@@ -254,9 +254,14 @@ export async function updateRecordsOfReceivedPois(
     for (const poi of receivedPois) {
         pois.set(poi.poiId, poi);
     }
+    performance.mark("begin nearly cells calculation")
     const cell14s = getNearlyCellsForBounds(fetchBounds, 14);
     const cell17s = getNearlyCellsForBounds(fetchBounds, 17);
+    performance.mark("end nearly cells calculation")
+
     await enterTransactionScope(records, { signal }, function* (poisStore) {
+
+        performance.mark("begin remove deleted pois")
         // 領域内に存在しないPOI記録を削除
         for (const poi of yield* getPoisInCell14s(
             poisStore,
@@ -266,8 +271,10 @@ export async function updateRecordsOfReceivedPois(
             if (!fetchBounds.contains(poi)) continue;
             yield* removePoi(poisStore, poi.guid);
         }
+        performance.mark("end remove deleted pois")
 
         // POI記録を更新
+        performance.mark("begin update pois")
         for (const [id, p] of pois) {
             const lat = p.latE6 / 1_000_000;
             const lng = p.lngE6 / 1_000_000;
@@ -297,8 +304,10 @@ export async function updateRecordsOfReceivedPois(
                 lastFetchDate: fetchDate,
             });
         }
+        performance.mark("end update pois")
 
         // 全面が取得されたセル17を更新
+        performance.mark("begin update cells")
         for (const cell of cell17s) {
             if (!boundsIncludesCell(cell, fetchBounds)) continue;
 
@@ -320,6 +329,7 @@ export async function updateRecordsOfReceivedPois(
                 lastFetchDate: fetchDate,
             });
         }
+        performance.mark("end update cells")
     });
 }
 
