@@ -11,7 +11,6 @@ import {
 } from "./typed-s2cell";
 
 type LatLngBounds = google.maps.LatLngBounds;
-type LatLng = google.maps.LatLng;
 type LatLngLiteral = google.maps.LatLngLiteral;
 
 /** ローカルマシンから取得した時間 */
@@ -340,12 +339,14 @@ export interface Cell14Statistics {
     readonly corner: [LatLngLiteral, LatLngLiteral, LatLngLiteral, LatLngLiteral];
     readonly center: LatLngLiteral;
     readonly cell: Cell<14>;
+    readonly id: CellId<14>;
     readonly pois: Map<string, PoiRecord>;
     readonly kindToPois: Map<EntityKind, PoiRecord[]>;
 }
 function createEmptyCell14Statistics(cell: Cell<14>): Cell14Statistics {
     return {
         cell,
+        id: cell.toString(),
         pois: new Map(),
         corner: cell.getCornerLatLngs(),
         center: cell.getLatLng(),
