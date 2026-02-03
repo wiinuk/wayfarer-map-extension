@@ -1,6 +1,7 @@
 // spell-checker: ignore Pois POKESTOP Lngs
 
 import { createScheduler, type Scheduler } from "./dom-extensions";
+import type { EntityKind } from "./gcs-schema";
 import { distanceSquared, toLatLngLiteral } from "./geometry";
 import { getCell14Stats, getNearlyCellsForBounds, type Cell14Statistics, type CellStatistic } from "./poi-records";
 import type { LatLng } from "./s2";
@@ -52,36 +53,45 @@ async function clearMarkers(page: PageResource, scheduler: Scheduler) {
 const baseZIndex = 3100;
 
 const cell17EmptyOptions = Object.freeze({
-    strokeColor: "rgba(253, 255, 114, 0.6)",
+    strokeColor: "rgba(253, 255, 114, 0.4)",
+    strokeOpacity: 1,
     strokeWeight: 1,
-    fillColor: "#00000056",
+    fillColor: "#0000002d",
+    fillOpacity: 1,
     clickable: false,
     zIndex: baseZIndex,
 } satisfies google.maps.PolygonOptions)
 
-const cell17Options = Object.freeze({
+const cell17PokestopOptions = Object.freeze({
     ...cell17EmptyOptions,
 
-    fillColor: "rgba(0, 191, 255, 0.69)",
+    fillColor: "rgba(0, 191, 255, 0.6)",
     zIndex: baseZIndex + 1,
+} satisfies google.maps.PolygonOptions)
+const cell17GymOptions = Object.freeze({
+    ...cell17PokestopOptions,
+
+    fillColor: "rgba(255, 0, 13, 0.6)"
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options = Object.freeze({
-    strokeColor: "#c54545b0",
+    strokeColor: "#c54545b7",
+    strokeOpacity: 1,
     strokeWeight: 2,
     fillColor: "transparent",
+    fillOpacity: 1,
     clickable: false,
     zIndex: baseZIndex + 2
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options1 = Object.freeze({
     ...cell14Options,
-    fillColor: "#dd7676da"
+    fillColor: "#dd767625"
 } satisfies google.maps.PolygonOptions)
 
 const cell14Options2 = Object.freeze({
     ...cell14Options,
-    fillColor: "#d3b717da"
+    fillColor: "#d3b71738"
 } satisfies google.maps.PolygonOptions)
 
 const cell17CountMarkerOptions = Object.freeze({
@@ -109,17 +119,27 @@ function renderCell14(page: PageResource, cell14: Cell14Statistics) {
     const polygon = allocatePolygonAtMap(page.overlay, options)
     polygon.setPath(cell14.corner);
 }
+function has(kind: EntityKind, cell17: CellStatistic<17>) {
+    return cell17.kindToCount.get(kind) ?? 0 !== 0
+}
 function renderCell17(page: PageResource, cell17: CellStatistic<17>) {
-    const options = cell17.count === 0 ? cell17EmptyOptions : cell17Options
+    let options = cell17EmptyOptions;
+    if (has("GYM", cell17)) {
+        options = cell17GymOptions
+    }
+    if (has("POKESTOP", cell17)) {
+        options = cell17PokestopOptions;
+    }
     const polygon = allocatePolygonAtMap(page.overlay, options)
     polygon.setPath(cell17.cell.getCornerLatLngs())
 }
 function renderCell17CountLabel(page: PageResource, cell14: Cell14Statistics) {
-    if (cell14.pois.size === 0) return
+    const count = sumGymAndPokestopCount(cell14)
+    if (count <= 0) return
 
     const countMarker = allocateMarkerAtMap(page.overlay, cell17CountMarkerOptions);
     countMarker.setPosition(cell14.cell.getLatLng())
-    countMarker.setLabel(`${sumGymAndPokestopCount(cell14)}`)
+    countMarker.setLabel(`${count}`)
 }
 async function renderPoiAndCells(page: PageResource, scheduler: Scheduler, signal: AbortSignal) {
     const { records, map } = page

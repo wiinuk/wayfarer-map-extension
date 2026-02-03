@@ -327,7 +327,7 @@ export async function updateRecordsOfReceivedPois(
 export interface CellStatistic<TLevel extends number> {
     readonly center: Readonly<LatLngLiteral>;
     readonly cell: Cell<TLevel>;
-    count: number;
+    readonly kindToCount: Map<EntityKind, number>;
     lastFetchDate: ClientDate | undefined
 }
 type CellStatisticMap<TLevel extends number> = Map<
@@ -364,17 +364,21 @@ function updateCellStatisticsByCell<TLevel extends number>(
         setEntry(cells, key, {
             cell,
             center: cell.getLatLng(),
-            count: 0,
+            kindToCount: new Map(),
             lastFetchDate
         });
 }
 function updateCellStatisticsByPoi<TLevel extends number>(
     cells: CellStatisticMap<TLevel>,
-    poiLatLng: LatLng,
+    poi: PoiRecord,
     level: TLevel
 ) {
-    const cell = createCellFromCoordinates(toLatLngLiteral(poiLatLng), level);
-    updateCellStatisticsByCell(cells, cell, undefined).count++
+    const cell = createCellFromCoordinates(poi, level);
+    const { kindToCount } = updateCellStatisticsByCell(cells, cell, undefined)
+    for (const { entity } of poi.data.gmo) {
+        const count = kindToCount.get(entity) ?? 0
+        kindToCount.set(entity, count + 1);
+    }
 }
 function isGymOrPokestop(g: Gmo) {
     return g.entity === "GYM" || g.entity === "POKESTOP"
@@ -395,8 +399,8 @@ export async function getCell14Stats(records: PoiRecords, lat: number, lng: numb
             pois.push(poi)
         }
         if (poi.data.gmo.some(isGymOrPokestop)) {
-            updateCellStatisticsByPoi(cell14.cell16s, latLng, 16);
-            updateCellStatisticsByPoi(cell14.cell17s, latLng, 17);
+            updateCellStatisticsByPoi(cell14.cell16s, poi, 16);
+            updateCellStatisticsByPoi(cell14.cell17s, poi, 17);
         }
     };
     const collectCells = (childCell: CellRecord) => {
