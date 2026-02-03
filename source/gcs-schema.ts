@@ -26,7 +26,7 @@ const StatusSchema = z.enum([
 ]);
 export type Status = z.infer<typeof StatusSchema>;
 
-const latLngStringPattern = /^\(\s*-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?\s*\)$/;
+const latLngStringPattern = /^\(\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\)$/;
 
 /** e.g. `"(35.681154537878946,139.76807615735552)"` */
 const LatLngStringSchema = z
