@@ -1,5 +1,4 @@
-import type { LatLng, S2Cell } from "./s2";
-import { S2 } from "./s2";
+import { S2, type LatLng, type S2Cell } from "./s2";
 
 function cellVsBounds(cell: S2Cell, bounds: google.maps.LatLngBounds) {
     const cellCorners = cell.getCornerLatLngs();
