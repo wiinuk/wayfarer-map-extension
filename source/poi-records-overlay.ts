@@ -49,34 +49,39 @@ async function clearMarkers(page: PageResource, scheduler: Scheduler) {
     }
 }
 
-const cell17Options: google.maps.PolygonOptions = {
+const baseZIndex = 3100;
+const cell17Options = Object.freeze({
     strokeColor: null,
     strokeOpacity: 0.7,
     strokeWeight: 2,
     fillColor: "#7eb97e",
     fillOpacity: 0.4,
     clickable: false,
-    zIndex: 3000
-}
-const cell14Options: google.maps.PolygonOptions = {
-    strokeColor: "#7eb97e",
+    zIndex: baseZIndex + 1
+} satisfies google.maps.PolygonOptions)
+
+const cell14Options = Object.freeze({
+    strokeColor: "#c54545",
     strokeOpacity: 0.7,
     strokeWeight: 2,
-    fillColor: null,
-    fillOpacity: 0,
+    fillColor: "transparent",
+    fillOpacity: 0.2,
     clickable: false,
-    zIndex: 3000
-}
-const cell14Options1 = {
+    zIndex: baseZIndex
+} satisfies google.maps.PolygonOptions)
+
+const cell14Options1 = Object.freeze({
     ...cell14Options,
     fillColor: "#dd7676"
-}
-const cell14Options2 = {
+} satisfies google.maps.PolygonOptions)
+
+const cell14Options2 = Object.freeze({
     ...cell14Options,
     fillColor: "#d3b717"
-}
-const cell17CountMarkerOptions: google.maps.marker.AdvancedMarkerElementOptions = {
-}
+} satisfies google.maps.PolygonOptions)
+
+const cell17CountMarkerOptions = Object.freeze({
+} satisfies google.maps.marker.AdvancedMarkerElementOptions)
 
 function countToCell14Options(count: number) {
     switch (count) {
