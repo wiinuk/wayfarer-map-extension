@@ -7,47 +7,58 @@ import { getCell14Stats, getNearlyCellsForBounds, type Cell14Statistics, type Ce
 import type { LatLng } from "./s2";
 import type { PageResource } from "./setup";
 import { createAsyncCancelScope } from "./standard-extensions";
+import type { Cell, Cell14Id, CellId } from "./typed-s2cell";
 
 export interface PoisOverlay {
     readonly map: google.maps.Map;
-
-    readonly addedPolygons: google.maps.Polygon[];
-    readonly addedMarkers: google.maps.Marker[];
+    readonly cell14IdToAddedViews: Map<CellId<14>, {
+        polygons: google.maps.Polygon[];
+        markers: google.maps.Marker[];
+    }>
 }
 export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
     return {
         map,
-        addedPolygons: [],
-        addedMarkers: [],
+        cell14IdToAddedViews: new Map(),
     }
 }
 
-function allocatePolygonAtMap(overlay: PoisOverlay, options: google.maps.PolygonOptions) {
+function getOrCreateAddedViewsOfCell14Id({ cell14IdToAddedViews }: PoisOverlay, cellId: CellId<14>) {
+    const views = cell14IdToAddedViews.get(cellId)
+    if (views) return views
+    else {
+        const views = { polygons: [], markers: [] }
+        cell14IdToAddedViews.set(cellId, views)
+        return views;
+    }
+}
+function allocatePolygonAtMap(overlay: PoisOverlay, cellId: CellId<14>, options: google.maps.PolygonOptions) {
     const p = new google.maps.Polygon();
     p.setOptions(options);
     p.setMap(overlay.map);
-    overlay.addedPolygons.push(p);
+    getOrCreateAddedViewsOfCell14Id(overlay, cellId).polygons.push(p);
     return p;
 }
-function allocateMarkerAtMap(overlay: PoisOverlay, options: google.maps.MarkerOptions) {
+function allocateMarkerAtMap(overlay: PoisOverlay, cellId: CellId<14>, options: google.maps.MarkerOptions) {
     // 新しい google.maps.marker.AdvancedMarkerElement を使うには、地図の初期化時に ID を指定する必要がある
     // UserScript は地図の初期化に関与できず、後から ID を付与することもできないので、ここでは古い google.maps.Marker を使う
     const m = new google.maps.Marker()
     m.setOptions(options)
     m.setMap(overlay.map);
-    overlay.addedMarkers.push(m);
+    getOrCreateAddedViewsOfCell14Id(overlay, cellId).markers.push(m);
     return m;
 }
-async function clearMarkers(page: PageResource, scheduler: Scheduler) {
-    const { addedPolygons, addedMarkers } = page.overlay
-    for (let p; (p = addedPolygons.pop());) {
+function clearMarkersInCell14({ cell14IdToAddedViews }: PoisOverlay, cellId: Cell14Id) {
+    const views = cell14IdToAddedViews.get(cellId)
+    if (views == null) return
+    const { polygons, markers } = views
+    for (let p; (p = polygons.pop());) {
         p.setMap(null);
-        await scheduler.yield();
     }
-    for (let m; (m = addedMarkers.pop());) {
+    for (let m; (m = markers.pop());) {
         m.setMap(null);
-        await scheduler.yield();
     }
+    cell14IdToAddedViews.delete(cellId);
 }
 
 const baseZIndex = 3100;
@@ -116,28 +127,28 @@ function renderCell14(page: PageResource, cell14: Cell14Statistics) {
 
     const entityCount = sumGymAndPokestopCount(cell14)
     const options = countToCell14Options(entityCount)
-    const polygon = allocatePolygonAtMap(page.overlay, options)
+    const polygon = allocatePolygonAtMap(page.overlay, cell14.id, options)
     polygon.setPath(cell14.corner);
 }
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return cell17.kindToCount.get(kind) ?? 0 !== 0
 }
-function renderCell17(page: PageResource, cell17: CellStatistic<17>) {
+function renderCell17(page: PageResource, cell14: Cell14Statistics, cell17: CellStatistic<17>) {
     let options = cell17EmptyOptions;
     if (has("GYM", cell17)) {
         options = cell17GymOptions
     }
-    if (has("POKESTOP", cell17)) {
+    else if (has("POKESTOP", cell17)) {
         options = cell17PokestopOptions;
     }
-    const polygon = allocatePolygonAtMap(page.overlay, options)
+    const polygon = allocatePolygonAtMap(page.overlay, cell14.id, options)
     polygon.setPath(cell17.cell.getCornerLatLngs())
 }
 function renderCell17CountLabel(page: PageResource, cell14: Cell14Statistics) {
     const count = sumGymAndPokestopCount(cell14)
     if (count <= 0) return
 
-    const countMarker = allocateMarkerAtMap(page.overlay, cell17CountMarkerOptions);
+    const countMarker = allocateMarkerAtMap(page.overlay, cell14.id, cell17CountMarkerOptions);
     countMarker.setPosition(cell14.cell.getLatLng())
     countMarker.setLabel(`${count}`)
 }
@@ -158,13 +169,14 @@ async function renderPoiAndCells(page: PageResource, scheduler: Scheduler, signa
         distanceSquared(center, a.getLatLng()) - distanceSquared(center, b.getLatLng())
     );
 
-    await clearMarkers(page, scheduler)
+    await clearUnusedCell14Markers(page, scheduler, nearlyCell14s);
 
     for (const nearlyCell14 of nearlyCell14s) {
         const { lat, lng } = nearlyCell14.getLatLng()
         const cell14 = await getCell14Stats(records, lat, lng, signal)
         if (cell14 == null) continue;
 
+        clearMarkersInCell14(page.overlay, cell14.id);
         renderCell14(page, cell14);
 
         if (13 < zoom) {
@@ -174,9 +186,19 @@ async function renderPoiAndCells(page: PageResource, scheduler: Scheduler, signa
             const cell17s = [...cell14.cell17s.values()]
             cell17s.sort(compareByDistanceToMapCenter)
             for (const cell17 of cell17s.values()) {
-                renderCell17(page, cell17);
+                renderCell17(page, cell14, cell17);
             }
         }
+    }
+}
+
+async function clearUnusedCell14Markers(page: PageResource, scheduler: Scheduler, nearlyCell14s: readonly Cell<14>[]) {
+    const cell14Ids = new Set<Cell14Id>(nearlyCell14s.map(cell => cell.toString()));
+    for (const cell14Id of page.overlay.cell14IdToAddedViews.keys()) {
+        if (cell14Ids.has(cell14Id)) continue;
+
+        await scheduler.yield();
+        clearMarkersInCell14(page.overlay, cell14Id);
     }
 }
 
