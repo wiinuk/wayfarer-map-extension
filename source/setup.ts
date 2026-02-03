@@ -60,16 +60,16 @@ async function asyncSetup(signal: AbortSignal) {
         overlay: createPoisOverlay(map)
     }
 
-    const gcsQueue: AsyncQueue<{ queries: GcsQueries, response: GcsResponse }> = createAsyncQueue(async (items) => {
-        for (const { queries, response } of items) {
+    const gcsQueue: AsyncQueue<{ url: URL, responseText: string }> = createAsyncQueue(async (items) => {
+        for (const { url, responseText } of items) {
+const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
+            const response = GcsResponseSchema.parse(JSON.parse(responseText));
             await processGcsRequest(page, queries, response, signal);
         }
     }, handleAsyncError);
 
-    injectGcsListener((url, rawResponseText) => {
-        const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
-        const response = GcsResponseSchema.parse(JSON.parse(rawResponseText));
-        gcsQueue.push({ queries, response });
+    injectGcsListener((url, responseText) => {
+                gcsQueue.push({ url, responseText });
     });
 
     setupPoiRecordOverlay(page)
