@@ -19,13 +19,13 @@ export interface Cell<TLevel extends number> {
 }
 export function createCellFromCoordinates<TLevel extends number>(
     latLng: S2LatLng,
-    level: TLevel
+    level: TLevel,
 ) {
     return S2.S2Cell.FromLatLng(latLng, level) as Cell<TLevel>;
 }
 export function getCellId<TLevel extends number>(
     latLng: S2LatLng,
-    level: TLevel
+    level: TLevel,
 ) {
     return createCellFromCoordinates(latLng, level).toString();
 }

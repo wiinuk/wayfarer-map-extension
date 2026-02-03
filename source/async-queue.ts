@@ -1,4 +1,3 @@
-
 export interface AsyncQueue<T> {
     push(item: T): void;
     close(): void;
@@ -6,7 +5,11 @@ export interface AsyncQueue<T> {
 interface CreateAsyncQueueOptions {
     batchSize?: number;
 }
-export function createAsyncQueue<T>(consume: (items: T[]) => Promise<void>, handleAsyncError: (reason: unknown) => void, { batchSize = 10 }: CreateAsyncQueueOptions = {}): AsyncQueue<T> {
+export function createAsyncQueue<T>(
+    consume: (items: T[]) => Promise<void>,
+    handleAsyncError: (reason: unknown) => void,
+    { batchSize = 10 }: CreateAsyncQueueOptions = {},
+): AsyncQueue<T> {
     const queue: T[] = [];
 
     let processing = false;
@@ -50,5 +53,5 @@ export function createAsyncQueue<T>(consume: (items: T[]) => Promise<void>, hand
     function close() {
         queue.length = 0;
     }
-    return { push, close }
+    return { push, close };
 }

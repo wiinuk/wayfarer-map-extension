@@ -11,7 +11,10 @@ function cellVsBounds(cell: S2Cell, bounds: google.maps.LatLngBounds) {
     return cellVsBoundsRest(cellCorners, bounds);
 }
 
-function cellVsBoundsRest(cellCorners: readonly LatLng[], bounds: google.maps.LatLngBounds) {
+function cellVsBoundsRest(
+    cellCorners: readonly LatLng[],
+    bounds: google.maps.LatLngBounds,
+) {
     // セルの角を含む外接矩形に含まれなければ交差しない
     const cellBounds = new google.maps.LatLngBounds();
     for (const cellCorner of cellCorners) {
@@ -56,7 +59,7 @@ function cellVsBoundsRest(cellCorners: readonly LatLng[], bounds: google.maps.La
                     cellEdge[0].lat,
                     cellEdge[0].lng,
                     cellEdge[1].lat,
-                    cellEdge[1].lng
+                    cellEdge[1].lng,
                 )
             ) {
                 return true;
@@ -86,8 +89,24 @@ function pointVsPolygon(point: google.maps.LatLng, polygon: readonly LatLng[]) {
     return inside;
 }
 
-function segmentVsSegment(p1x: number, p1y: number, p2x: number, p2y: number, p3x: number, p3y: number, p4x: number, p4y: number) {
-    const ccw = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+function segmentVsSegment(
+    p1x: number,
+    p1y: number,
+    p2x: number,
+    p2y: number,
+    p3x: number,
+    p3y: number,
+    p4x: number,
+    p4y: number,
+) {
+    const ccw = (
+        ax: number,
+        ay: number,
+        bx: number,
+        by: number,
+        cx: number,
+        cy: number,
+    ) => {
         return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     };
 
@@ -108,14 +127,18 @@ function getLatLngPoint(data: google.maps.LatLng | LatLng) {
         lng: typeof data.lng == "function" ? data.lng() : data.lng,
     };
 }
-export function collectCoveringS2Cells(center: google.maps.LatLng | LatLng, bounds: google.maps.LatLngBounds, level: number) {
+export function collectCoveringS2Cells(
+    center: google.maps.LatLng | LatLng,
+    bounds: google.maps.LatLngBounds,
+    level: number,
+) {
     const result: S2Cell[] = [];
 
     const remainingCells = [
         S2.S2Cell.FromLatLng(getLatLngPoint(center), level),
     ];
     const seenCellIds = new Set();
-    for (let cell; (cell = remainingCells.pop());) {
+    for (let cell; (cell = remainingCells.pop()); ) {
         const cellId = cell.toString();
         if (seenCellIds.has(cellId)) continue;
         seenCellIds.add(cellId);
