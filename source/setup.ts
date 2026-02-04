@@ -67,7 +67,6 @@ async function processGcsRequest(
     for (const cellData of response.result.data) {
         pois.push(...cellData.pois);
     }
-    console.debug(`gcs poi count: ${pois.length}`);
     performance.mark("start save");
     await updateRecordsOfReceivedPois(
         page.records,
@@ -98,10 +97,6 @@ async function processGcsRequest(
         "end update cells",
     );
     performance.measure("update pois", "begin update pois", "end update pois");
-
-    for (const m of performance.getEntriesByType("measure")) {
-        console.debug(`${m.name}: ${m.duration}ms`);
-    }
 }
 
 function parseQueryFromUrl(urlObj: URL) {

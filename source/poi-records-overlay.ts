@@ -234,7 +234,6 @@ async function renderPoiAndCells(
     const center = toLatLngLiteral(map.getCenter()!);
     if (bounds == null) return;
 
-    console.log("zoom", zoom);
     if (zoom <= 12) {
         await clearAllMarkers(page.overlay, scheduler);
         return;
