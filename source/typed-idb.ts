@@ -96,18 +96,32 @@ export type TransactionScope<R> = Generator<
 export type Store<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
-> = Tagged<IDBObjectStore, [TSchema, TStoreName]>;
+    TMode extends IDBTransactionMode,
+> = Tagged<IDBObjectStore, [TSchema, TStoreName, TMode]>;
+
+export type ReadableModes = IDBTransactionMode;
+export type WritableModes = Exclude<IDBTransactionMode, "readonly">;
+export type NormalTransactionModes = Exclude<
+    IDBTransactionMode,
+    "versionchange"
+>;
 
 export type Stores<
     TSchema extends DatabaseSchemaKind,
     TStoreNames extends readonly (keyof TSchema & string)[],
+    TMode extends IDBTransactionMode,
 > = {
-    [p in TStoreNames[number]]: Store<TSchema, As<p, keyof TSchema & string>>;
+    [p in TStoreNames[number]]: Store<
+        TSchema,
+        As<p, keyof TSchema & string>,
+        TMode
+    >;
 };
 
 export function enterTransactionScope<
     TSchema extends DatabaseSchemaKind,
     TStoreNames extends readonly (keyof TSchema & string)[],
+    TMode extends NormalTransactionModes,
     TResult,
 >(
     database: Database<TSchema>,
@@ -115,11 +129,11 @@ export function enterTransactionScope<
         mode,
         signal,
     }: {
-        mode: IDBTransactionMode;
+        mode: TMode;
         signal?: AbortSignal;
     },
     scope: (
-        stores: Readonly<Stores<TSchema, TStoreNames>>,
+        stores: Readonly<Stores<TSchema, TStoreNames, TMode>>,
     ) => TransactionScope<TResult>,
     ...storeNames: TStoreNames
 ): Promise<TResult> {
@@ -155,13 +169,13 @@ export function enterTransactionScope<
         });
         signal?.addEventListener("abort", onAbort);
 
-        const stores: Partial<Stores<TSchema, TStoreNames>> = {};
+        const stores: Partial<Stores<TSchema, TStoreNames, TMode>> = {};
         for (const name of storeNames) {
             stores[name] = withTag(transaction.objectStore(name));
         }
 
         const iterator = scope(
-            stores as Readonly<Stores<TSchema, TStoreNames>>,
+            stores as Readonly<Stores<TSchema, TStoreNames, TMode>>,
         );
 
         type ResolvingStateKind = "Request" | "WaitRequests" | "OpenCursor";
@@ -196,7 +210,7 @@ export function enterTransactionScope<
                     stateKind = undefined;
                     waitRequests_requests = undefined;
                     waitRequests_results = undefined;
-                    r = iterator.next(result);
+                    r = iterator.next(results);
                     break;
                 }
                 case "OpenCursor": {
@@ -262,8 +276,9 @@ export function getIndex<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
     TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
+    TMode extends IDBTransactionMode,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, TMode>,
     indexName: TIndexName,
 ): Index<TSchema, TStoreName, TIndexName> {
     return withTag(store.index(indexName));
@@ -305,7 +320,7 @@ type resolveRecordKeyType<
           : resolveRecordKeyArray<keys, recordType>
       : unreachable;
 
-type RecordType<
+export type RecordType<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 > = UnwrapId<TSchema[TStoreName]["recordType"]>;
@@ -331,12 +346,12 @@ export type IndexKey<
 >;
 
 export type AllValue = null | undefined;
-type Query<
+export type Query<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 > = StoreKey<TSchema, TStoreName> | KeyRange<StoreKey<TSchema, TStoreName>>;
 
-type IndexQuery<
+export type IndexQuery<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
     TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
@@ -352,14 +367,17 @@ type GetResult<
 export function* getValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
->(store: Store<TSchema, TStoreName>, query: Query<TSchema, TStoreName>) {
+>(
+    store: Store<TSchema, TStoreName, ReadableModes>,
+    query: Query<TSchema, TStoreName>,
+) {
     return (yield store.get(query)) as GetResult<TSchema, TStoreName>;
 }
 export function* getAll<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, ReadableModes>,
     query: Query<TSchema, TStoreName> | AllValue,
     count?: number,
 ): TransactionScope<RecordType<TSchema, TStoreName>[]> {
@@ -383,7 +401,7 @@ export function* bulkGet<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, ReadableModes>,
     queries: Iterable<Query<TSchema, TStoreName>>,
 ) {
     const requests = getRequests(store, queries);
@@ -430,7 +448,7 @@ export function* putValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, WritableModes>,
     value: RecordType<TSchema, TStoreName>,
 ): TransactionScope<RecordType<TSchema, TStoreName>> {
     yield store.put(value);
@@ -440,7 +458,7 @@ export function* bulkPut<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, WritableModes>,
     values: Iterable<RecordType<TSchema, TStoreName>>,
 ): TransactionScope<void> {
     let lastRequest;
@@ -455,7 +473,7 @@ export function* deleteValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, WritableModes>,
     query: Query<TSchema, TStoreName>,
 ): TransactionScope<void> {
     yield store.delete(query);
@@ -464,7 +482,7 @@ export function* bulkDelete<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, WritableModes>,
     queries: Iterable<Query<TSchema, TStoreName>>,
 ): TransactionScope<void> {
     let lastRequest;
