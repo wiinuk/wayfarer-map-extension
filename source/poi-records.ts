@@ -9,7 +9,6 @@ import {
     getCellId,
     type CellId,
     type Cell,
-    type Cell14Id,
 } from "./typed-s2cell";
 
 type LatLngBounds = google.maps.LatLngBounds;
