@@ -1,0 +1,57 @@
+export function addNavigateListener(onHistoryChanged: () => void) {
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function (...args) {
+        const result = originalPushState.apply(this, args);
+        onHistoryChanged();
+        return result;
+    };
+    history.replaceState = function (...args) {
+        const result = originalReplaceState.apply(this, args);
+        onHistoryChanged();
+        return result;
+    };
+    window.addEventListener("popstate", onHistoryChanged);
+    onHistoryChanged();
+}
+
+export interface Scheduler {
+    readonly isYieldRequested: boolean;
+    yield(): Promise<void> | null;
+}
+
+export function createScheduler(
+    signal: AbortSignal,
+    thresholdMs = 10,
+): Scheduler {
+    let startTime = performance.now();
+    let lastHandle: number | undefined;
+
+    signal.addEventListener("abort", () => {
+        if (lastHandle != null) cancelAnimationFrame(lastHandle);
+    });
+
+    return {
+        get isYieldRequested() {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((navigator as any).scheduling?.isInputPending?.()) {
+                return true;
+            }
+            const now = performance.now();
+            return now - startTime >= thresholdMs;
+        },
+
+        yield() {
+            if (!this.isYieldRequested) return null;
+
+            return new Promise((resolve) => {
+                lastHandle = requestAnimationFrame(() => {
+                    // yield したら、次のスライスのために開始時間をリセット
+                    startTime = performance.now();
+                    resolve();
+                });
+            });
+        },
+    };
+}
