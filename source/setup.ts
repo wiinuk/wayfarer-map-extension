@@ -123,14 +123,6 @@ async function asyncSetup(signal: AbortSignal) {
 
     const gcsQueue: AsyncQueue<{ url: URL; responseText: string }> =
         createAsyncQueue(async (items) => {
-            const jsonLength = items.reduce(
-                (n, x) => x.responseText.length + n,
-                0,
-            );
-            console.debug(
-                `gcs batch process: items.length = ${items.length}, json length: ${jsonLength}`,
-            );
-
             for (const { url, responseText } of items) {
                 performance.mark("start json parse");
                 const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
