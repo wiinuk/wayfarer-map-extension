@@ -480,11 +480,11 @@ export function* iterateValues<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
-    store: Store<TSchema, TStoreName>,
+    store: Store<TSchema, TStoreName, ReadableModes>,
     query: Query<TSchema, TStoreName> | AllValue,
     action: (value: RecordType<TSchema, TStoreName>) => IterationFlow,
 ): TransactionScope<void> {
-    yield { source: store, query, action };
+    yield new IterateValuesRequest(store, query, action);
     return;
 }
 export function* iterateValuesOfIndex<
@@ -496,7 +496,7 @@ export function* iterateValuesOfIndex<
     query: IndexQuery<TSchema, TStoreName, TIndexName> | AllValue,
     action: (value: RecordType<TSchema, TStoreName>) => IterationFlow,
 ): TransactionScope<void> {
-    yield { source: index, query, action };
+    yield new IterateValuesRequest(index, query, action);
     return;
 }
 
