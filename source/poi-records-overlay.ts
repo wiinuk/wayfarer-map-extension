@@ -34,12 +34,12 @@ export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
             clickable: false,
             icon: {
                 path: 0,
-                fillColor: "#353535",
+                fillColor: "#c54545",
                 fillOpacity: 1,
                 scale: 15,
-                strokeColor: "#0000000e",
+                strokeColor: "#ffffff",
                 strokeOpacity: 1,
-                strokeWeight: 3,
+                strokeWeight: 2,
             },
         },
     };
@@ -207,7 +207,7 @@ function renderCell17CountLabel(
     countMarker.setPosition(cell14.cell.getLatLng());
     countMarker.setLabel({
         text: `${count}`,
-        color: "#ffffff",
+        color: "rgb(255, 255, 255)",
         fontSize: "20px",
         fontWeight: "400",
     });
