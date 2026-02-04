@@ -14,7 +14,11 @@ import type { PageResource } from "./setup";
 import { createAsyncCancelScope } from "./standard-extensions";
 import type { Cell, Cell14Id, CellId } from "./typed-s2cell";
 
+interface ViewOptions {
+    readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
+}
 export interface PoisOverlay {
+    readonly options: ViewOptions;
     readonly map: google.maps.Map;
     readonly cell14IdToAddedViews: Map<
         CellId<14>,
@@ -25,7 +29,22 @@ export interface PoisOverlay {
     >;
 }
 export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
+    const options: ViewOptions = {
+        cell17CountMarkerOptions: {
+            clickable: false,
+            icon: {
+                path: 0,
+                fillColor: "#353535",
+                fillOpacity: 1,
+                scale: 15,
+                strokeColor: "#0000000e",
+                strokeOpacity: 1,
+                strokeWeight: 3,
+            },
+        },
+    };
     return {
+        options,
         map,
         cell14IdToAddedViews: new Map(),
     };
@@ -130,10 +149,6 @@ const cell14Options2 = Object.freeze({
     fillColor: "#d3b71738",
 } satisfies google.maps.PolygonOptions);
 
-const cell17CountMarkerOptions = Object.freeze(
-    {} satisfies google.maps.marker.AdvancedMarkerElementOptions,
-);
-
 function countToCell14Options(count: number) {
     switch (count) {
         case 1:
@@ -187,10 +202,15 @@ function renderCell17CountLabel(
     const countMarker = allocateMarkerAtMap(
         overlay,
         cell14.id,
-        cell17CountMarkerOptions,
+        overlay.options.cell17CountMarkerOptions,
     );
     countMarker.setPosition(cell14.cell.getLatLng());
-    countMarker.setLabel(`${count}`);
+    countMarker.setLabel({
+        text: `${count}`,
+        color: "#ffffff",
+        fontSize: "20px",
+        fontWeight: "400",
+    });
 }
 async function renderViewsInCell14(
     { records, overlay }: PageResource,
