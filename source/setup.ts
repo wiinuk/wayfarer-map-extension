@@ -1,7 +1,37 @@
-import { addS2Overlay } from "./cell-overlay";
+// spell-checker: ignore wfmapmods pois
+import { createAsyncQueue, type AsyncQueue } from "./async-queue";
+import { injectGcsListener } from "./gcs";
+import {
+    GcsQueriesSchema,
+    GcsResponseSchema,
+    type GcsQueries,
+    type GcsResponse,
+    type Poi,
+} from "./gcs-schema";
+import {
+    openRecords,
+    updateRecordsOfReceivedPois,
+    type PoiRecords,
+} from "./poi-records";
+import {
+    createPoisOverlay,
+    setupPoiRecordOverlay,
+    type PoisOverlay,
+} from "./poi-records-overlay";
 import { awaitElement } from "./standard-extensions";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
-async function getGMapObject(): Promise<google.maps.Map> {
+function handleAsyncError(reason: unknown) {
+    console.error("An error occurred during asynchronous processing:", reason);
+}
+
+async function getGMapObject(options: {
+    signal?: AbortSignal;
+}): Promise<google.maps.Map> {
     return await awaitElement(() => {
         try {
             // 実行時エラーは catch で無視する
@@ -11,69 +41,107 @@ async function getGMapObject(): Promise<google.maps.Map> {
         } catch {
             return null;
         }
-    });
+    }, options);
 }
 
-async function setupS2Overlay() {
-    const gMap = await getGMapObject();
+interface PageEventMap {
+    "gcs-saved": undefined;
+}
+export interface PageResource {
+    overlay: PoisOverlay;
+    defaultAsyncErrorHandler: (reason: unknown) => void;
+    map: google.maps.Map;
+    records: PoiRecords;
+    events: TypedEventTarget<PageEventMap>;
+}
+async function processGcsRequest(
+    page: PageResource,
+    queries: GcsQueries,
+    response: GcsResponse,
+    signal: AbortSignal,
+) {
+    if (response.captcha || !response.result.success) return;
 
-    function grid(level: number, color?: string, zIndex?: number) {
-        if (!color) {
-            switch (level % 4) {
-                case 0:
-                    color = "#808080";
-                    break;
-                case 2:
-                    color = "#E0E0E0";
-                    break;
-                default:
-                    color = "#C0C0C0";
-            }
-        }
-        return { level, color, zIndex };
+    const bounds = new google.maps.LatLngBounds(queries.sw, queries.ne);
+    const pois: Poi[] = [];
+    for (const cellData of response.result.data) {
+        pois.push(...cellData.pois);
     }
-    addS2Overlay(
-        gMap,
-        grid(4),
-        grid(5),
-        grid(6),
-        grid(7),
-        grid(8),
-        grid(9),
-        grid(10),
-        grid(11),
-        grid(12),
-        grid(13),
-        grid(14, "#0000FF", 401),
-        grid(15),
-        grid(16),
-        grid(17, "#FF0000", 400)
+    performance.mark("start save");
+    await updateRecordsOfReceivedPois(
+        page.records,
+        pois,
+        bounds,
+        Date.now(),
+        signal,
     );
+    performance.mark("end save");
+    page.events.dispatchEvent(createTypedCustomEvent("gcs-saved", undefined));
+
+    performance.measure("parse", "start json parse", "end json parse");
+    performance.measure("save", "start save", "end save");
+
+    performance.measure(
+        "nearly cells calculation",
+        "begin nearly cells calculation",
+        "end nearly cells calculation",
+    );
+    performance.measure(
+        "remove deleted pois",
+        "begin remove deleted pois",
+        "begin remove deleted pois",
+    );
+    performance.measure(
+        "update cells",
+        "begin update cells",
+        "end update cells",
+    );
+    performance.measure("update pois", "begin update pois", "end update pois");
 }
 
+function parseQueryFromUrl(urlObj: URL) {
+    const q: Record<string, string> = {};
+    urlObj.searchParams.forEach((v, k) => {
+        q[k] = v;
+    });
+    return q;
+}
 
-// マップを検出してS2オーバーレイを適用するメイン処理
-async function onPageUpdated() {
-    // Google Maps APIがロードされるのを待機してから描画
-    if (typeof google === "undefined" || typeof google.maps === "undefined") {
-        setTimeout(onPageUpdated, 500);
-        return;
-    }
+async function asyncSetup(signal: AbortSignal) {
+    await awaitElement(() => document.querySelector("#wfmapmods-side-panel"), {
+        signal,
+    });
 
-    await Promise.all([setupS2Overlay()]);
+    const map = await getGMapObject({ signal });
+    const page: PageResource = {
+        map,
+        records: await openRecords(),
+        defaultAsyncErrorHandler: handleAsyncError,
+        overlay: createPoisOverlay(map),
+        events: createTypedEventTarget(),
+    };
+
+    const gcsQueue: AsyncQueue<{ url: URL; responseText: string }> =
+        createAsyncQueue(async (items) => {
+            for (const { url, responseText } of items) {
+                performance.mark("start json parse");
+                const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
+                const response = GcsResponseSchema.parse(
+                    JSON.parse(responseText),
+                );
+                performance.mark("end json parse");
+                await processGcsRequest(page, queries, response, signal);
+            }
+        }, handleAsyncError);
+
+    injectGcsListener((url, responseText) => {
+        gcsQueue.push({ url, responseText });
+    });
+
+    setupPoiRecordOverlay(page);
 }
 
 export function setup() {
-    // スクリプト開始
-    // URL変更を検知して再実行する簡易的な仕組み
-    let lastUrl = location.href;
-    new MutationObserver(() => {
-        const url = location.href;
-        if (url !== lastUrl) {
-            lastUrl = url;
-            onPageUpdated();
-        }
-    }).observe(document, { subtree: true, childList: true });
-
-    onPageUpdated();
+    const cancel = new AbortController();
+    asyncSetup(cancel.signal).catch(handleAsyncError);
 }

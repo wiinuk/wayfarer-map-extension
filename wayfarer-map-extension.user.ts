@@ -8,9 +8,9 @@
 // @grant        none
 // ==/UserScript==
 
-import { setup } from './source/setup';
+import { setup } from "./source/setup";
 
-(function() {
-    'use strict';
+(function () {
+    "use strict";
     setup();
 })();
