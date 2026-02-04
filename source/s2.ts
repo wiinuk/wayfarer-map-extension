@@ -490,8 +490,8 @@ function exposeS2Module(exports: any) {
         S2.fromFacePosLevel =
         function (faceN, posS, levelN) {
             var Long =
-                (exports.dcodeIO && exports.dcodeIO.Long) ||
-                eval(`require("long")`);
+                (exports.dcodeIO && exports.dcodeIO.Long) // ||
+                // require("long");
             var faceB;
             var posB;
             var bin;
@@ -549,8 +549,8 @@ function exposeS2Module(exports: any) {
         S2.toHilbertQuadkey =
         function (idS) {
             var Long =
-                (exports.dcodeIO && exports.dcodeIO.Long) ||
-                eval(`require("long")`);
+                (exports.dcodeIO && exports.dcodeIO.Long) // ||
+                // require("long");
             var bin = Long.fromString(idS, true, 10).toString(2);
 
             while (bin.length < S2.FACE_BITS + S2.POS_BITS) {
@@ -605,7 +605,7 @@ function exposeS2Module(exports: any) {
         };
 
     S2.stepKey = function (key, num) {
-        var Long = (exports.dcodeIO && exports.dcodeIO.Long) || eval(`require("long")`);
+        var Long = (exports.dcodeIO && exports.dcodeIO.Long) // || require("long");
         var parts = key.split("/");
 
         var faceS = parts[0];
