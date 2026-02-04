@@ -99,12 +99,6 @@ export function setPoi(store: PoiStore<Idb.WritableModes>, value: PoiRecord) {
 export function removePoi(store: PoiStore<Idb.WritableModes>, guid: string) {
     return Idb.deleteValue(store[poisSymbol], guid);
 }
-function iteratePois(
-    store: PoiStore,
-    action: (value: PoiRecord) => Idb.IterationFlow,
-) {
-    return Idb.iterateValues(store[poisSymbol], undefined, action);
-}
 function iteratePoisInCell(
     store: PoiStore,
     cellId: CellIdAny,
@@ -129,13 +123,6 @@ export function getCell(store: PoiStore, cellId: CellIdAny) {
 export function setCell(store: PoiStore<Idb.WritableModes>, cell: CellRecord) {
     return Idb.putValue(store[cellsSymbol], cell);
 }
-function iterateCells(
-    store: PoiStore,
-    action: (cell: CellRecord) => Idb.IterationFlow,
-) {
-    return Idb.iterateValues(store[cellsSymbol], undefined, action);
-}
-
 const databaseName = "poi-records-e232930d-7282-4c02-aeef-bb9508576d2e";
 const databaseVersion = 1;
 const databaseSymbol = Symbol("_database");
@@ -267,41 +254,6 @@ function* bulkUpdate<
         return update(r, keys[i]!, values[i]!);
     });
     yield* Idb.bulkPut(store, updated);
-}
-
-function distributePoisToCell14s(pois: readonly Poi[]) {
-    const result = new Map<Cell14Id, Map<Poi["poiId"], Poi>>();
-    for (const poi of pois) {
-        const cell14Id = getCellId(
-            { lat: poi.latE6 / 1_000_000, lng: poi.lngE6 / 1_000_000 },
-            14,
-        );
-        let cell14Pois = result.get(cell14Id);
-        if (cell14Pois == null) {
-            result.set(cell14Id, (cell14Pois = new Map()));
-        }
-        cell14Pois.set(poi.poiId, poi);
-    }
-    return result;
-}
-
-function* removeDeletedPoisInCell14(
-    store: PoiStore<Idb.WritableModes>,
-    receivedPois: ReadonlyMap<string, Poi>,
-    fetchBounds: LatLngBounds,
-    cell14Id: Cell14Id,
-) {
-    const records = yield* Idb.getAllOfIndex(
-        store[cellIdsIndexSymbol],
-        cell14Id,
-    );
-    const removedPoiIds = [];
-    for (const poi of records) {
-        if (receivedPois.has(poi.guid)) continue;
-        if (!fetchBounds.contains(poi)) continue;
-        removedPoiIds.push(poi.guid);
-    }
-    yield* Idb.bulkDelete(store[poisSymbol], removedPoiIds);
 }
 
 export async function updateRecordsOfReceivedPois(
