@@ -2,12 +2,14 @@
 import type { EntityKind, Gmo, Poi } from "./gcs-schema";
 import { toLatLngLiteral } from "./geometry";
 import { id, type UnwrapPromise } from "./standard-extensions";
+import type { DatabaseSchemaKind, Query, RecordType } from "./typed-idb";
 import * as Idb from "./typed-idb";
 import {
     createCellFromCoordinates,
     getCellId,
     type CellId,
     type Cell,
+    type Cell14Id,
 } from "./typed-s2cell";
 
 type LatLngBounds = google.maps.LatLngBounds;
@@ -69,47 +71,41 @@ const databaseSchema = {
 } as const satisfies Idb.DatabaseSchemaKind;
 type DatabaseSchema = typeof databaseSchema;
 
-export type PoiStore = ReturnType<typeof createPoiStore>;
+export interface PoiStore<
+    TMode extends IDBTransactionMode = Idb.ReadableModes,
+> {
+    [poisSymbol]: Idb.Store<DatabaseSchema, "pois", TMode>;
+    [cellsSymbol]: Idb.Store<DatabaseSchema, "cells", TMode>;
+    [coordinatesIndexSymbol]: Idb.Index<DatabaseSchema, "pois", "coordinates">;
+    [cellIdsIndexSymbol]: Idb.Index<DatabaseSchema, "pois", "cellIds">;
+    [ancestorIdsIndexSymbol]: Idb.Index<DatabaseSchema, "cells", "ancestorIds">;
+}
 export type PoiRecords = UnwrapPromise<ReturnType<typeof openRecords>>;
 const poisSymbol = Symbol("_pois");
 const cellsSymbol = Symbol("_cells");
 const coordinatesIndexSymbol = Symbol("_coordinatesIndex");
 const cellIdsIndexSymbol = Symbol("_cellIdsIndex");
 const ancestorIdsIndexSymbol = Symbol("_ancestorIdsIndexSymbol");
-function createPoiStore({
-    pois,
-    cells,
-}: Readonly<{
-    pois: Idb.Store<DatabaseSchema, "pois">;
-    cells: Idb.Store<DatabaseSchema, "cells">;
-}>) {
-    return {
-        [poisSymbol]: pois,
-        [cellsSymbol]: cells,
-        [coordinatesIndexSymbol]: Idb.getIndex(pois, "coordinates"),
-        [cellIdsIndexSymbol]: Idb.getIndex(pois, "cellIds"),
-        [ancestorIdsIndexSymbol]: Idb.getIndex(cells, "ancestorIds"),
-    };
-}
+
 export function getPoiOfGuid(store: PoiStore, guid: string) {
     return Idb.getValue(store[poisSymbol], guid);
 }
 export function getPoiOfCoordinates(store: PoiStore, lat: number, lng: number) {
     return Idb.getValueOfIndex(store[coordinatesIndexSymbol], [lat, lng]);
 }
-export function setPoi(store: PoiStore, value: PoiRecord) {
+export function setPoi(store: PoiStore<Idb.WritableModes>, value: PoiRecord) {
     return Idb.putValue(store[poisSymbol], value);
 }
-export function removePoi(store: PoiStore, guid: string) {
+export function removePoi(store: PoiStore<Idb.WritableModes>, guid: string) {
     return Idb.deleteValue(store[poisSymbol], guid);
 }
-export function iteratePois(
+function iteratePois(
     store: PoiStore,
     action: (value: PoiRecord) => Idb.IterationFlow,
 ) {
     return Idb.iterateValues(store[poisSymbol], undefined, action);
 }
-export function iteratePoisInCell(
+function iteratePoisInCell(
     store: PoiStore,
     cellId: CellIdAny,
     action: (poi: PoiRecord) => Idb.IterationFlow,
@@ -130,10 +126,10 @@ function iterateCellsInCell(
 export function getCell(store: PoiStore, cellId: CellIdAny) {
     return Idb.getValue(store[cellsSymbol], cellId);
 }
-export function setCell(store: PoiStore, cell: CellRecord) {
+export function setCell(store: PoiStore<Idb.WritableModes>, cell: CellRecord) {
     return Idb.putValue(store[cellsSymbol], cell);
 }
-export function iterateCells(
+function iterateCells(
     store: PoiStore,
     action: (cell: CellRecord) => Idb.IterationFlow,
 ) {
@@ -155,15 +151,28 @@ export async function openRecords() {
 export function closeRecords(records: PoiRecords) {
     Idb.closeDatabase(records[databaseSymbol]);
 }
-export function enterTransactionScope<R>(
+export function enterTransactionScope<
+    TMode extends Idb.NormalTransactionModes,
+    R,
+>(
     records: PoiRecords,
+    mode: TMode,
     options: { signal?: AbortSignal } | null | undefined,
-    scope: (pois: PoiStore) => Idb.TransactionScope<R>,
+    scope: (pois: PoiStore<TMode>) => Idb.TransactionScope<R>,
 ): Promise<R> {
     return Idb.enterTransactionScope(
         records[databaseSymbol],
-        { mode: "readwrite", signal: options?.signal },
-        (stores) => scope(createPoiStore(stores)),
+        { mode, signal: options?.signal },
+        ({ pois, cells }) => {
+            const store = {
+                [poisSymbol]: pois,
+                [cellsSymbol]: cells,
+                [coordinatesIndexSymbol]: Idb.getIndex(pois, "coordinates"),
+                [cellIdsIndexSymbol]: Idb.getIndex(pois, "cellIds"),
+                [ancestorIdsIndexSymbol]: Idb.getIndex(cells, "ancestorIds"),
+            };
+            return scope(store);
+        },
         "pois",
         "cells",
     );
@@ -211,12 +220,15 @@ export function getNearlyCellsForBounds<TLevel extends number>(
 
 /** データベース中からセル14内のPOIを返す */
 function* getPoisInCell14s(store: PoiStore, cell14s: readonly Cell<14>[]) {
+    // TODO: bulkGetAllOfIndex
     const pois: PoiRecord[] = [];
     for (const cell14 of cell14s) {
-        yield* iteratePoisInCell(store, cell14.toString(), (poi) => {
-            pois.push(poi);
-            return "continue";
-        });
+        const poisInCell14 = yield* Idb.getAllOfIndex(
+            store[cellIdsIndexSymbol],
+            cell14.toString(),
+        );
+
+        pois.push(...poisInCell14);
     }
     return pois;
 }
@@ -233,6 +245,65 @@ function createCellIds(lat: number, lng: number, maxLevel = 30) {
 function createAncestorIds(lat: number, lng: number, level: number) {
     return createCellIds(lat, lng, level - 1);
 }
+
+function* bulkUpdate<
+    K extends Query<TSchema, TStoreName>,
+    T,
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+>(
+    store: Idb.Store<TSchema, TStoreName, Idb.WritableModes>,
+    map: Map<K, T>,
+    update: (
+        record: RecordType<TSchema, TStoreName> | undefined,
+        key: K,
+        value: T,
+    ) => RecordType<TSchema, TStoreName>,
+) {
+    const keys = [...map.keys()];
+    const values = [...map.values()];
+    const records = yield* Idb.bulkGet(store, keys);
+    const updated = records.map((r, i) => {
+        return update(r, keys[i]!, values[i]!);
+    });
+    yield* Idb.bulkPut(store, updated);
+}
+
+function distributePoisToCell14s(pois: readonly Poi[]) {
+    const result = new Map<Cell14Id, Map<Poi["poiId"], Poi>>();
+    for (const poi of pois) {
+        const cell14Id = getCellId(
+            { lat: poi.latE6 / 1_000_000, lng: poi.lngE6 / 1_000_000 },
+            14,
+        );
+        let cell14Pois = result.get(cell14Id);
+        if (cell14Pois == null) {
+            result.set(cell14Id, (cell14Pois = new Map()));
+        }
+        cell14Pois.set(poi.poiId, poi);
+    }
+    return result;
+}
+
+function* removeDeletedPoisInCell14(
+    store: PoiStore<Idb.WritableModes>,
+    receivedPois: ReadonlyMap<string, Poi>,
+    fetchBounds: LatLngBounds,
+    cell14Id: Cell14Id,
+) {
+    const records = yield* Idb.getAllOfIndex(
+        store[cellIdsIndexSymbol],
+        cell14Id,
+    );
+    const removedPoiIds = [];
+    for (const poi of records) {
+        if (receivedPois.has(poi.guid)) continue;
+        if (!fetchBounds.contains(poi)) continue;
+        removedPoiIds.push(poi.guid);
+    }
+    yield* Idb.bulkDelete(store[poisSymbol], removedPoiIds);
+}
+
 export async function updateRecordsOfReceivedPois(
     records: PoiRecords,
     receivedPois: readonly Poi[],
@@ -240,82 +311,101 @@ export async function updateRecordsOfReceivedPois(
     fetchDate: number,
     signal: AbortSignal,
 ) {
-    const pois = new Map<string, Poi>();
-    for (const poi of receivedPois) {
-        pois.set(poi.poiId, poi);
-    }
     performance.mark("begin nearly cells calculation");
     const cell14s = getNearlyCellsForBounds(fetchBounds, 14);
     const cell17s = getNearlyCellsForBounds(fetchBounds, 17);
     performance.mark("end nearly cells calculation");
 
-    await enterTransactionScope(records, { signal }, function* (poisStore) {
-        performance.mark("begin remove deleted pois");
-        // 領域内に存在しないPOI記録を削除
-        for (const poi of yield* getPoisInCell14s(poisStore, cell14s)) {
-            if (pois.has(poi.guid)) continue;
-            if (!fetchBounds.contains(poi)) continue;
-            yield* removePoi(poisStore, poi.guid);
-        }
-        performance.mark("end remove deleted pois");
+    const idToReceivedPoi = new Map();
+    for (const poi of receivedPois) {
+        idToReceivedPoi.set(poi.poiId, poi);
+    }
+    await enterTransactionScope(
+        records,
+        "readwrite",
+        { signal },
+        function* (poisStore) {
+            // 領域内に存在しないPOI記録を削除
+            performance.mark("begin remove deleted pois");
+            const pois = yield* getPoisInCell14s(poisStore, cell14s);
+            const removedPoiIds = [];
+            for (const poi of pois) {
+                if (idToReceivedPoi.has(poi.guid)) continue;
+                if (!fetchBounds.contains(poi)) continue;
+                removedPoiIds.push(poi.guid);
+            }
+            yield* Idb.bulkDelete(poisStore[poisSymbol], removedPoiIds);
+            performance.mark("end remove deleted pois");
 
-        // POI記録を更新
-        performance.mark("begin update pois");
-        for (const [id, p] of pois) {
-            const lat = p.latE6 / 1_000_000;
-            const lng = p.lngE6 / 1_000_000;
-            const name = p.title;
-            const cellIds = createCellIds(lat, lng);
-            const poi: PoiRecord = (yield* getPoiOfGuid(poisStore, id)) ?? {
-                guid: id,
-                lat,
-                lng,
-                name,
-                data: p,
-                cellIds,
-                firstFetchDate: fetchDate,
-                lastFetchDate: fetchDate,
-            };
+            // POI記録を更新
+            performance.mark("begin update pois");
+            yield* bulkUpdate(
+                poisStore[poisSymbol],
+                idToReceivedPoi,
+                (oldRecord, poiId, poi) => {
+                    const lat = poi.latE6 / 1_000_000;
+                    const lng = poi.lngE6 / 1_000_000;
+                    const name = poi.title;
+                    const cellIds = createCellIds(lat, lng);
+                    const record = oldRecord ?? {
+                        guid: poiId,
+                        lat,
+                        lng,
+                        name,
+                        data: poi,
+                        cellIds,
+                        firstFetchDate: fetchDate,
+                        lastFetchDate: fetchDate,
+                    };
+                    return {
+                        ...record,
+                        name: name !== "" ? name : record.name,
+                        lat,
+                        lng,
+                        data: poi,
+                        cellIds,
+                        lastFetchDate: fetchDate,
+                    };
+                },
+            );
+            performance.mark("end update pois");
 
-            yield* setPoi(poisStore, {
-                ...poi,
-                name: name !== "" ? name : poi.name,
-                lat,
-                lng,
-                data: p,
-                cellIds,
-                lastFetchDate: fetchDate,
-            });
-        }
-        performance.mark("end update pois");
-
-        // 全面が取得されたセル17を更新
-        performance.mark("begin update cells");
-        for (const cell of cell17s) {
-            if (!boundsIncludesCell(cell, fetchBounds)) continue;
-
-            const cellId = cell.toString();
-            const coordinates = cell.getLatLng();
-            const record: CellRecord = (yield* getCell(poisStore, cellId)) ?? {
-                cellId: cell.toString(),
-                centerLat: coordinates.lat,
-                centerLng: coordinates.lng,
-                level: cell.level,
-                ancestorIds: createAncestorIds(
-                    coordinates.lat,
-                    coordinates.lng,
-                    cell.level,
-                ),
-                firstFetchDate: fetchDate,
-                lastFetchDate: fetchDate,
-            };
-            yield* setCell(poisStore, {
-                ...record,
-                lastFetchDate: fetchDate,
-            });
-        }
-        performance.mark("end update cells");
-    });
+            // 全面が取得されたセル17を更新
+            performance.mark("begin update cells");
+            const cell17IdToVisibleCell = new Map();
+            for (const cell of cell17s) {
+                if (!boundsIncludesCell(cell, fetchBounds)) continue;
+                cell17IdToVisibleCell.set(cell.toString(), cell);
+            }
+            yield* bulkUpdate(
+                poisStore[cellsSymbol],
+                cell17IdToVisibleCell,
+                (oldRecord, cellId, cell) => {
+                    const coordinates = cell.getLatLng();
+                    const record =
+                        oldRecord ??
+                        ({
+                            cellId: cell.toString(),
+                            centerLat: coordinates.lat,
+                            centerLng: coordinates.lng,
+                            level: cell.level,
+                            ancestorIds: createAncestorIds(
+                                coordinates.lat,
+                                coordinates.lng,
+                                cell.level,
+                            ),
+                            firstFetchDate: fetchDate,
+                            lastFetchDate: fetchDate,
+                        } satisfies CellRecord);
+                    return {
+                        ...record,
+                        lastFetchDate: fetchDate,
+                    };
+                },
+            );
+            performance.mark("end update cells");
+        },
+    );
 }
 
 export interface CellStatistic<TLevel extends number> {
@@ -430,9 +520,14 @@ export async function getCell14Stats(
             childCell.lastFetchDate,
         );
     };
-    await enterTransactionScope(records, { signal }, function* (store) {
-        yield* iteratePoisInCell(store, cellId, collectPois);
-        yield* iterateCellsInCell(store, cellId, collectCells);
-    });
+    await enterTransactionScope(
+        records,
+        "readonly",
+        { signal },
+        function* (store) {
+            yield* iteratePoisInCell(store, cellId, collectPois);
+            yield* iterateCellsInCell(store, cellId, collectCells);
+        },
+    );
     return cell14;
 }

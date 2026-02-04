@@ -92,19 +92,22 @@ const cell17EmptyOptions = Object.freeze({
     fillColor: "#0000002d",
     fillOpacity: 1,
     clickable: false,
-    zIndex: baseZIndex,
+    zIndex: baseZIndex + 1,
 } satisfies google.maps.PolygonOptions);
 
 const cell17PokestopOptions = Object.freeze({
     ...cell17EmptyOptions,
 
-    fillColor: "rgba(0, 191, 255, 0.6)",
-    zIndex: baseZIndex + 1,
+    fillColor: "rgba(0, 191, 255, 0.4)",
+    strokeColor: "rgba(0, 191, 255, 0.6)",
+    zIndex: baseZIndex,
 } satisfies google.maps.PolygonOptions);
+
 const cell17GymOptions = Object.freeze({
     ...cell17PokestopOptions,
 
-    fillColor: "rgba(255, 0, 13, 0.6)",
+    fillColor: "rgba(255, 0, 13, 0.4)",
+    strokeColor: "rgba(255, 0, 13, 0.6)",
 } satisfies google.maps.PolygonOptions);
 
 const cell14Options = Object.freeze({
@@ -149,19 +152,19 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
         (kindToPois.get("POKESTOP")?.length ?? 0)
     );
 }
-function renderCell14(page: PageResource, cell14: Cell14Statistics) {
+function renderCell14(overlay: PoisOverlay, cell14: Cell14Statistics) {
     if (cell14.pois.size === 0) return;
 
     const entityCount = sumGymAndPokestopCount(cell14);
     const options = countToCell14Options(entityCount);
-    const polygon = allocatePolygonAtMap(page.overlay, cell14.id, options);
+    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
     polygon.setPath(cell14.corner);
 }
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return cell17.kindToCount.get(kind) ?? 0 !== 0;
 }
 function renderCell17(
-    page: PageResource,
+    overlay: PoisOverlay,
     cell14: Cell14Statistics,
     cell17: CellStatistic<17>,
 ) {
@@ -171,41 +174,70 @@ function renderCell17(
     } else if (has("POKESTOP", cell17)) {
         options = cell17PokestopOptions;
     }
-    const polygon = allocatePolygonAtMap(page.overlay, cell14.id, options);
+    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
     polygon.setPath(cell17.cell.getCornerLatLngs());
 }
-function renderCell17CountLabel(page: PageResource, cell14: Cell14Statistics) {
+function renderCell17CountLabel(
+    overlay: PoisOverlay,
+    cell14: Cell14Statistics,
+) {
     const count = sumGymAndPokestopCount(cell14);
     if (count <= 0) return;
 
     const countMarker = allocateMarkerAtMap(
-        page.overlay,
+        overlay,
         cell14.id,
         cell17CountMarkerOptions,
     );
     countMarker.setPosition(cell14.cell.getLatLng());
     countMarker.setLabel(`${count}`);
 }
+async function renderViewsInCell14(
+    { records, overlay }: PageResource,
+    nearlyCell14: Cell<14>,
+    zoom: number,
+    center: LatLng,
+    scheduler: Scheduler,
+    signal: AbortSignal,
+) {
+    const { lat, lng } = nearlyCell14.getLatLng();
+    const cell14 = await getCell14Stats(records, lat, lng, signal);
+    if (cell14 == null) return;
+
+    clearMarkersInCell14(overlay, cell14.id);
+    renderCell14(overlay, cell14);
+
+    if (13 < zoom) {
+        renderCell17CountLabel(overlay, cell14);
+    }
+    if (14 < zoom) {
+        const cell17s = [...cell14.cell17s.values()];
+        cell17s.sort(
+            (a, b) =>
+                distanceSquared(center, a.center) -
+                distanceSquared(center, b.center),
+        );
+        for (const cell17 of cell17s) {
+            renderCell17(overlay, cell14, cell17);
+        }
+    }
+}
 async function renderPoiAndCells(
     page: PageResource,
     scheduler: Scheduler,
     signal: AbortSignal,
 ) {
-    const { records, map } = page;
+    const { map } = page;
 
     const bounds = map.getBounds();
     const zoom = map.getZoom()!;
     const center = toLatLngLiteral(map.getCenter()!);
     if (bounds == null) return;
 
-    function compareByDistanceToMapCenter(
-        a: { center: LatLng },
-        b: { center: LatLng },
-    ) {
-        return (
-            distanceSquared(center, a.center) -
-            distanceSquared(center, b.center)
-        );
+    console.log("zoom", zoom);
+    if (zoom <= 12) {
+        await clearAllMarkers(page.overlay, scheduler);
+        return;
     }
 
     const nearlyCell14s = getNearlyCellsForBounds(bounds, 14);
@@ -215,42 +247,43 @@ async function renderPoiAndCells(
             distanceSquared(center, b.getLatLng()),
     );
 
-    await clearUnusedCell14Markers(page, scheduler, nearlyCell14s);
+    await clearOutOfRangeCell14Markers(page.overlay, scheduler, nearlyCell14s);
 
     for (const nearlyCell14 of nearlyCell14s) {
-        const { lat, lng } = nearlyCell14.getLatLng();
-        const cell14 = await getCell14Stats(records, lat, lng, signal);
-        if (cell14 == null) continue;
-
-        clearMarkersInCell14(page.overlay, cell14.id);
-        renderCell14(page, cell14);
-
-        if (13 < zoom) {
-            renderCell17CountLabel(page, cell14);
-        }
-        if (14 < zoom) {
-            const cell17s = [...cell14.cell17s.values()];
-            cell17s.sort(compareByDistanceToMapCenter);
-            for (const cell17 of cell17s.values()) {
-                renderCell17(page, cell14, cell17);
-            }
-        }
+        await scheduler.yield();
+        await renderViewsInCell14(
+            page,
+            nearlyCell14,
+            zoom,
+            center,
+            scheduler,
+            signal,
+        );
     }
 }
 
-async function clearUnusedCell14Markers(
-    page: PageResource,
+async function clearAllMarkers(overlay: PoisOverlay, scheduler: Scheduler) {
+    const { cell14IdToAddedViews: views } = overlay;
+    for (const cellId of views.keys()) {
+        await scheduler.yield();
+        clearMarkersInCell14(overlay, cellId);
+        views.delete(cellId);
+    }
+}
+
+async function clearOutOfRangeCell14Markers(
+    overlay: PoisOverlay,
     scheduler: Scheduler,
     nearlyCell14s: readonly Cell<14>[],
 ) {
     const cell14Ids = new Set<Cell14Id>(
         nearlyCell14s.map((cell) => cell.toString()),
     );
-    for (const cell14Id of page.overlay.cell14IdToAddedViews.keys()) {
+    for (const cell14Id of overlay.cell14IdToAddedViews.keys()) {
         if (cell14Ids.has(cell14Id)) continue;
 
         await scheduler.yield();
-        clearMarkersInCell14(page.overlay, cell14Id);
+        clearMarkersInCell14(overlay, cell14Id);
     }
 }
 
@@ -258,10 +291,12 @@ export function setupPoiRecordOverlay(page: PageResource) {
     const enterCancelScope = createAsyncCancelScope(
         page.defaultAsyncErrorHandler,
     );
-    page.map.addListener("idle", () => {
+    const onRenderNeeded = () => {
         enterCancelScope((signal) => {
             const scheduler = createScheduler(signal);
             return renderPoiAndCells(page, scheduler, signal);
         });
-    });
+    };
+    page.events.addEventListener("gcs-saved", onRenderNeeded);
+    page.map.addListener("idle", onRenderNeeded);
 }
