@@ -11,5 +11,11 @@
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
   },
-  "include": ["source", "main.user.ts"]
+  "exclude": ["node_modules", "**/.private/"],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.cjs",
+    "**/*.mjs",
+  ]
 }

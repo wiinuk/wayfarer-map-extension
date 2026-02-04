@@ -1,8 +1,10 @@
+//@ts-check
 import * as esbuild from "esbuild";
 import * as fs from "fs/promises";
 import { exec } from "child_process";
+import path from "path";
 
-const mainFile = "./main.user.ts";
+const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
 const watchMode = args.includes("--watch");
 const debugMode = args.includes("--debug");
@@ -43,13 +45,24 @@ async function startWsServer() {
     }
 }
 
+/**
+ * @param {string} originalPath
+ * @param {string} newExt
+ */
+function changeExt(originalPath, newExt) {
+    const parsedPath = path.parse(originalPath);
+    parsedPath.ext = newExt;
+    parsedPath.base = "";
+    return path.format(parsedPath);
+}
+
 async function build() {
     const mainContent = await fs.readFile(mainFile, "utf-8");
     const headerMatch = mainContent.match(
         /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/,
     );
     if (!headerMatch) {
-        throw new Error("Userscript header not found in main.user.ts");
+        throw new Error(`Userscript header not found in ${mainFile}`);
     }
     const banner = headerMatch[0];
 
@@ -62,10 +75,11 @@ async function build() {
         ? `;(function(){try{let connected = false; var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('open', () => {connected = true;});ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){if(connected){setTimeout(function(){location.reload();},100);}} );}catch(e){console.warn('dev reload ws failed',e);} })();`
         : "";
 
+    /** @type {esbuild.BuildOptions} */
     const baseOptions = {
         entryPoints: [mainFile],
         bundle: true,
-        outfile: "./main.user.js",
+        outfile: changeExt(mainFile, ".js"),
         banner: { js: banner },
         footer: debugMode ? { js: clientSnippet } : undefined,
         sourcemap: debugMode ? "inline" : false,

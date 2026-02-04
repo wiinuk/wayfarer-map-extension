@@ -2,9 +2,6 @@
 node_modules/
 .npm-cache/
 
-# Build artifacts
-main.user.js
-
 # Logs
 *.log
 npm-debug.log*
