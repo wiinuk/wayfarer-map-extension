@@ -74,14 +74,17 @@ export function closeDatabase<TSchema extends DatabaseSchemaKind>(
 }
 
 export type IterationFlow = "continue" | "break" | undefined;
-export interface IterateValuesRequest {
-    readonly source: IDBObjectStore | IDBIndex;
-    readonly query: IDBValidKey | IDBKeyRange | null | undefined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly action: (value: any) => IterationFlow;
+class IterateValuesRequest {
+    constructor(
+        readonly source: IDBObjectStore | IDBIndex,
+        readonly query: IDBValidKey | IDBKeyRange | null | undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        readonly action: (value: any) => IterationFlow,
+    ) {}
 }
 interface TransactionalOperations {
     request(value: IDBRequest): unknown;
+    requests(value: readonly IDBRequest[]): unknown[];
     iterateValues(value: IterateValuesRequest): void;
 }
 export type TransactionScope<R> = Generator<
@@ -161,9 +164,11 @@ export function enterTransactionScope<
             stores as Readonly<Stores<TSchema, TStoreNames>>,
         );
 
-        type ResolvingStateKind = "Request" | "OpenCursor";
+        type ResolvingStateKind = "Request" | "WaitRequests" | "OpenCursor";
         let stateKind: ResolvingStateKind | undefined;
         let request_request: IDBRequest | undefined;
+        let waitRequests_results: unknown[] | undefined;
+        let waitRequests_requests: readonly IDBRequest[] | undefined;
         let openCursor_request:
             | IDBRequest<IDBCursorWithValue | null>
             | undefined;
@@ -178,6 +183,19 @@ export function enterTransactionScope<
                     const result = request_request!.result;
                     stateKind = undefined;
                     request_request = undefined;
+                    r = iterator.next(result);
+                    break;
+                }
+                case "WaitRequests": {
+                    const results = waitRequests_results!;
+                    const requests = waitRequests_requests!;
+                    const result = requests[results.length]!.result;
+                    results.push(result);
+                    if (results.length !== requests.length) return;
+
+                    stateKind = undefined;
+                    waitRequests_requests = undefined;
+                    waitRequests_results = undefined;
                     r = iterator.next(result);
                     break;
                 }
@@ -214,10 +232,23 @@ export function enterTransactionScope<
                 yieldValue.onsuccess = onResolved;
                 return;
             }
-            stateKind = "OpenCursor";
-            openCursor_request = yieldValue.source.openCursor(yieldValue.query);
-            openCursor_action = yieldValue.action;
-            openCursor_request.onsuccess = onResolved;
+            if (yieldValue instanceof IterateValuesRequest) {
+                stateKind = "OpenCursor";
+                openCursor_request = yieldValue.source.openCursor(
+                    yieldValue.query,
+                );
+                openCursor_action = yieldValue.action;
+                openCursor_request.onsuccess = onResolved;
+                return;
+            }
+
+            stateKind = "WaitRequests";
+            waitRequests_requests = yieldValue;
+            waitRequests_results = [];
+            for (const request of yieldValue) {
+                request.onsuccess = onResolved;
+            }
+            return;
         }
         onResolved();
     });
@@ -274,13 +305,18 @@ type resolveRecordKeyType<
           : resolveRecordKeyArray<keys, recordType>
       : unreachable;
 
+type RecordType<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+> = UnwrapId<TSchema[TStoreName]["recordType"]>;
+
 export type StoreKey<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 > = resolveRecordKeyType<
     TSchema[TStoreName]["key"],
     false,
-    UnwrapId<TSchema[TStoreName]["recordType"]>
+    RecordType<TSchema, TStoreName>
 >;
 export type IndexKey<
     schema extends DatabaseSchemaKind,
@@ -291,22 +327,68 @@ export type IndexKey<
     schema[storeName]["indexes"][indexName]["multiEntry"] extends true
         ? true
         : false,
-    UnwrapId<schema[storeName]["recordType"]>
+    RecordType<schema, storeName>
 >;
 
-export type AllValue = null;
-type KeyOrRange<
+export type AllValue = null | undefined;
+type Query<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 > = StoreKey<TSchema, TStoreName> | KeyRange<StoreKey<TSchema, TStoreName>>;
 
+type IndexQuery<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
+> =
+    | IndexKey<TSchema, TStoreName, TIndexName>
+    | KeyRange<IndexKey<TSchema, TStoreName, TIndexName>>;
+
+type GetResult<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+> = RecordType<TSchema, TStoreName> | undefined;
+
 export function* getValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
->(store: Store<TSchema, TStoreName>, query: KeyOrRange<TSchema, TStoreName>) {
-    return (yield store.get(query)) as
-        | UnwrapId<TSchema[TStoreName]["recordType"]>
-        | undefined;
+>(store: Store<TSchema, TStoreName>, query: Query<TSchema, TStoreName>) {
+    return (yield store.get(query)) as GetResult<TSchema, TStoreName>;
+}
+export function* getAll<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+>(
+    store: Store<TSchema, TStoreName>,
+    query: Query<TSchema, TStoreName> | AllValue,
+    count?: number,
+): TransactionScope<RecordType<TSchema, TStoreName>[]> {
+    return (yield store.getAll(query, count)) as RecordType<
+        TSchema,
+        TStoreName
+    >[];
+}
+
+function getRequests(
+    source: IDBObjectStore | IDBIndex,
+    queries: Iterable<IDBValidKey | IDBKeyRange>,
+) {
+    const requests = [];
+    for (const query of queries) {
+        requests.push(source.get(query));
+    }
+    return requests;
+}
+export function* bulkGet<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+>(
+    store: Store<TSchema, TStoreName>,
+    queries: Iterable<Query<TSchema, TStoreName>>,
+) {
+    const requests = getRequests(store, queries);
+    if (requests.length === 0) return [];
+    return (yield requests) as GetResult<TSchema, TStoreName>[];
 }
 export function* getValueOfIndex<
     TSchema extends DatabaseSchemaKind,
@@ -314,30 +396,52 @@ export function* getValueOfIndex<
     TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 >(
     index: Index<TSchema, TStoreName, TIndexName>,
-    query:
-        | IndexKey<TSchema, TStoreName, TIndexName>
-        | KeyRange<IndexKey<TSchema, TStoreName, TIndexName>>,
-): TransactionScope<UnwrapId<TSchema[TStoreName]["recordType"]> | undefined> {
-    return (yield index.get(query)) as
-        | UnwrapId<TSchema[TStoreName]["recordType"]>
-        | undefined;
+    query: IndexQuery<TSchema, TStoreName, TIndexName>,
+) {
+    return (yield index.get(query)) as GetResult<TSchema, TStoreName>;
+}
+export function* getAllOfIndex<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
+>(
+    index: Index<TSchema, TStoreName, TIndexName>,
+    query: Query<TSchema, TStoreName> | AllValue,
+    count?: number,
+): TransactionScope<RecordType<TSchema, TStoreName>[]> {
+    return (yield index.getAll(query, count)) as RecordType<
+        TSchema,
+        TStoreName
+    >[];
+}
+export function* bulkGetOfIndex<
+    TSchema extends DatabaseSchemaKind,
+    TStoreName extends keyof TSchema & string,
+    TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
+>(
+    index: Index<TSchema, TStoreName, TIndexName>,
+    queries: Iterable<IndexQuery<TSchema, TStoreName, TIndexName>>,
+): TransactionScope<GetResult<TSchema, TStoreName>[]> {
+    const requests = getRequests(index, queries);
+    if (requests.length === 0) return [];
+    return (yield requests) as GetResult<TSchema, TStoreName>[];
 }
 export function* putValue<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    value: UnwrapId<TSchema[TStoreName]["recordType"]>,
-): TransactionScope<UnwrapId<TSchema[TStoreName]["recordType"]>> {
+    value: RecordType<TSchema, TStoreName>,
+): TransactionScope<RecordType<TSchema, TStoreName>> {
     yield store.put(value);
     return value;
 }
-export function* putValues<
+export function* bulkPut<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    values: Iterable<UnwrapId<TSchema[TStoreName]["recordType"]>>,
+    values: Iterable<RecordType<TSchema, TStoreName>>,
 ): TransactionScope<void> {
     let lastRequest;
     for (const value of values) {
@@ -352,16 +456,16 @@ export function* deleteValue<
     TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    query: KeyOrRange<TSchema, TStoreName>,
+    query: Query<TSchema, TStoreName>,
 ): TransactionScope<void> {
     yield store.delete(query);
 }
-export function* deleteValues<
+export function* bulkDelete<
     TSchema extends DatabaseSchemaKind,
     TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    queries: Iterable<KeyOrRange<TSchema, TStoreName>>,
+    queries: Iterable<Query<TSchema, TStoreName>>,
 ): TransactionScope<void> {
     let lastRequest;
     for (const query of queries) {
@@ -377,10 +481,8 @@ export function* iterateValues<
     TStoreName extends keyof TSchema & string,
 >(
     store: Store<TSchema, TStoreName>,
-    query: KeyOrRange<TSchema, TStoreName> | AllValue | undefined,
-    action: (
-        value: UnwrapId<TSchema[TStoreName]["recordType"]>,
-    ) => IterationFlow,
+    query: Query<TSchema, TStoreName> | AllValue,
+    action: (value: RecordType<TSchema, TStoreName>) => IterationFlow,
 ): TransactionScope<void> {
     yield { source: store, query, action };
     return;
@@ -391,14 +493,8 @@ export function* iterateValuesOfIndex<
     TIndexName extends keyof TSchema[TStoreName]["indexes"] & string,
 >(
     index: Index<TSchema, TStoreName, TIndexName>,
-    query:
-        | IndexKey<TSchema, TStoreName, TIndexName>
-        | KeyRange<IndexKey<TSchema, TStoreName, TIndexName>>
-        | AllValue
-        | undefined,
-    action: (
-        value: UnwrapId<TSchema[TStoreName]["recordType"]>,
-    ) => IterationFlow,
+    query: IndexQuery<TSchema, TStoreName, TIndexName> | AllValue,
+    action: (value: RecordType<TSchema, TStoreName>) => IterationFlow,
 ): TransactionScope<void> {
     yield { source: index, query, action };
     return;
