@@ -56,5 +56,11 @@ export default defineConfig([
             "no-duplicate-imports": "warn",
         },
     },
-    globalIgnores(["**/node_modules/", "**/*.user.js", "**/build.mjs"]),
+    globalIgnores([
+        "**/node_modules/",
+        "**/*.user.js",
+        "**/build.mjs",
+        "**/.private/",
+        "**/eslint.config.mjs",
+    ]),
 ]);
