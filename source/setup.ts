@@ -19,6 +19,11 @@ import {
     type PoisOverlay,
 } from "./poi-records-overlay";
 import { awaitElement } from "./standard-extensions";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
 function handleAsyncError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -39,11 +44,15 @@ async function getGMapObject(options: {
     }, options);
 }
 
+interface PageEventMap {
+    "gcs-saved": undefined;
+}
 export interface PageResource {
     overlay: PoisOverlay;
     defaultAsyncErrorHandler: (reason: unknown) => void;
     map: google.maps.Map;
     records: PoiRecords;
+    events: TypedEventTarget<PageEventMap>;
 }
 async function processGcsRequest(
     page: PageResource,
@@ -68,6 +77,7 @@ async function processGcsRequest(
         signal,
     );
     performance.mark("end save");
+    page.events.dispatchEvent(createTypedCustomEvent("gcs-saved", undefined));
 
     performance.measure("parse", "start json parse", "end json parse");
     performance.measure("save", "start save", "end save");
@@ -113,6 +123,7 @@ async function asyncSetup(signal: AbortSignal) {
         records: await openRecords(),
         defaultAsyncErrorHandler: handleAsyncError,
         overlay: createPoisOverlay(map),
+        events: createTypedEventTarget(),
     };
 
     const gcsQueue: AsyncQueue<{ url: URL; responseText: string }> =
