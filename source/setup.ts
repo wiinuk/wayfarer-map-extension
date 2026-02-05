@@ -24,6 +24,17 @@ import {
     createTypedEventTarget,
     type TypedEventTarget,
 } from "./typed-event-target";
+import * as remote from "./remote";
+import { createConfigAccessor, type LocalConfigAccessor } from "./local-config";
+import type { Draft } from "./remote";
+import {
+    createDraftsOverlay,
+    setupDraftsOverlay,
+    type DraftsOverlay,
+} from "./drafts-overlay";
+
+const localConfigKey =
+    "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
 
 function handleAsyncError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -48,11 +59,13 @@ interface PageEventMap {
     "gcs-saved": undefined;
 }
 export interface PageResource {
-    overlay: PoisOverlay;
-    defaultAsyncErrorHandler: (reason: unknown) => void;
-    map: google.maps.Map;
-    records: PoiRecords;
-    events: TypedEventTarget<PageEventMap>;
+    readonly overlay: PoisOverlay;
+    readonly defaultAsyncErrorHandler: (reason: unknown) => void;
+    readonly map: google.maps.Map;
+    readonly records: PoiRecords;
+    readonly events: TypedEventTarget<PageEventMap>;
+    readonly local: LocalConfigAccessor;
+    readonly drafts: DraftsOverlay;
 }
 async function processGcsRequest(
     page: PageResource,
@@ -113,12 +126,15 @@ async function asyncSetup(signal: AbortSignal) {
     });
 
     const map = await getGMapObject({ signal });
+    const local = createConfigAccessor(localConfigKey);
     const page: PageResource = {
         map,
         records: await openRecords(),
         defaultAsyncErrorHandler: handleAsyncError,
         overlay: createPoisOverlay(map),
         events: createTypedEventTarget(),
+        local,
+        drafts: createDraftsOverlay(map, handleAsyncError),
     };
 
     const gcsQueue: AsyncQueue<{ url: URL; responseText: string }> =
@@ -139,6 +155,7 @@ async function asyncSetup(signal: AbortSignal) {
     });
 
     setupPoiRecordOverlay(page);
+    await setupDraftsOverlay(page.drafts, local);
 }
 
 export function setup() {
