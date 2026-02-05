@@ -3,6 +3,7 @@ import * as esbuild from "esbuild";
 import * as fs from "fs/promises";
 import { exec } from "child_process";
 import path from "path";
+import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
 
 const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
@@ -14,7 +15,7 @@ const wsPort = Number(process.env.WS_PORT || 35729);
 async function runEslint() {
     console.log("[lint] Running ESLint...");
     return new Promise((resolve) => {
-        exec("eslint . --ext .ts", (error, stdout, stderr) => {
+        exec("eslint", (error, stdout, stderr) => {
             if (stdout) console.log(stdout);
             if (stderr) console.error(stderr);
             if (error) {
@@ -83,6 +84,7 @@ async function build() {
         banner: { js: banner },
         footer: debugMode ? { js: clientSnippet } : undefined,
         sourcemap: debugMode ? "inline" : false,
+        plugins: [TypedCssModulePlugin()],
     };
 
     if (watchMode) {

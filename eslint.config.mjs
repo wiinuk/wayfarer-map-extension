@@ -58,9 +58,10 @@ export default defineConfig([
     },
     globalIgnores([
         "**/node_modules/",
-        "**/*.user.js",
-        "**/build.mjs",
-        "**/.private/",
-        "**/eslint.config.mjs",
+        "**/.*",
+        "./esbuild-typed-css-module-plugin",
+        "./build.mjs",
+        "./*.config.mjs",
+        "./*.user.js",
     ]),
 ]);

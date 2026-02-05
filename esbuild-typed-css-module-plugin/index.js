@@ -52,9 +52,6 @@ module.exports = function typedCssModulePlugin(options = {}) {
 
             // 1. Initial Type Generation)
             build.onStart(async () => {
-                logger.info(
-                    `[typed-css-module] Starting initial type generation for pattern: '${filledOptions.pattern}'`,
-                );
                 const files = Glob.sync(filledOptions.pattern, {
                     cwd: rootPath,
                     absolute: true,
