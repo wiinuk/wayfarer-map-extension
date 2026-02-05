@@ -2,6 +2,9 @@
 node_modules/
 .npm-cache/
 
+# for debug
+*.debug.js
+
 # Logs
 *.log
 npm-debug.log*
