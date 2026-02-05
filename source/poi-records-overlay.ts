@@ -318,4 +318,5 @@ export function setupPoiRecordOverlay(page: PageResource) {
     };
     page.events.addEventListener("gcs-saved", onRenderNeeded);
     page.map.addListener("idle", onRenderNeeded);
+    onRenderNeeded();
 }
