@@ -4,7 +4,7 @@ import { createAsyncCancelScope } from "./standard-extensions";
 import { padBounds, parseCoordinates } from "./geometry";
 import { createScheduler, type Scheduler } from "./dom-extensions";
 import type { LocalConfigAccessor } from "./local-config";
-import { readonly } from "zod";
+import classNames, { cssText } from "./drafts-overlay.module.css";
 
 interface DraftWithView {
     readonly draft: Draft;
@@ -23,11 +23,10 @@ interface ViewOptions {
     };
 }
 function createDefaultViewOptions(): ViewOptions {
-    const classNamespace = String((Math.random() * 0xffffffff) >>> 0);
     const baseZIndex = 3100;
     let draftMarker: ViewOptions["draftMarker"];
     {
-        const className = `draft-label_${classNamespace}`;
+        const className = classNames.label;
         draftMarker = {
             options: Object.freeze({
                 zIndex: baseZIndex,
@@ -44,6 +43,8 @@ function createDefaultViewOptions(): ViewOptions {
             } satisfies google.maps.MarkerOptions),
             label: Object.freeze({
                 text: "",
+                color: "#FFFFBB",
+                fontSize: "11px",
                 className,
             } satisfies google.maps.MarkerLabel),
             className,
@@ -168,6 +169,10 @@ export async function setupDraftsOverlay(
     overlay: DraftsOverlay,
     local: LocalConfigAccessor,
 ) {
+    const style = document.createElement("style");
+    style.innerText = cssText;
+    document.body.append(style);
+
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
         const { routes } = await remote.getRoutes(
@@ -187,7 +192,4 @@ export async function setupDraftsOverlay(
     }
     overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
     notifyMapRangeChanged(overlay);
-
-    const style = document.createElement("style");
-    style.innerText = ``;
 }

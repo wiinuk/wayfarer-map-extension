@@ -1,0 +1,15 @@
+.label {
+    --text-stroke-color: #000;
+
+    max-width: 12em;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    text-shadow:
+        1px 1px var(--text-stroke-color),
+        1px -1px var(--text-stroke-color),
+        -1px 1px var(--text-stroke-color),
+        -1px -1px var(--text-stroke-color),
+        0 0 5px var(--text-stroke-color);
+}
