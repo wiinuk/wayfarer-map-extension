@@ -132,7 +132,7 @@ export interface Draft extends Omit<
     Route,
     "coordinates" | "routeId" | "routeName"
 > {
-    coordinates: LatLng[];
+    coordinates: [LatLng, ...LatLng[]];
     id: string;
     name: string;
 }
