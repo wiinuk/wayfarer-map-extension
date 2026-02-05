@@ -80,7 +80,7 @@ async function build() {
     const baseOptions = {
         entryPoints: [mainFile],
         bundle: true,
-        outfile: changeExt(mainFile, ".js"),
+        outfile: changeExt(mainFile, debugMode || watchMode ? ".debug.js" : ".js"),
         banner: { js: banner },
         footer: debugMode ? { js: clientSnippet } : undefined,
         sourcemap: debugMode ? "inline" : false,
