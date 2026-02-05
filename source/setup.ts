@@ -24,9 +24,7 @@ import {
     createTypedEventTarget,
     type TypedEventTarget,
 } from "./typed-event-target";
-import * as remote from "./remote";
 import { createConfigAccessor, type LocalConfigAccessor } from "./local-config";
-import type { Draft } from "./remote";
 import {
     createDraftsOverlay,
     setupDraftsOverlay,
