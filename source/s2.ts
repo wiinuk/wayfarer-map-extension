@@ -652,4 +652,14 @@ function exposeS2Module(exports: any) {
     return S2 as S2Namespace;
 }
 
-export const S2 = exposeS2Module("undefined" !== typeof module ? module.exports : window);
+export const S2 = exposeS2Module(
+    typeof module !== "undefined" && module.exports
+        ? module.exports
+        : typeof globalThis !== "undefined"
+          ? globalThis
+          : typeof self !== "undefined"
+            ? self
+            : typeof window !== "undefined"
+              ? window
+              : this,
+);
