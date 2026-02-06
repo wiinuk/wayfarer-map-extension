@@ -63,5 +63,6 @@ export default defineConfig([
         "./build.mjs",
         "./*.config.mjs",
         "./*.user.js",
+        "./*.debug.js",
     ]),
 ]);
