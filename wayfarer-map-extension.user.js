@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -14,45 +14,6 @@
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
   };
-
-  // source/async-queue.ts
-  function createAsyncQueue(consume, handleAsyncError2, { batchSize = 10 } = {}) {
-    const queue = [];
-    let processing = false;
-    let scheduled = false;
-    function push(item) {
-      queue.push(item);
-      schedule();
-    }
-    function schedule() {
-      if (scheduled) return;
-      scheduled = true;
-      queueMicrotask(() => {
-        scheduled = false;
-        void flush().catch(handleAsyncError2);
-      });
-    }
-    async function flush() {
-      if (processing) return;
-      if (queue.length === 0) return;
-      processing = true;
-      const batch = queue.splice(0, batchSize);
-      try {
-        await consume(batch);
-      } catch {
-        queue.unshift(...batch);
-      } finally {
-        processing = false;
-        if (queue.length) {
-          schedule();
-        }
-      }
-    }
-    function close() {
-      queue.length = 0;
-    }
-    return { push, close };
-  }
 
   // source/gcs.ts
   var TARGET_PATH = "/api/v1/vault/mapview/gcs";
@@ -89,6 +50,1748 @@
       return origSend.apply(this, args);
     };
   }
+
+  // source/environments.ts
+  function isWebWorker() {
+    return typeof window === "undefined" && typeof self !== "undefined";
+  }
+
+  // source/dom-extensions.ts
+  function createSchedulerByAnimationFrame(signal, thresholdMs = 10) {
+    let startTime = performance.now();
+    let lastHandle;
+    signal.addEventListener("abort", () => {
+      if (lastHandle != null) cancelAnimationFrame(lastHandle);
+    });
+    return {
+      get isYieldRequested() {
+        if (navigator.scheduling?.isInputPending?.()) {
+          return true;
+        }
+        const now = performance.now();
+        return now - startTime >= thresholdMs;
+      },
+      yield() {
+        if (!this.isYieldRequested) return null;
+        return new Promise((resolve) => {
+          lastHandle = requestAnimationFrame(() => {
+            startTime = performance.now();
+            resolve();
+          });
+        });
+      }
+    };
+  }
+  function createWorkerScheduler() {
+    return {
+      isYieldRequested: false,
+      yield() {
+        return null;
+      }
+    };
+  }
+  function createScheduler(signal, thresholdMs = 10) {
+    if (isWebWorker()) return createWorkerScheduler();
+    return createSchedulerByAnimationFrame(signal, thresholdMs);
+  }
+
+  // source/geometry.ts
+  function toLatLngLiteral(latLng) {
+    return { lat: latLng.lat(), lng: latLng.lng() };
+  }
+  function distanceSquared(a, b) {
+    const dLat = b.lat - a.lat;
+    const dLng = b.lng - a.lng;
+    return dLat * dLat + dLng * dLng;
+  }
+  function padBounds(bounds, ratio) {
+    const sw = bounds.getSouthWest(), ne = bounds.getNorthEast(), swLat = sw.lat(), swLng = sw.lng(), neLat = ne.lat(), neLng = ne.lng();
+    const height = Math.abs(swLat - neLat) * ratio;
+    const width = Math.abs(swLng - neLng) * ratio;
+    return new google.maps.LatLngBounds(
+      { lat: swLat - height, lng: swLng - width },
+      { lat: neLat + height, lng: neLng + width }
+    );
+  }
+  function parseCoordinates(kmlCoordinatesText) {
+    const tokens = kmlCoordinatesText.split(",");
+    const result = [];
+    for (let i = 1; i < tokens.length; i += 2) {
+      result.push({ lat: Number(tokens[i - 1]), lng: Number(tokens[i]) });
+    }
+    if (result.length === 0) {
+      throw new Error();
+    }
+    return result;
+  }
+
+  // source/bounds.ts
+  function createDefault() {
+    return {
+      sw: { lat: Infinity, lng: Infinity },
+      ne: { lat: -Infinity, lng: -Infinity }
+    };
+  }
+  function fromSwNeLatLng(swLat, swLng, neLat, neLng) {
+    return {
+      sw: { lat: swLat, lng: swLng },
+      ne: { lat: neLat, lng: neLng }
+    };
+  }
+  function getCenter(bounds) {
+    return {
+      lat: (bounds.sw.lat + bounds.ne.lat) / 2,
+      lng: (bounds.sw.lng + bounds.ne.lng) / 2
+    };
+  }
+  function toExtended(bounds, point) {
+    return {
+      sw: {
+        lat: Math.min(bounds.sw.lat, point.lat),
+        lng: Math.min(bounds.sw.lng, point.lng)
+      },
+      ne: {
+        lat: Math.max(bounds.ne.lat, point.lat),
+        lng: Math.max(bounds.ne.lng, point.lng)
+      }
+    };
+  }
+  function intersects(bounds, other) {
+    return bounds.sw.lat <= other.ne.lat && bounds.ne.lat >= other.sw.lat && bounds.sw.lng <= other.ne.lng && bounds.ne.lng >= other.sw.lng;
+  }
+  function fromClass(object2) {
+    const sw = object2.getSouthWest();
+    const ne = object2.getNorthEast();
+    return fromSwNeLatLng(sw.lat(), sw.lng(), ne.lat(), ne.lng());
+  }
+
+  // source/standard-extensions.ts
+  function id(value) {
+    return value;
+  }
+  function ignore(..._) {
+  }
+  function withTag(value) {
+    return value;
+  }
+  async function awaitElement(get, options) {
+    let currentInterval = 100;
+    const maxInterval = 500;
+    while (true) {
+      const ref = get();
+      if (ref) return ref;
+      await sleep(Math.min(currentInterval *= 2, maxInterval), options);
+    }
+  }
+  function sleep(ms, options) {
+    return new Promise((resolve, reject) => {
+      const handle = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
+      function onAbort() {
+        cleanup();
+        reject(newAbortError());
+      }
+      function cleanup() {
+        clearTimeout(handle);
+        options?.signal?.removeEventListener("abort", onAbort);
+      }
+      options?.signal?.addEventListener("abort", onAbort);
+    });
+  }
+  var AbortError = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "AbortError";
+    }
+  };
+  function newAbortError(message = "The operation was aborted.") {
+    if (typeof DOMException === "function") {
+      return new DOMException(message, "AbortError");
+    } else {
+      return new AbortError(message);
+    }
+  }
+  function cancelToReject(promise2, onCancel = ignore) {
+    return promise2.catch((e) => {
+      if (e instanceof Error && e.name === "AbortError") {
+        return onCancel();
+      }
+      throw e;
+    });
+  }
+  function createAsyncCancelScope(asyncErrorHandler) {
+    let lastCancel;
+    return (process2) => {
+      lastCancel?.abort(newAbortError());
+      lastCancel = new AbortController();
+      cancelToReject(process2(lastCancel.signal)).catch(asyncErrorHandler);
+    };
+  }
+
+  // source/typed-idb.ts
+  function defineDatabase(database, schema) {
+    for (const [storeName, storeSchema] of Object.entries(schema)) {
+      const store = database.createObjectStore(storeName, {
+        keyPath: storeSchema.key.slice()
+      });
+      for (const [indexName, options] of Object.entries(
+        storeSchema.indexes
+      )) {
+        store.createIndex(indexName, options.key, options);
+      }
+    }
+  }
+  function openDatabase(databaseName2, databaseVersion2, databaseSchema2) {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(databaseName2, databaseVersion2);
+      request.addEventListener(
+        "upgradeneeded",
+        () => defineDatabase(request.result, databaseSchema2)
+      );
+      request.addEventListener(
+        "blocked",
+        () => reject(new Error("database blocked"))
+      );
+      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener(
+        "success",
+        () => resolve(withTag(request.result))
+      );
+    });
+  }
+  var IterateValuesRequest = class {
+    constructor(source, query, action) {
+      this.source = source;
+      this.query = query;
+      this.action = action;
+    }
+  };
+  function enterTransactionScope(database, {
+    mode,
+    signal
+  }, scope, ...storeNames) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(newAbortError());
+        return;
+      }
+      let hasResult = false;
+      let result;
+      const transaction = database.transaction(storeNames, mode);
+      const onAbort = signal ? () => {
+        if (!hasResult) {
+          transaction.abort();
+        }
+      } : ignore;
+      transaction.addEventListener("complete", () => {
+        signal?.removeEventListener("abort", onAbort);
+        if (hasResult) {
+          resolve(result);
+        } else {
+          reject(new Error(`internal error`));
+        }
+      });
+      transaction.addEventListener("error", (e) => {
+        signal?.removeEventListener("abort", onAbort);
+        reject(e.target.error);
+      });
+      signal?.addEventListener("abort", onAbort);
+      const stores = {};
+      for (const name of storeNames) {
+        stores[name] = withTag(transaction.objectStore(name));
+      }
+      const iterator = scope(
+        stores
+      );
+      let stateKind;
+      let request_request;
+      let waitRequests_results;
+      let waitRequests_requests;
+      let openCursor_request;
+      let openCursor_action;
+      function onResolved() {
+        let r;
+        switch (stateKind) {
+          case void 0:
+            r = iterator.next();
+            break;
+          case "Request": {
+            const result2 = request_request.result;
+            stateKind = void 0;
+            request_request = void 0;
+            r = iterator.next(result2);
+            break;
+          }
+          case "WaitRequests": {
+            const results = waitRequests_results;
+            const requests = waitRequests_requests;
+            const result2 = requests[results.length].result;
+            results.push(result2);
+            if (results.length !== requests.length) return;
+            stateKind = void 0;
+            waitRequests_requests = void 0;
+            waitRequests_results = void 0;
+            r = iterator.next(results);
+            break;
+          }
+          case "OpenCursor": {
+            const cursor = openCursor_request.result;
+            if (cursor === null || openCursor_action(cursor.value) === "break") {
+              stateKind = void 0;
+              openCursor_request = void 0;
+              openCursor_action = void 0;
+              r = iterator.next(void 0);
+            } else {
+              cursor.continue();
+              return;
+            }
+            break;
+          }
+          default: {
+            reject(new Error(`Invalid resolving kind: ${stateKind}`));
+            return;
+          }
+        }
+        if (r.done) {
+          hasResult = true;
+          result = r.value;
+          return;
+        }
+        const yieldValue = r.value;
+        if (yieldValue instanceof IDBRequest) {
+          stateKind = "Request";
+          request_request = yieldValue;
+          yieldValue.onsuccess = onResolved;
+          return;
+        }
+        if (yieldValue instanceof IterateValuesRequest) {
+          stateKind = "OpenCursor";
+          openCursor_request = yieldValue.source.openCursor(
+            yieldValue.query
+          );
+          openCursor_action = yieldValue.action;
+          openCursor_request.onsuccess = onResolved;
+          return;
+        }
+        stateKind = "WaitRequests";
+        waitRequests_requests = yieldValue;
+        waitRequests_results = [];
+        for (const request of yieldValue) {
+          request.onsuccess = onResolved;
+        }
+        return;
+      }
+      onResolved();
+    });
+  }
+  function getIndex(store, indexName) {
+    return withTag(store.index(indexName));
+  }
+  function* iterateValuesOfIndex(index, query, action) {
+    yield new IterateValuesRequest(index, query, action);
+    return;
+  }
+
+  // source/s2.ts
+  function exposeS2Module(exports) {
+    "use strict";
+    var S22 = exports.S2 = {
+      L: {}
+    };
+    S22.L.LatLng = function(rawLat, rawLng, noWrap) {
+      var lat = parseFloat(rawLat, 10);
+      var lng = parseFloat(rawLng, 10);
+      if (isNaN(lat) || isNaN(lng)) {
+        throw new Error(
+          "Invalid LatLng object: (" + rawLat + ", " + rawLng + ")"
+        );
+      }
+      if (noWrap !== true) {
+        lat = Math.max(Math.min(lat, 90), -90);
+        lng = (lng + 180) % 360 + (lng < -180 || lng === 180 ? 180 : -180);
+      }
+      return {
+        lat,
+        lng
+      };
+    };
+    S22.L.LatLng.DEG_TO_RAD = Math.PI / 180;
+    S22.L.LatLng.RAD_TO_DEG = 180 / Math.PI;
+    S22.LatLngToXYZ = function(latLng) {
+      var d2r = S22.L.LatLng.DEG_TO_RAD;
+      var phi = latLng.lat * d2r;
+      var theta = latLng.lng * d2r;
+      var cosphi = Math.cos(phi);
+      return [
+        Math.cos(theta) * cosphi,
+        Math.sin(theta) * cosphi,
+        Math.sin(phi)
+      ];
+    };
+    S22.XYZToLatLng = function(xyz) {
+      var r2d = S22.L.LatLng.RAD_TO_DEG;
+      var lat = Math.atan2(
+        xyz[2],
+        Math.sqrt(xyz[0] * xyz[0] + xyz[1] * xyz[1])
+      );
+      var lng = Math.atan2(xyz[1], xyz[0]);
+      return S22.L.LatLng(lat * r2d, lng * r2d);
+    };
+    var largestAbsComponent = function(xyz) {
+      var temp = [Math.abs(xyz[0]), Math.abs(xyz[1]), Math.abs(xyz[2])];
+      if (temp[0] > temp[1]) {
+        if (temp[0] > temp[2]) {
+          return 0;
+        } else {
+          return 2;
+        }
+      } else {
+        if (temp[1] > temp[2]) {
+          return 1;
+        } else {
+          return 2;
+        }
+      }
+    };
+    var faceXYZToUV = function(face, xyz) {
+      var u, v;
+      switch (face) {
+        case 0:
+          u = xyz[1] / xyz[0];
+          v = xyz[2] / xyz[0];
+          break;
+        case 1:
+          u = -xyz[0] / xyz[1];
+          v = xyz[2] / xyz[1];
+          break;
+        case 2:
+          u = -xyz[0] / xyz[2];
+          v = -xyz[1] / xyz[2];
+          break;
+        case 3:
+          u = xyz[2] / xyz[0];
+          v = xyz[1] / xyz[0];
+          break;
+        case 4:
+          u = xyz[2] / xyz[1];
+          v = -xyz[0] / xyz[1];
+          break;
+        case 5:
+          u = -xyz[1] / xyz[2];
+          v = -xyz[0] / xyz[2];
+          break;
+        default:
+          throw {
+            error: "Invalid face"
+          };
+      }
+      return [u, v];
+    };
+    S22.XYZToFaceUV = function(xyz) {
+      var face = largestAbsComponent(xyz);
+      if (xyz[face] < 0) {
+        face += 3;
+      }
+      var uv = faceXYZToUV(face, xyz);
+      return [face, uv];
+    };
+    S22.FaceUVToXYZ = function(face, uv) {
+      var u = uv[0];
+      var v = uv[1];
+      switch (face) {
+        case 0:
+          return [1, u, v];
+        case 1:
+          return [-u, 1, v];
+        case 2:
+          return [-u, -v, 1];
+        case 3:
+          return [-1, -v, -u];
+        case 4:
+          return [v, -1, -u];
+        case 5:
+          return [v, u, -1];
+        default:
+          throw {
+            error: "Invalid face"
+          };
+      }
+    };
+    var singleSTtoUV = function(st) {
+      if (st >= 0.5) {
+        return 1 / 3 * (4 * st * st - 1);
+      } else {
+        return 1 / 3 * (1 - 4 * (1 - st) * (1 - st));
+      }
+    };
+    S22.STToUV = function(st) {
+      return [singleSTtoUV(st[0]), singleSTtoUV(st[1])];
+    };
+    var singleUVtoST = function(uv) {
+      if (uv >= 0) {
+        return 0.5 * Math.sqrt(1 + 3 * uv);
+      } else {
+        return 1 - 0.5 * Math.sqrt(1 - 3 * uv);
+      }
+    };
+    S22.UVToST = function(uv) {
+      return [singleUVtoST(uv[0]), singleUVtoST(uv[1])];
+    };
+    S22.STToIJ = function(st, order) {
+      var maxSize = 1 << order;
+      var singleSTtoIJ = function(st2) {
+        var ij = Math.floor(st2 * maxSize);
+        return Math.max(0, Math.min(maxSize - 1, ij));
+      };
+      return [singleSTtoIJ(st[0]), singleSTtoIJ(st[1])];
+    };
+    S22.IJToST = function(ij, order, offsets) {
+      var maxSize = 1 << order;
+      return [(ij[0] + offsets[0]) / maxSize, (ij[1] + offsets[1]) / maxSize];
+    };
+    var rotateAndFlipQuadrant = function(n, point, rx, ry) {
+      var newX, newY;
+      if (ry == 0) {
+        if (rx == 1) {
+          point.x = n - 1 - point.x;
+          point.y = n - 1 - point.y;
+        }
+        var x = point.x;
+        point.x = point.y;
+        point.y = x;
+      }
+    };
+    var pointToHilbertQuadList = function(x, y, order, face) {
+      var hilbertMap = {
+        a: [
+          [0, "d"],
+          [1, "a"],
+          [3, "b"],
+          [2, "a"]
+        ],
+        b: [
+          [2, "b"],
+          [1, "b"],
+          [3, "a"],
+          [0, "c"]
+        ],
+        c: [
+          [2, "c"],
+          [3, "d"],
+          [1, "c"],
+          [0, "b"]
+        ],
+        d: [
+          [0, "a"],
+          [3, "c"],
+          [1, "d"],
+          [2, "d"]
+        ]
+      };
+      if ("number" !== typeof face) {
+        console.warn(
+          new Error(
+            "called pointToHilbertQuadList without face value, defaulting to '0'"
+          ).stack
+        );
+      }
+      var currentSquare = face % 2 ? "d" : "a";
+      var positions = [];
+      for (var i = order - 1; i >= 0; i--) {
+        var mask = 1 << i;
+        var quad_x = x & mask ? 1 : 0;
+        var quad_y = y & mask ? 1 : 0;
+        var t = hilbertMap[currentSquare][quad_x * 2 + quad_y];
+        positions.push(t[0]);
+        currentSquare = t[1];
+      }
+      return positions;
+    };
+    S22.S2Cell = function() {
+    };
+    S22.S2Cell.FromHilbertQuadKey = function(hilbertQuadkey) {
+      var parts = hilbertQuadkey.split("/");
+      var face = parseInt(parts[0]);
+      var position = parts[1];
+      var maxLevel = position.length;
+      var point = {
+        x: 0,
+        y: 0
+      };
+      var i;
+      var level;
+      var bit;
+      var rx, ry;
+      var val;
+      for (i = maxLevel - 1; i >= 0; i--) {
+        level = maxLevel - i;
+        bit = position[i];
+        rx = 0;
+        ry = 0;
+        if (bit === "1") {
+          ry = 1;
+        } else if (bit === "2") {
+          rx = 1;
+          ry = 1;
+        } else if (bit === "3") {
+          rx = 1;
+        }
+        val = Math.pow(2, level - 1);
+        rotateAndFlipQuadrant(val, point, rx, ry);
+        point.x += val * rx;
+        point.y += val * ry;
+      }
+      if (face % 2 === 1) {
+        var t = point.x;
+        point.x = point.y;
+        point.y = t;
+      }
+      return S22.S2Cell.FromFaceIJ(parseInt(face), [point.x, point.y], level);
+    };
+    S22.S2Cell.FromLatLng = function(latLng, level) {
+      if (!latLng.lat && latLng.lat !== 0 || !latLng.lng && latLng.lng !== 0) {
+        throw new Error(
+          "Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng"
+        );
+      }
+      var xyz = S22.LatLngToXYZ(latLng);
+      var faceuv = S22.XYZToFaceUV(xyz);
+      var st = S22.UVToST(faceuv[1]);
+      var ij = S22.STToIJ(st, level);
+      return S22.S2Cell.FromFaceIJ(faceuv[0], ij, level);
+    };
+    S22.S2Cell.FromFaceIJ = function(face, ij, level) {
+      var cell = new S22.S2Cell();
+      cell.face = face;
+      cell.ij = ij;
+      cell.level = level;
+      return cell;
+    };
+    S22.S2Cell.prototype.toString = function() {
+      return "F" + this.face + "ij[" + this.ij[0] + "," + this.ij[1] + "]@" + this.level;
+    };
+    S22.S2Cell.prototype.getLatLng = function() {
+      var st = S22.IJToST(this.ij, this.level, [0.5, 0.5]);
+      var uv = S22.STToUV(st);
+      var xyz = S22.FaceUVToXYZ(this.face, uv);
+      return S22.XYZToLatLng(xyz);
+    };
+    S22.S2Cell.prototype.getCornerLatLngs = function() {
+      var result = [];
+      var offsets = [
+        [0, 0],
+        [0, 1],
+        [1, 1],
+        [1, 0]
+      ];
+      for (var i = 0; i < 4; i++) {
+        var st = S22.IJToST(this.ij, this.level, offsets[i]);
+        var uv = S22.STToUV(st);
+        var xyz = S22.FaceUVToXYZ(this.face, uv);
+        result.push(S22.XYZToLatLng(xyz));
+      }
+      return result;
+    };
+    S22.S2Cell.prototype.getFaceAndQuads = function() {
+      var quads = pointToHilbertQuadList(
+        this.ij[0],
+        this.ij[1],
+        this.level,
+        this.face
+      );
+      return [this.face, quads];
+    };
+    S22.S2Cell.prototype.toHilbertQuadkey = function() {
+      var quads = pointToHilbertQuadList(
+        this.ij[0],
+        this.ij[1],
+        this.level,
+        this.face
+      );
+      return this.face.toString(10) + "/" + quads.join("");
+    };
+    S22.latLngToNeighborKeys = S22.S2Cell.latLngToNeighborKeys = function(lat, lng, level) {
+      return S22.S2Cell.FromLatLng(
+        {
+          lat,
+          lng
+        },
+        level
+      ).getNeighbors().map(function(cell) {
+        return cell.toHilbertQuadkey();
+      });
+    };
+    S22.S2Cell.prototype.getNeighbors = function() {
+      var fromFaceIJWrap = function(face2, ij, level2) {
+        var maxSize = 1 << level2;
+        if (ij[0] >= 0 && ij[1] >= 0 && ij[0] < maxSize && ij[1] < maxSize) {
+          return S22.S2Cell.FromFaceIJ(face2, ij, level2);
+        } else {
+          var st = S22.IJToST(ij, level2, [0.5, 0.5]);
+          var uv = S22.STToUV(st);
+          var xyz = S22.FaceUVToXYZ(face2, uv);
+          var faceuv = S22.XYZToFaceUV(xyz);
+          face2 = faceuv[0];
+          uv = faceuv[1];
+          st = S22.UVToST(uv);
+          ij = S22.STToIJ(st, level2);
+          return S22.S2Cell.FromFaceIJ(face2, ij, level2);
+        }
+      };
+      var face = this.face;
+      var i = this.ij[0];
+      var j = this.ij[1];
+      var level = this.level;
+      return [
+        fromFaceIJWrap(face, [i - 1, j], level),
+        fromFaceIJWrap(face, [i, j - 1], level),
+        fromFaceIJWrap(face, [i + 1, j], level),
+        fromFaceIJWrap(face, [i, j + 1], level)
+      ];
+    };
+    S22.FACE_BITS = 3;
+    S22.MAX_LEVEL = 30;
+    S22.POS_BITS = 2 * S22.MAX_LEVEL + 1;
+    S22.facePosLevelToId = S22.S2Cell.facePosLevelToId = S22.fromFacePosLevel = function(faceN, posS, levelN) {
+      var Long = exports.dcodeIO && exports.dcodeIO.Long;
+      var faceB;
+      var posB;
+      var bin;
+      if (!levelN) {
+        levelN = posS.length;
+      }
+      if (posS.length > levelN) {
+        posS = posS.substr(0, levelN);
+      }
+      faceB = Long.fromString(faceN.toString(10), true, 10).toString(
+        2
+      );
+      while (faceB.length < S22.FACE_BITS) {
+        faceB = "0" + faceB;
+      }
+      posB = Long.fromString(posS, true, 4).toString(2);
+      while (posB.length < 2 * levelN) {
+        posB = "0" + posB;
+      }
+      bin = faceB + posB;
+      bin += "1";
+      while (bin.length < S22.FACE_BITS + S22.POS_BITS) {
+        bin += "0";
+      }
+      return Long.fromString(bin, true, 2).toString(10);
+    };
+    S22.keyToId = S22.S2Cell.keyToId = S22.toId = S22.toCellId = S22.fromKey = function(key) {
+      var parts = key.split("/");
+      return S22.fromFacePosLevel(parts[0], parts[1], parts[1].length);
+    };
+    S22.idToKey = S22.S2Cell.idToKey = S22.S2Cell.toKey = S22.toKey = S22.fromId = S22.fromCellId = S22.S2Cell.toHilbertQuadkey = S22.toHilbertQuadkey = function(idS) {
+      var Long = exports.dcodeIO && exports.dcodeIO.Long;
+      var bin = Long.fromString(idS, true, 10).toString(2);
+      while (bin.length < S22.FACE_BITS + S22.POS_BITS) {
+        bin = "0" + bin;
+      }
+      var lsbIndex = bin.lastIndexOf("1");
+      var faceB = bin.substring(0, 3);
+      var posB = bin.substring(3, lsbIndex);
+      var levelN = posB.length / 2;
+      var faceS = Long.fromString(faceB, true, 2).toString(10);
+      var posS = Long.fromString(posB, true, 2).toString(4);
+      while (posS.length < levelN) {
+        posS = "0" + posS;
+      }
+      return faceS + "/" + posS;
+    };
+    S22.keyToLatLng = S22.S2Cell.keyToLatLng = function(key) {
+      var cell2 = S22.S2Cell.FromHilbertQuadKey(key);
+      return cell2.getLatLng();
+    };
+    S22.idToLatLng = S22.S2Cell.idToLatLng = function(id2) {
+      var key = S22.idToKey(id2);
+      return S22.keyToLatLng(key);
+    };
+    S22.S2Cell.latLngToKey = S22.latLngToKey = S22.latLngToQuadkey = function(lat, lng, level) {
+      if (isNaN(level) || level < 1 || level > 30) {
+        throw new Error(
+          "'level' is not a number between 1 and 30 (but it should be)"
+        );
+      }
+      return S22.S2Cell.FromLatLng(
+        {
+          lat,
+          lng
+        },
+        level
+      ).toHilbertQuadkey();
+    };
+    S22.stepKey = function(key, num) {
+      var Long = exports.dcodeIO && exports.dcodeIO.Long;
+      var parts = key.split("/");
+      var faceS = parts[0];
+      var posS = parts[1];
+      var level = parts[1].length;
+      var posL = Long.fromString(posS, true, 4);
+      var otherL;
+      if (num > 0) {
+        otherL = posL.add(Math.abs(num));
+      } else if (num < 0) {
+        otherL = posL.subtract(Math.abs(num));
+      }
+      var otherS = otherL.toString(4);
+      if ("0" === otherS) {
+        console.warning(
+          new Error("face/position wrapping is not yet supported")
+        );
+      }
+      while (otherS.length < level) {
+        otherS = "0" + otherS;
+      }
+      return faceS + "/" + otherS;
+    };
+    S22.S2Cell.prevKey = S22.prevKey = function(key) {
+      return S22.stepKey(key, -1);
+    };
+    S22.S2Cell.nextKey = S22.nextKey = function(key) {
+      return S22.stepKey(key, 1);
+    };
+    return S22;
+  }
+  var S2 = exposeS2Module(
+    typeof module !== "undefined" && module.exports ? module.exports : typeof globalThis !== "undefined" ? globalThis : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : void 0
+  );
+
+  // source/typed-s2cell.ts
+  function createCellFromCoordinates(latLng, level) {
+    return S2.S2Cell.FromLatLng(latLng, level);
+  }
+  var indexes = Object.freeze(["0", "1", "2", "3"]);
+  var buffer64 = new BigUint64Array(1);
+  var view32 = new Uint32Array(buffer64.buffer);
+
+  // source/poi-records.ts
+  var databaseSchema = {
+    pois: {
+      recordType: id,
+      key: "guid",
+      indexes: {
+        coordinates: {
+          key: ["lat", "lng"]
+        },
+        cellIds: {
+          key: "cellIds",
+          multiEntry: true
+        }
+      }
+    },
+    cells: {
+      recordType: id,
+      key: "cellId",
+      indexes: {
+        ancestorIds: {
+          key: "ancestorIds",
+          multiEntry: true
+        }
+      }
+    }
+  };
+  var poisSymbol = /* @__PURE__ */ Symbol("_pois");
+  var cellsSymbol = /* @__PURE__ */ Symbol("_cells");
+  var coordinatesIndexSymbol = /* @__PURE__ */ Symbol("_coordinatesIndex");
+  var cellIdsIndexSymbol = /* @__PURE__ */ Symbol("_cellIdsIndex");
+  var ancestorIdsIndexSymbol = /* @__PURE__ */ Symbol("_ancestorIdsIndexSymbol");
+  function iteratePoisInCell(store, cellId, action) {
+    return iterateValuesOfIndex(store[cellIdsIndexSymbol], cellId, action);
+  }
+  function iterateCell14sInCell(store, cellId, action) {
+    return iterateValuesOfIndex(
+      store[ancestorIdsIndexSymbol],
+      cellId,
+      action
+    );
+  }
+  var databaseName = "poi-records-e232930d-7282-4c02-aeef-bb9508576d2e";
+  var databaseVersion = 1;
+  var databaseSymbol = /* @__PURE__ */ Symbol("_database");
+  async function openRecords() {
+    return {
+      [databaseSymbol]: await openDatabase(
+        databaseName,
+        databaseVersion,
+        databaseSchema
+      )
+    };
+  }
+  function enterTransactionScope2(records, mode, options, scope) {
+    return enterTransactionScope(
+      records[databaseSymbol],
+      { mode, signal: options?.signal },
+      ({ pois, cells }) => {
+        const store = {
+          [poisSymbol]: pois,
+          [cellsSymbol]: cells,
+          [coordinatesIndexSymbol]: getIndex(pois, "coordinates"),
+          [cellIdsIndexSymbol]: getIndex(pois, "cellIds"),
+          [ancestorIdsIndexSymbol]: getIndex(cells, "ancestorIds")
+        };
+        return scope(store);
+      },
+      "pois",
+      "cells"
+    );
+  }
+  function setEntry(map2, key, value) {
+    map2.set(key, value);
+    return value;
+  }
+  function getNearlyCellsForBounds(bounds, level) {
+    const result = [];
+    const seenCellIds = /* @__PURE__ */ new Set();
+    const remainingCells = [
+      createCellFromCoordinates(getCenter(bounds), level)
+    ];
+    for (let cell; cell = remainingCells.pop(); ) {
+      const id2 = cell.toString();
+      if (seenCellIds.has(id2)) continue;
+      seenCellIds.add(id2);
+      let cellBounds = createDefault();
+      for (const corner of cell.getCornerLatLngs()) {
+        cellBounds = toExtended(cellBounds, corner);
+      }
+      if (!intersects(bounds, cellBounds)) continue;
+      result.push(cell);
+      remainingCells.push(...cell.getNeighbors());
+    }
+    return result;
+  }
+  function createEmptyCell14Statistics(cell) {
+    return {
+      cell,
+      id: cell.toString(),
+      pois: /* @__PURE__ */ new Map(),
+      corner: cell.getCornerLatLngs(),
+      center: cell.getLatLng(),
+      cell17s: /* @__PURE__ */ new Map(),
+      cell16s: /* @__PURE__ */ new Map(),
+      kindToPois: /* @__PURE__ */ new Map()
+    };
+  }
+  function updateCellStatisticsByCell(cells, cell, lastFetchDate) {
+    const key = cell.toString();
+    return cells.get(key) ?? setEntry(cells, key, {
+      cell,
+      center: cell.getLatLng(),
+      kindToCount: /* @__PURE__ */ new Map(),
+      lastFetchDate
+    });
+  }
+  function updateCellStatisticsByPoi(cells, poi, level) {
+    const cell = createCellFromCoordinates(poi, level);
+    const { kindToCount } = updateCellStatisticsByCell(cells, cell, void 0);
+    for (const { entity } of poi.data.gmo) {
+      const count = kindToCount.get(entity) ?? 0;
+      kindToCount.set(entity, count + 1);
+    }
+  }
+  function isGymOrPokestop(g) {
+    return g.entity === "GYM" || g.entity === "POKESTOP";
+  }
+  async function getCell14Stats(records, lat, lng, signal) {
+    const cell = createCellFromCoordinates({ lat, lng }, 14);
+    const cellId = cell.toString();
+    let cell14;
+    const collectPois = (poi) => {
+      cell14 ??= createEmptyCell14Statistics(cell);
+      const coordinateKey = `(${poi.lat}, ${poi.lng})`;
+      if (cell14.pois.get(coordinateKey) != null) return "continue";
+      cell14.pois.set(coordinateKey, poi);
+      for (const { entity } of poi.data.gmo) {
+        const pois = cell14.kindToPois.get(entity) ?? setEntry(cell14.kindToPois, entity, []);
+        pois.push(poi);
+      }
+      if (poi.data.gmo.some(isGymOrPokestop)) {
+        updateCellStatisticsByPoi(cell14.cell16s, poi, 16);
+        updateCellStatisticsByPoi(cell14.cell17s, poi, 17);
+      }
+    };
+    const collectCells = (childCell) => {
+      if (childCell.level !== 17) {
+        return "continue";
+      }
+      cell14 ??= createEmptyCell14Statistics(cell);
+      const cell17 = createCellFromCoordinates(
+        { lat: childCell.centerLat, lng: childCell.centerLng },
+        17
+      );
+      updateCellStatisticsByCell(
+        cell14.cell17s,
+        cell17,
+        childCell.lastFetchDate
+      );
+    };
+    await enterTransactionScope2(
+      records,
+      "readonly",
+      { signal },
+      function* (store) {
+        yield* iteratePoisInCell(store, cellId, collectPois);
+        yield* iterateCell14sInCell(store, cellId, collectCells);
+      }
+    );
+    return cell14;
+  }
+
+  // source/poi-records-overlay.ts
+  function createPoisOverlay(map2) {
+    const options = {
+      cell17CountMarkerOptions: {
+        clickable: false,
+        icon: {
+          path: 0,
+          fillColor: "#c54545",
+          fillOpacity: 1,
+          scale: 15,
+          strokeColor: "#ffffff",
+          strokeOpacity: 1,
+          strokeWeight: 2
+        }
+      }
+    };
+    return {
+      options,
+      map: map2,
+      cell14IdToAddedViews: /* @__PURE__ */ new Map()
+    };
+  }
+  function getOrCreateAddedViewsOfCell14Id({ cell14IdToAddedViews }, cellId) {
+    const views = cell14IdToAddedViews.get(cellId);
+    if (views) return views;
+    else {
+      const views2 = { polygons: [], markers: [] };
+      cell14IdToAddedViews.set(cellId, views2);
+      return views2;
+    }
+  }
+  function allocatePolygonAtMap(overlay, cellId, options) {
+    const p = new google.maps.Polygon();
+    p.setOptions(options);
+    p.setMap(overlay.map);
+    getOrCreateAddedViewsOfCell14Id(overlay, cellId).polygons.push(p);
+    return p;
+  }
+  function allocateMarkerAtMap(overlay, cellId, options) {
+    const m = new google.maps.Marker();
+    m.setOptions(options);
+    m.setMap(overlay.map);
+    getOrCreateAddedViewsOfCell14Id(overlay, cellId).markers.push(m);
+    return m;
+  }
+  function clearMarkersInCell14({ cell14IdToAddedViews }, cellId) {
+    const views = cell14IdToAddedViews.get(cellId);
+    if (views == null) return;
+    const { polygons, markers } = views;
+    for (let p; p = polygons.pop(); ) {
+      p.setMap(null);
+    }
+    for (let m; m = markers.pop(); ) {
+      m.setMap(null);
+    }
+    cell14IdToAddedViews.delete(cellId);
+  }
+  var baseZIndex = 3100;
+  var cell17EmptyOptions = Object.freeze({
+    strokeColor: "rgba(253, 255, 114, 0.4)",
+    strokeOpacity: 1,
+    strokeWeight: 1,
+    fillColor: "#0000002d",
+    fillOpacity: 1,
+    clickable: false,
+    zIndex: baseZIndex + 1
+  });
+  var cell17PokestopOptions = Object.freeze({
+    ...cell17EmptyOptions,
+    fillColor: "rgba(0, 191, 255, 0.4)",
+    strokeColor: "rgba(0, 191, 255, 0.6)",
+    zIndex: baseZIndex
+  });
+  var cell17GymOptions = Object.freeze({
+    ...cell17PokestopOptions,
+    fillColor: "rgba(255, 0, 13, 0.4)",
+    strokeColor: "rgba(255, 0, 13, 0.6)"
+  });
+  var cell14Options = Object.freeze({
+    strokeColor: "#c54545b7",
+    strokeOpacity: 1,
+    strokeWeight: 2,
+    fillColor: "transparent",
+    fillOpacity: 1,
+    clickable: false,
+    zIndex: baseZIndex + 2
+  });
+  var cell14Options1 = Object.freeze({
+    ...cell14Options,
+    fillColor: "#dd767625"
+  });
+  var cell14Options2 = Object.freeze({
+    ...cell14Options,
+    fillColor: "#d3b71738"
+  });
+  function countToCell14Options(count) {
+    switch (count) {
+      case 1:
+      case 5:
+      case 19:
+        return cell14Options1;
+      case 4:
+      case 18:
+        return cell14Options2;
+    }
+    return cell14Options;
+  }
+  function sumGymAndPokestopCount({ kindToPois }) {
+    return (kindToPois.get("GYM")?.length ?? 0) + (kindToPois.get("POKESTOP")?.length ?? 0);
+  }
+  function renderCell14(overlay, cell14) {
+    if (cell14.pois.size === 0) return;
+    const entityCount = sumGymAndPokestopCount(cell14);
+    const options = countToCell14Options(entityCount);
+    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
+    polygon.setPath(cell14.corner);
+  }
+  function has(kind, cell17) {
+    return cell17.kindToCount.get(kind) ?? false;
+  }
+  function renderCell17(overlay, cell14, cell17) {
+    let options = cell17EmptyOptions;
+    if (has("GYM", cell17)) {
+      options = cell17GymOptions;
+    } else if (has("POKESTOP", cell17)) {
+      options = cell17PokestopOptions;
+    }
+    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
+    polygon.setPath(cell17.cell.getCornerLatLngs());
+  }
+  function renderCell17CountLabel(overlay, cell14) {
+    const count = sumGymAndPokestopCount(cell14);
+    if (count <= 0) return;
+    const countMarker = allocateMarkerAtMap(
+      overlay,
+      cell14.id,
+      overlay.options.cell17CountMarkerOptions
+    );
+    countMarker.setPosition(cell14.cell.getLatLng());
+    countMarker.setLabel({
+      text: `${count}`,
+      color: "rgb(255, 255, 255)",
+      fontSize: "20px",
+      fontWeight: "400"
+    });
+  }
+  async function renderViewsInCell14({ records, overlay }, nearlyCell14, zoom, center, scheduler, signal) {
+    const { lat, lng } = nearlyCell14.getLatLng();
+    const cell14 = await getCell14Stats(records, lat, lng, signal);
+    if (cell14 == null) return;
+    clearMarkersInCell14(overlay, cell14.id);
+    renderCell14(overlay, cell14);
+    if (13 < zoom) {
+      renderCell17CountLabel(overlay, cell14);
+    }
+    if (14 < zoom) {
+      const cell17s = [...cell14.cell17s.values()];
+      cell17s.sort(
+        (a, b) => distanceSquared(center, a.center) - distanceSquared(center, b.center)
+      );
+      for (const cell17 of cell17s) {
+        renderCell17(overlay, cell14, cell17);
+      }
+    }
+  }
+  async function renderPoiAndCells(page, scheduler, signal) {
+    const { map: map2 } = page;
+    const bounds = map2.getBounds();
+    const zoom = map2.getZoom();
+    const center = toLatLngLiteral(map2.getCenter());
+    if (bounds == null) return;
+    if (zoom <= 12) {
+      await clearAllMarkers(page.overlay, scheduler);
+      return;
+    }
+    const nearlyCell14s = getNearlyCellsForBounds(fromClass(bounds), 14);
+    nearlyCell14s.sort(
+      (a, b) => distanceSquared(center, a.getLatLng()) - distanceSquared(center, b.getLatLng())
+    );
+    await clearOutOfRangeCell14Markers(page.overlay, scheduler, nearlyCell14s);
+    for (const nearlyCell14 of nearlyCell14s) {
+      await scheduler.yield();
+      await renderViewsInCell14(
+        page,
+        nearlyCell14,
+        zoom,
+        center,
+        scheduler,
+        signal
+      );
+    }
+  }
+  async function clearAllMarkers(overlay, scheduler) {
+    const { cell14IdToAddedViews: views } = overlay;
+    for (const cellId of views.keys()) {
+      await scheduler.yield();
+      clearMarkersInCell14(overlay, cellId);
+      views.delete(cellId);
+    }
+  }
+  async function clearOutOfRangeCell14Markers(overlay, scheduler, nearlyCell14s) {
+    const cell14Ids = new Set(
+      nearlyCell14s.map((cell) => cell.toString())
+    );
+    for (const cell14Id of overlay.cell14IdToAddedViews.keys()) {
+      if (cell14Ids.has(cell14Id)) continue;
+      await scheduler.yield();
+      clearMarkersInCell14(overlay, cell14Id);
+    }
+  }
+  function setupPoiRecordOverlay(page) {
+    const enterCancelScope = createAsyncCancelScope(
+      page.defaultAsyncErrorHandler
+    );
+    const onRenderNeeded = () => {
+      enterCancelScope((signal) => {
+        const scheduler = createScheduler(signal);
+        return renderPoiAndCells(page, scheduler, signal);
+      });
+    };
+    page.events.addEventListener("gcs-saved", onRenderNeeded);
+    page.map.addListener("idle", onRenderNeeded);
+    onRenderNeeded();
+  }
+
+  // source/typed-event-target.ts
+  function createTypedEventTarget() {
+    return new EventTarget();
+  }
+  function createTypedCustomEvent(type, detail) {
+    return new CustomEvent(type, { detail });
+  }
+
+  // node_modules/zod/v4/classic/external.js
+  var external_exports = {};
+  __export(external_exports, {
+    $brand: () => $brand,
+    $input: () => $input,
+    $output: () => $output,
+    NEVER: () => NEVER,
+    TimePrecision: () => TimePrecision,
+    ZodAny: () => ZodAny,
+    ZodArray: () => ZodArray,
+    ZodBase64: () => ZodBase64,
+    ZodBase64URL: () => ZodBase64URL,
+    ZodBigInt: () => ZodBigInt,
+    ZodBigIntFormat: () => ZodBigIntFormat,
+    ZodBoolean: () => ZodBoolean,
+    ZodCIDRv4: () => ZodCIDRv4,
+    ZodCIDRv6: () => ZodCIDRv6,
+    ZodCUID: () => ZodCUID,
+    ZodCUID2: () => ZodCUID2,
+    ZodCatch: () => ZodCatch,
+    ZodCodec: () => ZodCodec,
+    ZodCustom: () => ZodCustom,
+    ZodCustomStringFormat: () => ZodCustomStringFormat,
+    ZodDate: () => ZodDate,
+    ZodDefault: () => ZodDefault,
+    ZodDiscriminatedUnion: () => ZodDiscriminatedUnion,
+    ZodE164: () => ZodE164,
+    ZodEmail: () => ZodEmail,
+    ZodEmoji: () => ZodEmoji,
+    ZodEnum: () => ZodEnum,
+    ZodError: () => ZodError,
+    ZodExactOptional: () => ZodExactOptional,
+    ZodFile: () => ZodFile,
+    ZodFirstPartyTypeKind: () => ZodFirstPartyTypeKind,
+    ZodFunction: () => ZodFunction,
+    ZodGUID: () => ZodGUID,
+    ZodIPv4: () => ZodIPv4,
+    ZodIPv6: () => ZodIPv6,
+    ZodISODate: () => ZodISODate,
+    ZodISODateTime: () => ZodISODateTime,
+    ZodISODuration: () => ZodISODuration,
+    ZodISOTime: () => ZodISOTime,
+    ZodIntersection: () => ZodIntersection,
+    ZodIssueCode: () => ZodIssueCode,
+    ZodJWT: () => ZodJWT,
+    ZodKSUID: () => ZodKSUID,
+    ZodLazy: () => ZodLazy,
+    ZodLiteral: () => ZodLiteral,
+    ZodMAC: () => ZodMAC,
+    ZodMap: () => ZodMap,
+    ZodNaN: () => ZodNaN,
+    ZodNanoID: () => ZodNanoID,
+    ZodNever: () => ZodNever,
+    ZodNonOptional: () => ZodNonOptional,
+    ZodNull: () => ZodNull,
+    ZodNullable: () => ZodNullable,
+    ZodNumber: () => ZodNumber,
+    ZodNumberFormat: () => ZodNumberFormat,
+    ZodObject: () => ZodObject,
+    ZodOptional: () => ZodOptional,
+    ZodPipe: () => ZodPipe,
+    ZodPrefault: () => ZodPrefault,
+    ZodPromise: () => ZodPromise,
+    ZodReadonly: () => ZodReadonly,
+    ZodRealError: () => ZodRealError,
+    ZodRecord: () => ZodRecord,
+    ZodSet: () => ZodSet,
+    ZodString: () => ZodString,
+    ZodStringFormat: () => ZodStringFormat,
+    ZodSuccess: () => ZodSuccess,
+    ZodSymbol: () => ZodSymbol,
+    ZodTemplateLiteral: () => ZodTemplateLiteral,
+    ZodTransform: () => ZodTransform,
+    ZodTuple: () => ZodTuple,
+    ZodType: () => ZodType,
+    ZodULID: () => ZodULID,
+    ZodURL: () => ZodURL,
+    ZodUUID: () => ZodUUID,
+    ZodUndefined: () => ZodUndefined,
+    ZodUnion: () => ZodUnion,
+    ZodUnknown: () => ZodUnknown,
+    ZodVoid: () => ZodVoid,
+    ZodXID: () => ZodXID,
+    ZodXor: () => ZodXor,
+    _ZodString: () => _ZodString,
+    _default: () => _default2,
+    _function: () => _function,
+    any: () => any,
+    array: () => array,
+    base64: () => base642,
+    base64url: () => base64url2,
+    bigint: () => bigint2,
+    boolean: () => boolean2,
+    catch: () => _catch2,
+    check: () => check,
+    cidrv4: () => cidrv42,
+    cidrv6: () => cidrv62,
+    clone: () => clone,
+    codec: () => codec,
+    coerce: () => coerce_exports,
+    config: () => config,
+    core: () => core_exports2,
+    cuid: () => cuid3,
+    cuid2: () => cuid22,
+    custom: () => custom,
+    date: () => date3,
+    decode: () => decode2,
+    decodeAsync: () => decodeAsync2,
+    describe: () => describe2,
+    discriminatedUnion: () => discriminatedUnion,
+    e164: () => e1642,
+    email: () => email2,
+    emoji: () => emoji2,
+    encode: () => encode2,
+    encodeAsync: () => encodeAsync2,
+    endsWith: () => _endsWith,
+    enum: () => _enum2,
+    exactOptional: () => exactOptional,
+    file: () => file,
+    flattenError: () => flattenError,
+    float32: () => float32,
+    float64: () => float64,
+    formatError: () => formatError,
+    fromJSONSchema: () => fromJSONSchema,
+    function: () => _function,
+    getErrorMap: () => getErrorMap,
+    globalRegistry: () => globalRegistry,
+    gt: () => _gt,
+    gte: () => _gte,
+    guid: () => guid2,
+    hash: () => hash,
+    hex: () => hex2,
+    hostname: () => hostname2,
+    httpUrl: () => httpUrl,
+    includes: () => _includes,
+    instanceof: () => _instanceof,
+    int: () => int,
+    int32: () => int32,
+    int64: () => int64,
+    intersection: () => intersection,
+    ipv4: () => ipv42,
+    ipv6: () => ipv62,
+    iso: () => iso_exports,
+    json: () => json,
+    jwt: () => jwt,
+    keyof: () => keyof,
+    ksuid: () => ksuid2,
+    lazy: () => lazy,
+    length: () => _length,
+    literal: () => literal,
+    locales: () => locales_exports,
+    looseObject: () => looseObject,
+    looseRecord: () => looseRecord,
+    lowercase: () => _lowercase,
+    lt: () => _lt,
+    lte: () => _lte,
+    mac: () => mac2,
+    map: () => map,
+    maxLength: () => _maxLength,
+    maxSize: () => _maxSize,
+    meta: () => meta2,
+    mime: () => _mime,
+    minLength: () => _minLength,
+    minSize: () => _minSize,
+    multipleOf: () => _multipleOf,
+    nan: () => nan,
+    nanoid: () => nanoid2,
+    nativeEnum: () => nativeEnum,
+    negative: () => _negative,
+    never: () => never,
+    nonnegative: () => _nonnegative,
+    nonoptional: () => nonoptional,
+    nonpositive: () => _nonpositive,
+    normalize: () => _normalize,
+    null: () => _null3,
+    nullable: () => nullable,
+    nullish: () => nullish2,
+    number: () => number2,
+    object: () => object,
+    optional: () => optional,
+    overwrite: () => _overwrite,
+    parse: () => parse2,
+    parseAsync: () => parseAsync2,
+    partialRecord: () => partialRecord,
+    pipe: () => pipe,
+    positive: () => _positive,
+    prefault: () => prefault,
+    preprocess: () => preprocess,
+    prettifyError: () => prettifyError,
+    promise: () => promise,
+    property: () => _property,
+    readonly: () => readonly,
+    record: () => record,
+    refine: () => refine,
+    regex: () => _regex,
+    regexes: () => regexes_exports,
+    registry: () => registry,
+    safeDecode: () => safeDecode2,
+    safeDecodeAsync: () => safeDecodeAsync2,
+    safeEncode: () => safeEncode2,
+    safeEncodeAsync: () => safeEncodeAsync2,
+    safeParse: () => safeParse2,
+    safeParseAsync: () => safeParseAsync2,
+    set: () => set,
+    setErrorMap: () => setErrorMap,
+    size: () => _size,
+    slugify: () => _slugify,
+    startsWith: () => _startsWith,
+    strictObject: () => strictObject,
+    string: () => string2,
+    stringFormat: () => stringFormat,
+    stringbool: () => stringbool,
+    success: () => success,
+    superRefine: () => superRefine,
+    symbol: () => symbol,
+    templateLiteral: () => templateLiteral,
+    toJSONSchema: () => toJSONSchema,
+    toLowerCase: () => _toLowerCase,
+    toUpperCase: () => _toUpperCase,
+    transform: () => transform,
+    treeifyError: () => treeifyError,
+    trim: () => _trim,
+    tuple: () => tuple,
+    uint32: () => uint32,
+    uint64: () => uint64,
+    ulid: () => ulid2,
+    undefined: () => _undefined3,
+    union: () => union,
+    unknown: () => unknown,
+    uppercase: () => _uppercase,
+    url: () => url,
+    util: () => util_exports,
+    uuid: () => uuid2,
+    uuidv4: () => uuidv4,
+    uuidv6: () => uuidv6,
+    uuidv7: () => uuidv7,
+    void: () => _void2,
+    xid: () => xid2,
+    xor: () => xor
+  });
+
+  // node_modules/zod/v4/core/index.js
+  var core_exports2 = {};
+  __export(core_exports2, {
+    $ZodAny: () => $ZodAny,
+    $ZodArray: () => $ZodArray,
+    $ZodAsyncError: () => $ZodAsyncError,
+    $ZodBase64: () => $ZodBase64,
+    $ZodBase64URL: () => $ZodBase64URL,
+    $ZodBigInt: () => $ZodBigInt,
+    $ZodBigIntFormat: () => $ZodBigIntFormat,
+    $ZodBoolean: () => $ZodBoolean,
+    $ZodCIDRv4: () => $ZodCIDRv4,
+    $ZodCIDRv6: () => $ZodCIDRv6,
+    $ZodCUID: () => $ZodCUID,
+    $ZodCUID2: () => $ZodCUID2,
+    $ZodCatch: () => $ZodCatch,
+    $ZodCheck: () => $ZodCheck,
+    $ZodCheckBigIntFormat: () => $ZodCheckBigIntFormat,
+    $ZodCheckEndsWith: () => $ZodCheckEndsWith,
+    $ZodCheckGreaterThan: () => $ZodCheckGreaterThan,
+    $ZodCheckIncludes: () => $ZodCheckIncludes,
+    $ZodCheckLengthEquals: () => $ZodCheckLengthEquals,
+    $ZodCheckLessThan: () => $ZodCheckLessThan,
+    $ZodCheckLowerCase: () => $ZodCheckLowerCase,
+    $ZodCheckMaxLength: () => $ZodCheckMaxLength,
+    $ZodCheckMaxSize: () => $ZodCheckMaxSize,
+    $ZodCheckMimeType: () => $ZodCheckMimeType,
+    $ZodCheckMinLength: () => $ZodCheckMinLength,
+    $ZodCheckMinSize: () => $ZodCheckMinSize,
+    $ZodCheckMultipleOf: () => $ZodCheckMultipleOf,
+    $ZodCheckNumberFormat: () => $ZodCheckNumberFormat,
+    $ZodCheckOverwrite: () => $ZodCheckOverwrite,
+    $ZodCheckProperty: () => $ZodCheckProperty,
+    $ZodCheckRegex: () => $ZodCheckRegex,
+    $ZodCheckSizeEquals: () => $ZodCheckSizeEquals,
+    $ZodCheckStartsWith: () => $ZodCheckStartsWith,
+    $ZodCheckStringFormat: () => $ZodCheckStringFormat,
+    $ZodCheckUpperCase: () => $ZodCheckUpperCase,
+    $ZodCodec: () => $ZodCodec,
+    $ZodCustom: () => $ZodCustom,
+    $ZodCustomStringFormat: () => $ZodCustomStringFormat,
+    $ZodDate: () => $ZodDate,
+    $ZodDefault: () => $ZodDefault,
+    $ZodDiscriminatedUnion: () => $ZodDiscriminatedUnion,
+    $ZodE164: () => $ZodE164,
+    $ZodEmail: () => $ZodEmail,
+    $ZodEmoji: () => $ZodEmoji,
+    $ZodEncodeError: () => $ZodEncodeError,
+    $ZodEnum: () => $ZodEnum,
+    $ZodError: () => $ZodError,
+    $ZodExactOptional: () => $ZodExactOptional,
+    $ZodFile: () => $ZodFile,
+    $ZodFunction: () => $ZodFunction,
+    $ZodGUID: () => $ZodGUID,
+    $ZodIPv4: () => $ZodIPv4,
+    $ZodIPv6: () => $ZodIPv6,
+    $ZodISODate: () => $ZodISODate,
+    $ZodISODateTime: () => $ZodISODateTime,
+    $ZodISODuration: () => $ZodISODuration,
+    $ZodISOTime: () => $ZodISOTime,
+    $ZodIntersection: () => $ZodIntersection,
+    $ZodJWT: () => $ZodJWT,
+    $ZodKSUID: () => $ZodKSUID,
+    $ZodLazy: () => $ZodLazy,
+    $ZodLiteral: () => $ZodLiteral,
+    $ZodMAC: () => $ZodMAC,
+    $ZodMap: () => $ZodMap,
+    $ZodNaN: () => $ZodNaN,
+    $ZodNanoID: () => $ZodNanoID,
+    $ZodNever: () => $ZodNever,
+    $ZodNonOptional: () => $ZodNonOptional,
+    $ZodNull: () => $ZodNull,
+    $ZodNullable: () => $ZodNullable,
+    $ZodNumber: () => $ZodNumber,
+    $ZodNumberFormat: () => $ZodNumberFormat,
+    $ZodObject: () => $ZodObject,
+    $ZodObjectJIT: () => $ZodObjectJIT,
+    $ZodOptional: () => $ZodOptional,
+    $ZodPipe: () => $ZodPipe,
+    $ZodPrefault: () => $ZodPrefault,
+    $ZodPromise: () => $ZodPromise,
+    $ZodReadonly: () => $ZodReadonly,
+    $ZodRealError: () => $ZodRealError,
+    $ZodRecord: () => $ZodRecord,
+    $ZodRegistry: () => $ZodRegistry,
+    $ZodSet: () => $ZodSet,
+    $ZodString: () => $ZodString,
+    $ZodStringFormat: () => $ZodStringFormat,
+    $ZodSuccess: () => $ZodSuccess,
+    $ZodSymbol: () => $ZodSymbol,
+    $ZodTemplateLiteral: () => $ZodTemplateLiteral,
+    $ZodTransform: () => $ZodTransform,
+    $ZodTuple: () => $ZodTuple,
+    $ZodType: () => $ZodType,
+    $ZodULID: () => $ZodULID,
+    $ZodURL: () => $ZodURL,
+    $ZodUUID: () => $ZodUUID,
+    $ZodUndefined: () => $ZodUndefined,
+    $ZodUnion: () => $ZodUnion,
+    $ZodUnknown: () => $ZodUnknown,
+    $ZodVoid: () => $ZodVoid,
+    $ZodXID: () => $ZodXID,
+    $ZodXor: () => $ZodXor,
+    $brand: () => $brand,
+    $constructor: () => $constructor,
+    $input: () => $input,
+    $output: () => $output,
+    Doc: () => Doc,
+    JSONSchema: () => json_schema_exports,
+    JSONSchemaGenerator: () => JSONSchemaGenerator,
+    NEVER: () => NEVER,
+    TimePrecision: () => TimePrecision,
+    _any: () => _any,
+    _array: () => _array,
+    _base64: () => _base64,
+    _base64url: () => _base64url,
+    _bigint: () => _bigint,
+    _boolean: () => _boolean,
+    _catch: () => _catch,
+    _check: () => _check,
+    _cidrv4: () => _cidrv4,
+    _cidrv6: () => _cidrv6,
+    _coercedBigint: () => _coercedBigint,
+    _coercedBoolean: () => _coercedBoolean,
+    _coercedDate: () => _coercedDate,
+    _coercedNumber: () => _coercedNumber,
+    _coercedString: () => _coercedString,
+    _cuid: () => _cuid,
+    _cuid2: () => _cuid2,
+    _custom: () => _custom,
+    _date: () => _date,
+    _decode: () => _decode,
+    _decodeAsync: () => _decodeAsync,
+    _default: () => _default,
+    _discriminatedUnion: () => _discriminatedUnion,
+    _e164: () => _e164,
+    _email: () => _email,
+    _emoji: () => _emoji2,
+    _encode: () => _encode,
+    _encodeAsync: () => _encodeAsync,
+    _endsWith: () => _endsWith,
+    _enum: () => _enum,
+    _file: () => _file,
+    _float32: () => _float32,
+    _float64: () => _float64,
+    _gt: () => _gt,
+    _gte: () => _gte,
+    _guid: () => _guid,
+    _includes: () => _includes,
+    _int: () => _int,
+    _int32: () => _int32,
+    _int64: () => _int64,
+    _intersection: () => _intersection,
+    _ipv4: () => _ipv4,
+    _ipv6: () => _ipv6,
+    _isoDate: () => _isoDate,
+    _isoDateTime: () => _isoDateTime,
+    _isoDuration: () => _isoDuration,
+    _isoTime: () => _isoTime,
+    _jwt: () => _jwt,
+    _ksuid: () => _ksuid,
+    _lazy: () => _lazy,
+    _length: () => _length,
+    _literal: () => _literal,
+    _lowercase: () => _lowercase,
+    _lt: () => _lt,
+    _lte: () => _lte,
+    _mac: () => _mac,
+    _map: () => _map,
+    _max: () => _lte,
+    _maxLength: () => _maxLength,
+    _maxSize: () => _maxSize,
+    _mime: () => _mime,
+    _min: () => _gte,
+    _minLength: () => _minLength,
+    _minSize: () => _minSize,
+    _multipleOf: () => _multipleOf,
+    _nan: () => _nan,
+    _nanoid: () => _nanoid,
+    _nativeEnum: () => _nativeEnum,
+    _negative: () => _negative,
+    _never: () => _never,
+    _nonnegative: () => _nonnegative,
+    _nonoptional: () => _nonoptional,
+    _nonpositive: () => _nonpositive,
+    _normalize: () => _normalize,
+    _null: () => _null2,
+    _nullable: () => _nullable,
+    _number: () => _number,
+    _optional: () => _optional,
+    _overwrite: () => _overwrite,
+    _parse: () => _parse,
+    _parseAsync: () => _parseAsync,
+    _pipe: () => _pipe,
+    _positive: () => _positive,
+    _promise: () => _promise,
+    _property: () => _property,
+    _readonly: () => _readonly,
+    _record: () => _record,
+    _refine: () => _refine,
+    _regex: () => _regex,
+    _safeDecode: () => _safeDecode,
+    _safeDecodeAsync: () => _safeDecodeAsync,
+    _safeEncode: () => _safeEncode,
+    _safeEncodeAsync: () => _safeEncodeAsync,
+    _safeParse: () => _safeParse,
+    _safeParseAsync: () => _safeParseAsync,
+    _set: () => _set,
+    _size: () => _size,
+    _slugify: () => _slugify,
+    _startsWith: () => _startsWith,
+    _string: () => _string,
+    _stringFormat: () => _stringFormat,
+    _stringbool: () => _stringbool,
+    _success: () => _success,
+    _superRefine: () => _superRefine,
+    _symbol: () => _symbol,
+    _templateLiteral: () => _templateLiteral,
+    _toLowerCase: () => _toLowerCase,
+    _toUpperCase: () => _toUpperCase,
+    _transform: () => _transform,
+    _trim: () => _trim,
+    _tuple: () => _tuple,
+    _uint32: () => _uint32,
+    _uint64: () => _uint64,
+    _ulid: () => _ulid,
+    _undefined: () => _undefined2,
+    _union: () => _union,
+    _unknown: () => _unknown,
+    _uppercase: () => _uppercase,
+    _url: () => _url,
+    _uuid: () => _uuid,
+    _uuidv4: () => _uuidv4,
+    _uuidv6: () => _uuidv6,
+    _uuidv7: () => _uuidv7,
+    _void: () => _void,
+    _xid: () => _xid,
+    _xor: () => _xor,
+    clone: () => clone,
+    config: () => config,
+    createStandardJSONSchemaMethod: () => createStandardJSONSchemaMethod,
+    createToJSONSchemaMethod: () => createToJSONSchemaMethod,
+    decode: () => decode,
+    decodeAsync: () => decodeAsync,
+    describe: () => describe,
+    encode: () => encode,
+    encodeAsync: () => encodeAsync,
+    extractDefs: () => extractDefs,
+    finalize: () => finalize,
+    flattenError: () => flattenError,
+    formatError: () => formatError,
+    globalConfig: () => globalConfig,
+    globalRegistry: () => globalRegistry,
+    initializeContext: () => initializeContext,
+    isValidBase64: () => isValidBase64,
+    isValidBase64URL: () => isValidBase64URL,
+    isValidJWT: () => isValidJWT,
+    locales: () => locales_exports,
+    meta: () => meta,
+    parse: () => parse,
+    parseAsync: () => parseAsync,
+    prettifyError: () => prettifyError,
+    process: () => process,
+    regexes: () => regexes_exports,
+    registry: () => registry,
+    safeDecode: () => safeDecode,
+    safeDecodeAsync: () => safeDecodeAsync,
+    safeEncode: () => safeEncode,
+    safeEncodeAsync: () => safeEncodeAsync,
+    safeParse: () => safeParse,
+    safeParseAsync: () => safeParseAsync,
+    toDotPath: () => toDotPath,
+    toJSONSchema: () => toJSONSchema,
+    treeifyError: () => treeifyError,
+    util: () => util_exports,
+    version: () => version
+  });
 
   // node_modules/zod/v4/core/core.js
   var NEVER = Object.freeze({
@@ -146,6 +1849,7 @@
     Object.defineProperty(_, "name", { value: name });
     return _;
   }
+  var $brand = /* @__PURE__ */ Symbol("zod_brand");
   var $ZodAsyncError = class extends Error {
     constructor() {
       super(`Encountered Promise during synchronous parse. Use .parseAsync() instead.`);
@@ -248,8 +1952,8 @@
     const values = Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
     return values;
   }
-  function joinValues(array2, separator = "|") {
-    return array2.map((val) => stringifyPrimitive(val)).join(separator);
+  function joinValues(array3, separator = "|") {
+    return array3.map((val) => stringifyPrimitive(val)).join(separator);
   }
   function jsonStringifyReplacer(_, value) {
     if (typeof value === "bigint")
@@ -862,10 +2566,10 @@
   };
   var $ZodError = $constructor("$ZodError", initializer);
   var $ZodRealError = $constructor("$ZodError", initializer, { Parent: Error });
-  function flattenError(error2, mapper = (issue2) => issue2.message) {
+  function flattenError(error48, mapper = (issue2) => issue2.message) {
     const fieldErrors = {};
     const formErrors = [];
-    for (const sub of error2.issues) {
+    for (const sub of error48.issues) {
       if (sub.path.length > 0) {
         fieldErrors[sub.path[0]] = fieldErrors[sub.path[0]] || [];
         fieldErrors[sub.path[0]].push(mapper(sub));
@@ -875,10 +2579,10 @@
     }
     return { formErrors, fieldErrors };
   }
-  function formatError(error2, mapper = (issue2) => issue2.message) {
+  function formatError(error48, mapper = (issue2) => issue2.message) {
     const fieldErrors = { _errors: [] };
-    const processError = (error3) => {
-      for (const issue2 of error3.issues) {
+    const processError = (error49) => {
+      for (const issue2 of error49.issues) {
         if (issue2.code === "invalid_union" && issue2.errors.length) {
           issue2.errors.map((issues) => processError({ issues }));
         } else if (issue2.code === "invalid_key") {
@@ -905,8 +2609,78 @@
         }
       }
     };
-    processError(error2);
+    processError(error48);
     return fieldErrors;
+  }
+  function treeifyError(error48, mapper = (issue2) => issue2.message) {
+    const result = { errors: [] };
+    const processError = (error49, path = []) => {
+      var _a2, _b;
+      for (const issue2 of error49.issues) {
+        if (issue2.code === "invalid_union" && issue2.errors.length) {
+          issue2.errors.map((issues) => processError({ issues }, issue2.path));
+        } else if (issue2.code === "invalid_key") {
+          processError({ issues: issue2.issues }, issue2.path);
+        } else if (issue2.code === "invalid_element") {
+          processError({ issues: issue2.issues }, issue2.path);
+        } else {
+          const fullpath = [...path, ...issue2.path];
+          if (fullpath.length === 0) {
+            result.errors.push(mapper(issue2));
+            continue;
+          }
+          let curr = result;
+          let i = 0;
+          while (i < fullpath.length) {
+            const el = fullpath[i];
+            const terminal = i === fullpath.length - 1;
+            if (typeof el === "string") {
+              curr.properties ?? (curr.properties = {});
+              (_a2 = curr.properties)[el] ?? (_a2[el] = { errors: [] });
+              curr = curr.properties[el];
+            } else {
+              curr.items ?? (curr.items = []);
+              (_b = curr.items)[el] ?? (_b[el] = { errors: [] });
+              curr = curr.items[el];
+            }
+            if (terminal) {
+              curr.errors.push(mapper(issue2));
+            }
+            i++;
+          }
+        }
+      }
+    };
+    processError(error48);
+    return result;
+  }
+  function toDotPath(_path) {
+    const segs = [];
+    const path = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+    for (const seg of path) {
+      if (typeof seg === "number")
+        segs.push(`[${seg}]`);
+      else if (typeof seg === "symbol")
+        segs.push(`[${JSON.stringify(String(seg))}]`);
+      else if (/[^\w$]/.test(seg))
+        segs.push(`[${JSON.stringify(seg)}]`);
+      else {
+        if (segs.length)
+          segs.push(".");
+        segs.push(seg);
+      }
+    }
+    return segs.join("");
+  }
+  function prettifyError(error48) {
+    const lines = [];
+    const issues = [...error48.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
+    for (const issue2 of issues) {
+      lines.push(`\u2716 ${issue2.message}`);
+      if (issue2.path?.length)
+        lines.push(`  \u2192 at ${toDotPath(issue2.path)}`);
+    }
+    return lines.join("\n");
   }
 
   // node_modules/zod/v4/core/parse.js
@@ -964,30 +2738,38 @@
     const ctx = _ctx ? Object.assign(_ctx, { direction: "backward" }) : { direction: "backward" };
     return _parse(_Err)(schema, value, ctx);
   };
+  var encode = /* @__PURE__ */ _encode($ZodRealError);
   var _decode = (_Err) => (schema, value, _ctx) => {
     return _parse(_Err)(schema, value, _ctx);
   };
+  var decode = /* @__PURE__ */ _decode($ZodRealError);
   var _encodeAsync = (_Err) => async (schema, value, _ctx) => {
     const ctx = _ctx ? Object.assign(_ctx, { direction: "backward" }) : { direction: "backward" };
     return _parseAsync(_Err)(schema, value, ctx);
   };
+  var encodeAsync = /* @__PURE__ */ _encodeAsync($ZodRealError);
   var _decodeAsync = (_Err) => async (schema, value, _ctx) => {
     return _parseAsync(_Err)(schema, value, _ctx);
   };
+  var decodeAsync = /* @__PURE__ */ _decodeAsync($ZodRealError);
   var _safeEncode = (_Err) => (schema, value, _ctx) => {
     const ctx = _ctx ? Object.assign(_ctx, { direction: "backward" }) : { direction: "backward" };
     return _safeParse(_Err)(schema, value, ctx);
   };
+  var safeEncode = /* @__PURE__ */ _safeEncode($ZodRealError);
   var _safeDecode = (_Err) => (schema, value, _ctx) => {
     return _safeParse(_Err)(schema, value, _ctx);
   };
+  var safeDecode = /* @__PURE__ */ _safeDecode($ZodRealError);
   var _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
     const ctx = _ctx ? Object.assign(_ctx, { direction: "backward" }) : { direction: "backward" };
     return _safeParseAsync(_Err)(schema, value, ctx);
   };
+  var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync($ZodRealError);
   var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
     return _safeParseAsync(_Err)(schema, value, _ctx);
   };
+  var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync($ZodRealError);
 
   // node_modules/zod/v4/core/regexes.js
   var regexes_exports = {};
@@ -2473,13 +4255,13 @@
       }
       return propValues;
     });
-    const isObject2 = isObject;
+    const isObject3 = isObject;
     const catchall = def.catchall;
     let value;
     inst._zod.parse = (payload, ctx) => {
       value ?? (value = _normalized.value);
       const input = payload.value;
-      if (!isObject2(input)) {
+      if (!isObject3(input)) {
         payload.issues.push({
           expected: "object",
           code: "invalid_type",
@@ -2577,7 +4359,7 @@
       return (payload, ctx) => fn(shape, payload, ctx);
     };
     let fastpass;
-    const isObject2 = isObject;
+    const isObject3 = isObject;
     const jit = !globalConfig.jitless;
     const allowsEval2 = allowsEval;
     const fastEnabled = jit && allowsEval2.value;
@@ -2586,7 +4368,7 @@
     inst._zod.parse = (payload, ctx) => {
       value ?? (value = _normalized.value);
       const input = payload.value;
-      if (!isObject2(input)) {
+      if (!isObject3(input)) {
         payload.issues.push({
           expected: "object",
           code: "invalid_type",
@@ -3708,8 +5490,999 @@
     }
   }
 
-  // node_modules/zod/v4/locales/en.js
+  // node_modules/zod/v4/locales/index.js
+  var locales_exports = {};
+  __export(locales_exports, {
+    ar: () => ar_default,
+    az: () => az_default,
+    be: () => be_default,
+    bg: () => bg_default,
+    ca: () => ca_default,
+    cs: () => cs_default,
+    da: () => da_default,
+    de: () => de_default,
+    en: () => en_default,
+    eo: () => eo_default,
+    es: () => es_default,
+    fa: () => fa_default,
+    fi: () => fi_default,
+    fr: () => fr_default,
+    frCA: () => fr_CA_default,
+    he: () => he_default,
+    hu: () => hu_default,
+    hy: () => hy_default,
+    id: () => id_default,
+    is: () => is_default,
+    it: () => it_default,
+    ja: () => ja_default,
+    ka: () => ka_default,
+    kh: () => kh_default,
+    km: () => km_default,
+    ko: () => ko_default,
+    lt: () => lt_default,
+    mk: () => mk_default,
+    ms: () => ms_default,
+    nl: () => nl_default,
+    no: () => no_default,
+    ota: () => ota_default,
+    pl: () => pl_default,
+    ps: () => ps_default,
+    pt: () => pt_default,
+    ru: () => ru_default,
+    sl: () => sl_default,
+    sv: () => sv_default,
+    ta: () => ta_default,
+    th: () => th_default,
+    tr: () => tr_default,
+    ua: () => ua_default,
+    uk: () => uk_default,
+    ur: () => ur_default,
+    uz: () => uz_default,
+    vi: () => vi_default,
+    yo: () => yo_default,
+    zhCN: () => zh_CN_default,
+    zhTW: () => zh_TW_default
+  });
+
+  // node_modules/zod/v4/locales/ar.js
   var error = () => {
+    const Sizable = {
+      string: { unit: "\u062D\u0631\u0641", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
+      file: { unit: "\u0628\u0627\u064A\u062A", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
+      array: { unit: "\u0639\u0646\u0635\u0631", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
+      set: { unit: "\u0639\u0646\u0635\u0631", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0645\u062F\u062E\u0644",
+      email: "\u0628\u0631\u064A\u062F \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A",
+      url: "\u0631\u0627\u0628\u0637",
+      emoji: "\u0625\u064A\u0645\u0648\u062C\u064A",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u062A\u0627\u0631\u064A\u062E \u0648\u0648\u0642\u062A \u0628\u0645\u0639\u064A\u0627\u0631 ISO",
+      date: "\u062A\u0627\u0631\u064A\u062E \u0628\u0645\u0639\u064A\u0627\u0631 ISO",
+      time: "\u0648\u0642\u062A \u0628\u0645\u0639\u064A\u0627\u0631 ISO",
+      duration: "\u0645\u062F\u0629 \u0628\u0645\u0639\u064A\u0627\u0631 ISO",
+      ipv4: "\u0639\u0646\u0648\u0627\u0646 IPv4",
+      ipv6: "\u0639\u0646\u0648\u0627\u0646 IPv6",
+      cidrv4: "\u0645\u062F\u0649 \u0639\u0646\u0627\u0648\u064A\u0646 \u0628\u0635\u064A\u063A\u0629 IPv4",
+      cidrv6: "\u0645\u062F\u0649 \u0639\u0646\u0627\u0648\u064A\u0646 \u0628\u0635\u064A\u063A\u0629 IPv6",
+      base64: "\u0646\u064E\u0635 \u0628\u062A\u0631\u0645\u064A\u0632 base64-encoded",
+      base64url: "\u0646\u064E\u0635 \u0628\u062A\u0631\u0645\u064A\u0632 base64url-encoded",
+      json_string: "\u0646\u064E\u0635 \u0639\u0644\u0649 \u0647\u064A\u0626\u0629 JSON",
+      e164: "\u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0628\u0645\u0639\u064A\u0627\u0631 E.164",
+      jwt: "JWT",
+      template_literal: "\u0645\u062F\u062E\u0644"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0645\u062F\u062E\u0644\u0627\u062A \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644\u0629: \u064A\u0641\u062A\u0631\u0636 \u0625\u062F\u062E\u0627\u0644 instanceof ${issue2.expected}\u060C \u0648\u0644\u0643\u0646 \u062A\u0645 \u0625\u062F\u062E\u0627\u0644 ${received}`;
+          }
+          return `\u0645\u062F\u062E\u0644\u0627\u062A \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644\u0629: \u064A\u0641\u062A\u0631\u0636 \u0625\u062F\u062E\u0627\u0644 ${expected}\u060C \u0648\u0644\u0643\u0646 \u062A\u0645 \u0625\u062F\u062E\u0627\u0644 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u0645\u062F\u062E\u0644\u0627\u062A \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644\u0629: \u064A\u0641\u062A\u0631\u0636 \u0625\u062F\u062E\u0627\u0644 ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u0627\u062E\u062A\u064A\u0627\u0631 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062A\u0648\u0642\u0639 \u0627\u0646\u062A\u0642\u0627\u0621 \u0623\u062D\u062F \u0647\u0630\u0647 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A: ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return ` \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0644\u0627\u0632\u0645: \u064A\u0641\u062A\u0631\u0636 \u0623\u0646 \u062A\u0643\u0648\u0646 ${issue2.origin ?? "\u0627\u0644\u0642\u064A\u0645\u0629"} ${adj} ${issue2.maximum.toString()} ${sizing.unit ?? "\u0639\u0646\u0635\u0631"}`;
+          return `\u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0644\u0627\u0632\u0645: \u064A\u0641\u062A\u0631\u0636 \u0623\u0646 \u062A\u0643\u0648\u0646 ${issue2.origin ?? "\u0627\u0644\u0642\u064A\u0645\u0629"} ${adj} ${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0623\u0635\u063A\u0631 \u0645\u0646 \u0627\u0644\u0644\u0627\u0632\u0645: \u064A\u0641\u062A\u0631\u0636 \u0644\u0640 ${issue2.origin} \u0623\u0646 \u064A\u0643\u0648\u0646 ${adj} ${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u0623\u0635\u063A\u0631 \u0645\u0646 \u0627\u0644\u0644\u0627\u0632\u0645: \u064A\u0641\u062A\u0631\u0636 \u0644\u0640 ${issue2.origin} \u0623\u0646 \u064A\u0643\u0648\u0646 ${adj} ${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u0646\u064E\u0635 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 "${issue2.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u0646\u064E\u0635 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062C\u0628 \u0623\u0646 \u064A\u0646\u062A\u0647\u064A \u0628\u0640 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u0646\u064E\u0635 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062C\u0628 \u0623\u0646 \u064A\u062A\u0636\u0645\u0651\u064E\u0646 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u0646\u064E\u0635 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062C\u0628 \u0623\u0646 \u064A\u0637\u0627\u0628\u0642 \u0627\u0644\u0646\u0645\u0637 ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644`;
+        }
+        case "not_multiple_of":
+          return `\u0631\u0642\u0645 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644: \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0645\u0646 \u0645\u0636\u0627\u0639\u0641\u0627\u062A ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u0645\u0639\u0631\u0641${issue2.keys.length > 1 ? "\u0627\u062A" : ""} \u063A\u0631\u064A\u0628${issue2.keys.length > 1 ? "\u0629" : ""}: ${joinValues(issue2.keys, "\u060C ")}`;
+        case "invalid_key":
+          return `\u0645\u0639\u0631\u0641 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644 \u0641\u064A ${issue2.origin}`;
+        case "invalid_union":
+          return "\u0645\u062F\u062E\u0644 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644";
+        case "invalid_element":
+          return `\u0645\u062F\u062E\u0644 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644 \u0641\u064A ${issue2.origin}`;
+        default:
+          return "\u0645\u062F\u062E\u0644 \u063A\u064A\u0631 \u0645\u0642\u0628\u0648\u0644";
+      }
+    };
+  };
+  function ar_default() {
+    return {
+      localeError: error()
+    };
+  }
+
+  // node_modules/zod/v4/locales/az.js
+  var error2 = () => {
+    const Sizable = {
+      string: { unit: "simvol", verb: "olmal\u0131d\u0131r" },
+      file: { unit: "bayt", verb: "olmal\u0131d\u0131r" },
+      array: { unit: "element", verb: "olmal\u0131d\u0131r" },
+      set: { unit: "element", verb: "olmal\u0131d\u0131r" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "email address",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO datetime",
+      date: "ISO date",
+      time: "ISO time",
+      duration: "ISO duration",
+      ipv4: "IPv4 address",
+      ipv6: "IPv6 address",
+      cidrv4: "IPv4 range",
+      cidrv6: "IPv6 range",
+      base64: "base64-encoded string",
+      base64url: "base64url-encoded string",
+      json_string: "JSON string",
+      e164: "E.164 number",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Yanl\u0131\u015F d\u0259y\u0259r: g\xF6zl\u0259nil\u0259n instanceof ${issue2.expected}, daxil olan ${received}`;
+          }
+          return `Yanl\u0131\u015F d\u0259y\u0259r: g\xF6zl\u0259nil\u0259n ${expected}, daxil olan ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Yanl\u0131\u015F d\u0259y\u0259r: g\xF6zl\u0259nil\u0259n ${stringifyPrimitive(issue2.values[0])}`;
+          return `Yanl\u0131\u015F se\xE7im: a\u015Fa\u011F\u0131dak\u0131lardan biri olmal\u0131d\u0131r: ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\xC7ox b\xF6y\xFCk: g\xF6zl\u0259nil\u0259n ${issue2.origin ?? "d\u0259y\u0259r"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "element"}`;
+          return `\xC7ox b\xF6y\xFCk: g\xF6zl\u0259nil\u0259n ${issue2.origin ?? "d\u0259y\u0259r"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\xC7ox ki\xE7ik: g\xF6zl\u0259nil\u0259n ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          return `\xC7ox ki\xE7ik: g\xF6zl\u0259nil\u0259n ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Yanl\u0131\u015F m\u0259tn: "${_issue.prefix}" il\u0259 ba\u015Flamal\u0131d\u0131r`;
+          if (_issue.format === "ends_with")
+            return `Yanl\u0131\u015F m\u0259tn: "${_issue.suffix}" il\u0259 bitm\u0259lidir`;
+          if (_issue.format === "includes")
+            return `Yanl\u0131\u015F m\u0259tn: "${_issue.includes}" daxil olmal\u0131d\u0131r`;
+          if (_issue.format === "regex")
+            return `Yanl\u0131\u015F m\u0259tn: ${_issue.pattern} \u015Fablonuna uy\u011Fun olmal\u0131d\u0131r`;
+          return `Yanl\u0131\u015F ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Yanl\u0131\u015F \u0259d\u0259d: ${issue2.divisor} il\u0259 b\xF6l\xFCn\u0259 bil\u0259n olmal\u0131d\u0131r`;
+        case "unrecognized_keys":
+          return `Tan\u0131nmayan a\xE7ar${issue2.keys.length > 1 ? "lar" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} daxilind\u0259 yanl\u0131\u015F a\xE7ar`;
+        case "invalid_union":
+          return "Yanl\u0131\u015F d\u0259y\u0259r";
+        case "invalid_element":
+          return `${issue2.origin} daxilind\u0259 yanl\u0131\u015F d\u0259y\u0259r`;
+        default:
+          return `Yanl\u0131\u015F d\u0259y\u0259r`;
+      }
+    };
+  };
+  function az_default() {
+    return {
+      localeError: error2()
+    };
+  }
+
+  // node_modules/zod/v4/locales/be.js
+  function getBelarusianPlural(count, one, few, many) {
+    const absCount = Math.abs(count);
+    const lastDigit = absCount % 10;
+    const lastTwoDigits = absCount % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+      return many;
+    }
+    if (lastDigit === 1) {
+      return one;
+    }
+    if (lastDigit >= 2 && lastDigit <= 4) {
+      return few;
+    }
+    return many;
+  }
+  var error3 = () => {
+    const Sizable = {
+      string: {
+        unit: {
+          one: "\u0441\u0456\u043C\u0432\u0430\u043B",
+          few: "\u0441\u0456\u043C\u0432\u0430\u043B\u044B",
+          many: "\u0441\u0456\u043C\u0432\u0430\u043B\u0430\u045E"
+        },
+        verb: "\u043C\u0435\u0446\u044C"
+      },
+      array: {
+        unit: {
+          one: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442",
+          few: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u044B",
+          many: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u0430\u045E"
+        },
+        verb: "\u043C\u0435\u0446\u044C"
+      },
+      set: {
+        unit: {
+          one: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442",
+          few: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u044B",
+          many: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u0430\u045E"
+        },
+        verb: "\u043C\u0435\u0446\u044C"
+      },
+      file: {
+        unit: {
+          one: "\u0431\u0430\u0439\u0442",
+          few: "\u0431\u0430\u0439\u0442\u044B",
+          many: "\u0431\u0430\u0439\u0442\u0430\u045E"
+        },
+        verb: "\u043C\u0435\u0446\u044C"
+      }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0443\u0432\u043E\u0434",
+      email: "email \u0430\u0434\u0440\u0430\u0441",
+      url: "URL",
+      emoji: "\u044D\u043C\u043E\u0434\u0437\u0456",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0434\u0430\u0442\u0430 \u0456 \u0447\u0430\u0441",
+      date: "ISO \u0434\u0430\u0442\u0430",
+      time: "ISO \u0447\u0430\u0441",
+      duration: "ISO \u043F\u0440\u0430\u0446\u044F\u0433\u043B\u0430\u0441\u0446\u044C",
+      ipv4: "IPv4 \u0430\u0434\u0440\u0430\u0441",
+      ipv6: "IPv6 \u0430\u0434\u0440\u0430\u0441",
+      cidrv4: "IPv4 \u0434\u044B\u044F\u043F\u0430\u0437\u043E\u043D",
+      cidrv6: "IPv6 \u0434\u044B\u044F\u043F\u0430\u0437\u043E\u043D",
+      base64: "\u0440\u0430\u0434\u043E\u043A \u0443 \u0444\u0430\u0440\u043C\u0430\u0446\u0435 base64",
+      base64url: "\u0440\u0430\u0434\u043E\u043A \u0443 \u0444\u0430\u0440\u043C\u0430\u0446\u0435 base64url",
+      json_string: "JSON \u0440\u0430\u0434\u043E\u043A",
+      e164: "\u043D\u0443\u043C\u0430\u0440 E.164",
+      jwt: "JWT",
+      template_literal: "\u0443\u0432\u043E\u0434"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u043B\u0456\u043A",
+      array: "\u043C\u0430\u0441\u0456\u045E"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u045E\u0432\u043E\u0434: \u0447\u0430\u043A\u0430\u045E\u0441\u044F instanceof ${issue2.expected}, \u0430\u0442\u0440\u044B\u043C\u0430\u043D\u0430 ${received}`;
+          }
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u045E\u0432\u043E\u0434: \u0447\u0430\u043A\u0430\u045E\u0441\u044F ${expected}, \u0430\u0442\u0440\u044B\u043C\u0430\u043D\u0430 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u045E\u0432\u043E\u0434: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u0432\u0430\u0440\u044B\u044F\u043D\u0442: \u0447\u0430\u043A\u0430\u045E\u0441\u044F \u0430\u0434\u0437\u0456\u043D \u0437 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const maxValue = Number(issue2.maximum);
+            const unit = getBelarusianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+            return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.maximum.toString()} ${unit}`;
+          }
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u0432\u044F\u043B\u0456\u043A\u0456: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435"} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const minValue = Number(issue2.minimum);
+            const unit = getBelarusianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+            return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 ${sizing.verb} ${adj}${issue2.minimum.toString()} ${unit}`;
+          }
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u0430 \u043C\u0430\u043B\u044B: \u0447\u0430\u043A\u0430\u043B\u0430\u0441\u044F, \u0448\u0442\u043E ${issue2.origin} \u043F\u0430\u0432\u0456\u043D\u043D\u0430 \u0431\u044B\u0446\u044C ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u0440\u0430\u0434\u043E\u043A: \u043F\u0430\u0432\u0456\u043D\u0435\u043D \u043F\u0430\u0447\u044B\u043D\u0430\u0446\u0446\u0430 \u0437 "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u0440\u0430\u0434\u043E\u043A: \u043F\u0430\u0432\u0456\u043D\u0435\u043D \u0437\u0430\u043A\u0430\u043D\u0447\u0432\u0430\u0446\u0446\u0430 \u043D\u0430 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u0440\u0430\u0434\u043E\u043A: \u043F\u0430\u0432\u0456\u043D\u0435\u043D \u0437\u043C\u044F\u0448\u0447\u0430\u0446\u044C "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u0440\u0430\u0434\u043E\u043A: \u043F\u0430\u0432\u0456\u043D\u0435\u043D \u0430\u0434\u043F\u0430\u0432\u044F\u0434\u0430\u0446\u044C \u0448\u0430\u0431\u043B\u043E\u043D\u0443 ${_issue.pattern}`;
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u043B\u0456\u043A: \u043F\u0430\u0432\u0456\u043D\u0435\u043D \u0431\u044B\u0446\u044C \u043A\u0440\u0430\u0442\u043D\u044B\u043C ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u041D\u0435\u0440\u0430\u0441\u043F\u0430\u0437\u043D\u0430\u043D\u044B ${issue2.keys.length > 1 ? "\u043A\u043B\u044E\u0447\u044B" : "\u043A\u043B\u044E\u0447"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u043A\u043B\u044E\u0447 \u0443 ${issue2.origin}`;
+        case "invalid_union":
+          return "\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u045E\u0432\u043E\u0434";
+        case "invalid_element":
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u0430\u0435 \u0437\u043D\u0430\u0447\u044D\u043D\u043D\u0435 \u045E ${issue2.origin}`;
+        default:
+          return `\u041D\u044F\u043F\u0440\u0430\u0432\u0456\u043B\u044C\u043D\u044B \u045E\u0432\u043E\u0434`;
+      }
+    };
+  };
+  function be_default() {
+    return {
+      localeError: error3()
+    };
+  }
+
+  // node_modules/zod/v4/locales/bg.js
+  var error4 = () => {
+    const Sizable = {
+      string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
+      file: { unit: "\u0431\u0430\u0439\u0442\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
+      array: { unit: "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
+      set: { unit: "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0432\u0445\u043E\u0434",
+      email: "\u0438\u043C\u0435\u0439\u043B \u0430\u0434\u0440\u0435\u0441",
+      url: "URL",
+      emoji: "\u0435\u043C\u043E\u0434\u0436\u0438",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0432\u0440\u0435\u043C\u0435",
+      date: "ISO \u0434\u0430\u0442\u0430",
+      time: "ISO \u0432\u0440\u0435\u043C\u0435",
+      duration: "ISO \u043F\u0440\u043E\u0434\u044A\u043B\u0436\u0438\u0442\u0435\u043B\u043D\u043E\u0441\u0442",
+      ipv4: "IPv4 \u0430\u0434\u0440\u0435\u0441",
+      ipv6: "IPv6 \u0430\u0434\u0440\u0435\u0441",
+      cidrv4: "IPv4 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D",
+      cidrv6: "IPv6 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D",
+      base64: "base64-\u043A\u043E\u0434\u0438\u0440\u0430\u043D \u043D\u0438\u0437",
+      base64url: "base64url-\u043A\u043E\u0434\u0438\u0440\u0430\u043D \u043D\u0438\u0437",
+      json_string: "JSON \u043D\u0438\u0437",
+      e164: "E.164 \u043D\u043E\u043C\u0435\u0440",
+      jwt: "JWT",
+      template_literal: "\u0432\u0445\u043E\u0434"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0447\u0438\u0441\u043B\u043E",
+      array: "\u043C\u0430\u0441\u0438\u0432"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u0432\u0445\u043E\u0434: \u043E\u0447\u0430\u043A\u0432\u0430\u043D instanceof ${issue2.expected}, \u043F\u043E\u043B\u0443\u0447\u0435\u043D ${received}`;
+          }
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u0432\u0445\u043E\u0434: \u043E\u0447\u0430\u043A\u0432\u0430\u043D ${expected}, \u043F\u043E\u043B\u0443\u0447\u0435\u043D ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u0432\u0445\u043E\u0434: \u043E\u0447\u0430\u043A\u0432\u0430\u043D ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u0430 \u043E\u043F\u0446\u0438\u044F: \u043E\u0447\u0430\u043A\u0432\u0430\u043D\u043E \u0435\u0434\u043D\u043E \u043E\u0442 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u0422\u0432\u044A\u0440\u0434\u0435 \u0433\u043E\u043B\u044F\u043C\u043E: \u043E\u0447\u0430\u043A\u0432\u0430 \u0441\u0435 ${issue2.origin ?? "\u0441\u0442\u043E\u0439\u043D\u043E\u0441\u0442"} \u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430 ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0430"}`;
+          return `\u0422\u0432\u044A\u0440\u0434\u0435 \u0433\u043E\u043B\u044F\u043C\u043E: \u043E\u0447\u0430\u043A\u0432\u0430 \u0441\u0435 ${issue2.origin ?? "\u0441\u0442\u043E\u0439\u043D\u043E\u0441\u0442"} \u0434\u0430 \u0431\u044A\u0434\u0435 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0422\u0432\u044A\u0440\u0434\u0435 \u043C\u0430\u043B\u043A\u043E: \u043E\u0447\u0430\u043A\u0432\u0430 \u0441\u0435 ${issue2.origin} \u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430 ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u0422\u0432\u044A\u0440\u0434\u0435 \u043C\u0430\u043B\u043A\u043E: \u043E\u0447\u0430\u043A\u0432\u0430 \u0441\u0435 ${issue2.origin} \u0434\u0430 \u0431\u044A\u0434\u0435 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u043D\u0438\u0437: \u0442\u0440\u044F\u0431\u0432\u0430 \u0434\u0430 \u0437\u0430\u043F\u043E\u0447\u0432\u0430 \u0441 "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u043D\u0438\u0437: \u0442\u0440\u044F\u0431\u0432\u0430 \u0434\u0430 \u0437\u0430\u0432\u044A\u0440\u0448\u0432\u0430 \u0441 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u043D\u0438\u0437: \u0442\u0440\u044F\u0431\u0432\u0430 \u0434\u0430 \u0432\u043A\u043B\u044E\u0447\u0432\u0430 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u043D\u0438\u0437: \u0442\u0440\u044F\u0431\u0432\u0430 \u0434\u0430 \u0441\u044A\u0432\u043F\u0430\u0434\u0430 \u0441 ${_issue.pattern}`;
+          let invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D";
+          if (_issue.format === "emoji")
+            invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E";
+          if (_issue.format === "datetime")
+            invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E";
+          if (_issue.format === "date")
+            invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u0430";
+          if (_issue.format === "time")
+            invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E";
+          if (_issue.format === "duration")
+            invalid_adj = "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u0430";
+          return `${invalid_adj} ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E \u0447\u0438\u0441\u043B\u043E: \u0442\u0440\u044F\u0431\u0432\u0430 \u0434\u0430 \u0431\u044A\u0434\u0435 \u043A\u0440\u0430\u0442\u043D\u043E \u043D\u0430 ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u041D\u0435\u0440\u0430\u0437\u043F\u043E\u0437\u043D\u0430\u0442${issue2.keys.length > 1 ? "\u0438" : ""} \u043A\u043B\u044E\u0447${issue2.keys.length > 1 ? "\u043E\u0432\u0435" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u043A\u043B\u044E\u0447 \u0432 ${issue2.origin}`;
+        case "invalid_union":
+          return "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u0432\u0445\u043E\u0434";
+        case "invalid_element":
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u0430 \u0441\u0442\u043E\u0439\u043D\u043E\u0441\u0442 \u0432 ${issue2.origin}`;
+        default:
+          return `\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u0432\u0445\u043E\u0434`;
+      }
+    };
+  };
+  function bg_default() {
+    return {
+      localeError: error4()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ca.js
+  var error5 = () => {
+    const Sizable = {
+      string: { unit: "car\xE0cters", verb: "contenir" },
+      file: { unit: "bytes", verb: "contenir" },
+      array: { unit: "elements", verb: "contenir" },
+      set: { unit: "elements", verb: "contenir" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "entrada",
+      email: "adre\xE7a electr\xF2nica",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "data i hora ISO",
+      date: "data ISO",
+      time: "hora ISO",
+      duration: "durada ISO",
+      ipv4: "adre\xE7a IPv4",
+      ipv6: "adre\xE7a IPv6",
+      cidrv4: "rang IPv4",
+      cidrv6: "rang IPv6",
+      base64: "cadena codificada en base64",
+      base64url: "cadena codificada en base64url",
+      json_string: "cadena JSON",
+      e164: "n\xFAmero E.164",
+      jwt: "JWT",
+      template_literal: "entrada"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Tipus inv\xE0lid: s'esperava instanceof ${issue2.expected}, s'ha rebut ${received}`;
+          }
+          return `Tipus inv\xE0lid: s'esperava ${expected}, s'ha rebut ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Valor inv\xE0lid: s'esperava ${stringifyPrimitive(issue2.values[0])}`;
+          return `Opci\xF3 inv\xE0lida: s'esperava una de ${joinValues(issue2.values, " o ")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "com a m\xE0xim" : "menys de";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Massa gran: s'esperava que ${issue2.origin ?? "el valor"} contingu\xE9s ${adj} ${issue2.maximum.toString()} ${sizing.unit ?? "elements"}`;
+          return `Massa gran: s'esperava que ${issue2.origin ?? "el valor"} fos ${adj} ${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? "com a m\xEDnim" : "m\xE9s de";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Massa petit: s'esperava que ${issue2.origin} contingu\xE9s ${adj} ${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Massa petit: s'esperava que ${issue2.origin} fos ${adj} ${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Format inv\xE0lid: ha de comen\xE7ar amb "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `Format inv\xE0lid: ha d'acabar amb "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Format inv\xE0lid: ha d'incloure "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Format inv\xE0lid: ha de coincidir amb el patr\xF3 ${_issue.pattern}`;
+          return `Format inv\xE0lid per a ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `N\xFAmero inv\xE0lid: ha de ser m\xFAltiple de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Clau${issue2.keys.length > 1 ? "s" : ""} no reconeguda${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Clau inv\xE0lida a ${issue2.origin}`;
+        case "invalid_union":
+          return "Entrada inv\xE0lida";
+        // Could also be "Tipus d'unió invàlid" but "Entrada invàlida" is more general
+        case "invalid_element":
+          return `Element inv\xE0lid a ${issue2.origin}`;
+        default:
+          return `Entrada inv\xE0lida`;
+      }
+    };
+  };
+  function ca_default() {
+    return {
+      localeError: error5()
+    };
+  }
+
+  // node_modules/zod/v4/locales/cs.js
+  var error6 = () => {
+    const Sizable = {
+      string: { unit: "znak\u016F", verb: "m\xEDt" },
+      file: { unit: "bajt\u016F", verb: "m\xEDt" },
+      array: { unit: "prvk\u016F", verb: "m\xEDt" },
+      set: { unit: "prvk\u016F", verb: "m\xEDt" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "regul\xE1rn\xED v\xFDraz",
+      email: "e-mailov\xE1 adresa",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "datum a \u010Das ve form\xE1tu ISO",
+      date: "datum ve form\xE1tu ISO",
+      time: "\u010Das ve form\xE1tu ISO",
+      duration: "doba trv\xE1n\xED ISO",
+      ipv4: "IPv4 adresa",
+      ipv6: "IPv6 adresa",
+      cidrv4: "rozsah IPv4",
+      cidrv6: "rozsah IPv6",
+      base64: "\u0159et\u011Bzec zak\xF3dovan\xFD ve form\xE1tu base64",
+      base64url: "\u0159et\u011Bzec zak\xF3dovan\xFD ve form\xE1tu base64url",
+      json_string: "\u0159et\u011Bzec ve form\xE1tu JSON",
+      e164: "\u010D\xEDslo E.164",
+      jwt: "JWT",
+      template_literal: "vstup"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u010D\xEDslo",
+      string: "\u0159et\u011Bzec",
+      function: "funkce",
+      array: "pole"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Neplatn\xFD vstup: o\u010Dek\xE1v\xE1no instanceof ${issue2.expected}, obdr\u017Eeno ${received}`;
+          }
+          return `Neplatn\xFD vstup: o\u010Dek\xE1v\xE1no ${expected}, obdr\u017Eeno ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Neplatn\xFD vstup: o\u010Dek\xE1v\xE1no ${stringifyPrimitive(issue2.values[0])}`;
+          return `Neplatn\xE1 mo\u017Enost: o\u010Dek\xE1v\xE1na jedna z hodnot ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Hodnota je p\u0159\xEDli\u0161 velk\xE1: ${issue2.origin ?? "hodnota"} mus\xED m\xEDt ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "prvk\u016F"}`;
+          }
+          return `Hodnota je p\u0159\xEDli\u0161 velk\xE1: ${issue2.origin ?? "hodnota"} mus\xED b\xFDt ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Hodnota je p\u0159\xEDli\u0161 mal\xE1: ${issue2.origin ?? "hodnota"} mus\xED m\xEDt ${adj}${issue2.minimum.toString()} ${sizing.unit ?? "prvk\u016F"}`;
+          }
+          return `Hodnota je p\u0159\xEDli\u0161 mal\xE1: ${issue2.origin ?? "hodnota"} mus\xED b\xFDt ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Neplatn\xFD \u0159et\u011Bzec: mus\xED za\u010D\xEDnat na "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Neplatn\xFD \u0159et\u011Bzec: mus\xED kon\u010Dit na "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Neplatn\xFD \u0159et\u011Bzec: mus\xED obsahovat "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Neplatn\xFD \u0159et\u011Bzec: mus\xED odpov\xEDdat vzoru ${_issue.pattern}`;
+          return `Neplatn\xFD form\xE1t ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Neplatn\xE9 \u010D\xEDslo: mus\xED b\xFDt n\xE1sobkem ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Nezn\xE1m\xE9 kl\xED\u010De: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Neplatn\xFD kl\xED\u010D v ${issue2.origin}`;
+        case "invalid_union":
+          return "Neplatn\xFD vstup";
+        case "invalid_element":
+          return `Neplatn\xE1 hodnota v ${issue2.origin}`;
+        default:
+          return `Neplatn\xFD vstup`;
+      }
+    };
+  };
+  function cs_default() {
+    return {
+      localeError: error6()
+    };
+  }
+
+  // node_modules/zod/v4/locales/da.js
+  var error7 = () => {
+    const Sizable = {
+      string: { unit: "tegn", verb: "havde" },
+      file: { unit: "bytes", verb: "havde" },
+      array: { unit: "elementer", verb: "indeholdt" },
+      set: { unit: "elementer", verb: "indeholdt" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "e-mailadresse",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO dato- og klokkesl\xE6t",
+      date: "ISO-dato",
+      time: "ISO-klokkesl\xE6t",
+      duration: "ISO-varighed",
+      ipv4: "IPv4-omr\xE5de",
+      ipv6: "IPv6-omr\xE5de",
+      cidrv4: "IPv4-spektrum",
+      cidrv6: "IPv6-spektrum",
+      base64: "base64-kodet streng",
+      base64url: "base64url-kodet streng",
+      json_string: "JSON-streng",
+      e164: "E.164-nummer",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      string: "streng",
+      number: "tal",
+      boolean: "boolean",
+      array: "liste",
+      object: "objekt",
+      set: "s\xE6t",
+      file: "fil"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ugyldigt input: forventede instanceof ${issue2.expected}, fik ${received}`;
+          }
+          return `Ugyldigt input: forventede ${expected}, fik ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ugyldig v\xE6rdi: forventede ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ugyldigt valg: forventede en af f\xF8lgende ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          if (sizing)
+            return `For stor: forventede ${origin ?? "value"} ${sizing.verb} ${adj} ${issue2.maximum.toString()} ${sizing.unit ?? "elementer"}`;
+          return `For stor: forventede ${origin ?? "value"} havde ${adj} ${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          if (sizing) {
+            return `For lille: forventede ${origin} ${sizing.verb} ${adj} ${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `For lille: forventede ${origin} havde ${adj} ${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Ugyldig streng: skal starte med "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Ugyldig streng: skal ende med "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Ugyldig streng: skal indeholde "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Ugyldig streng: skal matche m\xF8nsteret ${_issue.pattern}`;
+          return `Ugyldig ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ugyldigt tal: skal v\xE6re deleligt med ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "Ukendte n\xF8gler" : "Ukendt n\xF8gle"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Ugyldig n\xF8gle i ${issue2.origin}`;
+        case "invalid_union":
+          return "Ugyldigt input: matcher ingen af de tilladte typer";
+        case "invalid_element":
+          return `Ugyldig v\xE6rdi i ${issue2.origin}`;
+        default:
+          return `Ugyldigt input`;
+      }
+    };
+  };
+  function da_default() {
+    return {
+      localeError: error7()
+    };
+  }
+
+  // node_modules/zod/v4/locales/de.js
+  var error8 = () => {
+    const Sizable = {
+      string: { unit: "Zeichen", verb: "zu haben" },
+      file: { unit: "Bytes", verb: "zu haben" },
+      array: { unit: "Elemente", verb: "zu haben" },
+      set: { unit: "Elemente", verb: "zu haben" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "Eingabe",
+      email: "E-Mail-Adresse",
+      url: "URL",
+      emoji: "Emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO-Datum und -Uhrzeit",
+      date: "ISO-Datum",
+      time: "ISO-Uhrzeit",
+      duration: "ISO-Dauer",
+      ipv4: "IPv4-Adresse",
+      ipv6: "IPv6-Adresse",
+      cidrv4: "IPv4-Bereich",
+      cidrv6: "IPv6-Bereich",
+      base64: "Base64-codierter String",
+      base64url: "Base64-URL-codierter String",
+      json_string: "JSON-String",
+      e164: "E.164-Nummer",
+      jwt: "JWT",
+      template_literal: "Eingabe"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "Zahl",
+      array: "Array"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ung\xFCltige Eingabe: erwartet instanceof ${issue2.expected}, erhalten ${received}`;
+          }
+          return `Ung\xFCltige Eingabe: erwartet ${expected}, erhalten ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ung\xFCltige Eingabe: erwartet ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ung\xFCltige Option: erwartet eine von ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Zu gro\xDF: erwartet, dass ${issue2.origin ?? "Wert"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "Elemente"} hat`;
+          return `Zu gro\xDF: erwartet, dass ${issue2.origin ?? "Wert"} ${adj}${issue2.maximum.toString()} ist`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Zu klein: erwartet, dass ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit} hat`;
+          }
+          return `Zu klein: erwartet, dass ${issue2.origin} ${adj}${issue2.minimum.toString()} ist`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Ung\xFCltiger String: muss mit "${_issue.prefix}" beginnen`;
+          if (_issue.format === "ends_with")
+            return `Ung\xFCltiger String: muss mit "${_issue.suffix}" enden`;
+          if (_issue.format === "includes")
+            return `Ung\xFCltiger String: muss "${_issue.includes}" enthalten`;
+          if (_issue.format === "regex")
+            return `Ung\xFCltiger String: muss dem Muster ${_issue.pattern} entsprechen`;
+          return `Ung\xFCltig: ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ung\xFCltige Zahl: muss ein Vielfaches von ${issue2.divisor} sein`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "Unbekannte Schl\xFCssel" : "Unbekannter Schl\xFCssel"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Ung\xFCltiger Schl\xFCssel in ${issue2.origin}`;
+        case "invalid_union":
+          return "Ung\xFCltige Eingabe";
+        case "invalid_element":
+          return `Ung\xFCltiger Wert in ${issue2.origin}`;
+        default:
+          return `Ung\xFCltige Eingabe`;
+      }
+    };
+  };
+  function de_default() {
+    return {
+      localeError: error8()
+    };
+  }
+
+  // node_modules/zod/v4/locales/en.js
+  var error9 = () => {
     const Sizable = {
       string: { unit: "characters", verb: "to have" },
       file: { unit: "bytes", verb: "to have" },
@@ -3813,12 +6586,4491 @@
   };
   function en_default() {
     return {
-      localeError: error()
+      localeError: error9()
+    };
+  }
+
+  // node_modules/zod/v4/locales/eo.js
+  var error10 = () => {
+    const Sizable = {
+      string: { unit: "karaktrojn", verb: "havi" },
+      file: { unit: "bajtojn", verb: "havi" },
+      array: { unit: "elementojn", verb: "havi" },
+      set: { unit: "elementojn", verb: "havi" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "enigo",
+      email: "retadreso",
+      url: "URL",
+      emoji: "emo\u011Dio",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO-datotempo",
+      date: "ISO-dato",
+      time: "ISO-tempo",
+      duration: "ISO-da\u016Dro",
+      ipv4: "IPv4-adreso",
+      ipv6: "IPv6-adreso",
+      cidrv4: "IPv4-rango",
+      cidrv6: "IPv6-rango",
+      base64: "64-ume kodita karaktraro",
+      base64url: "URL-64-ume kodita karaktraro",
+      json_string: "JSON-karaktraro",
+      e164: "E.164-nombro",
+      jwt: "JWT",
+      template_literal: "enigo"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "nombro",
+      array: "tabelo",
+      null: "senvalora"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Nevalida enigo: atendi\u011Dis instanceof ${issue2.expected}, ricevi\u011Dis ${received}`;
+          }
+          return `Nevalida enigo: atendi\u011Dis ${expected}, ricevi\u011Dis ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Nevalida enigo: atendi\u011Dis ${stringifyPrimitive(issue2.values[0])}`;
+          return `Nevalida opcio: atendi\u011Dis unu el ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Tro granda: atendi\u011Dis ke ${issue2.origin ?? "valoro"} havu ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementojn"}`;
+          return `Tro granda: atendi\u011Dis ke ${issue2.origin ?? "valoro"} havu ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Tro malgranda: atendi\u011Dis ke ${issue2.origin} havu ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Tro malgranda: atendi\u011Dis ke ${issue2.origin} estu ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Nevalida karaktraro: devas komenci\u011Di per "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Nevalida karaktraro: devas fini\u011Di per "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Nevalida karaktraro: devas inkluzivi "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Nevalida karaktraro: devas kongrui kun la modelo ${_issue.pattern}`;
+          return `Nevalida ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Nevalida nombro: devas esti oblo de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Nekonata${issue2.keys.length > 1 ? "j" : ""} \u015Dlosilo${issue2.keys.length > 1 ? "j" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Nevalida \u015Dlosilo en ${issue2.origin}`;
+        case "invalid_union":
+          return "Nevalida enigo";
+        case "invalid_element":
+          return `Nevalida valoro en ${issue2.origin}`;
+        default:
+          return `Nevalida enigo`;
+      }
+    };
+  };
+  function eo_default() {
+    return {
+      localeError: error10()
+    };
+  }
+
+  // node_modules/zod/v4/locales/es.js
+  var error11 = () => {
+    const Sizable = {
+      string: { unit: "caracteres", verb: "tener" },
+      file: { unit: "bytes", verb: "tener" },
+      array: { unit: "elementos", verb: "tener" },
+      set: { unit: "elementos", verb: "tener" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "entrada",
+      email: "direcci\xF3n de correo electr\xF3nico",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "fecha y hora ISO",
+      date: "fecha ISO",
+      time: "hora ISO",
+      duration: "duraci\xF3n ISO",
+      ipv4: "direcci\xF3n IPv4",
+      ipv6: "direcci\xF3n IPv6",
+      cidrv4: "rango IPv4",
+      cidrv6: "rango IPv6",
+      base64: "cadena codificada en base64",
+      base64url: "URL codificada en base64",
+      json_string: "cadena JSON",
+      e164: "n\xFAmero E.164",
+      jwt: "JWT",
+      template_literal: "entrada"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      string: "texto",
+      number: "n\xFAmero",
+      boolean: "booleano",
+      array: "arreglo",
+      object: "objeto",
+      set: "conjunto",
+      file: "archivo",
+      date: "fecha",
+      bigint: "n\xFAmero grande",
+      symbol: "s\xEDmbolo",
+      undefined: "indefinido",
+      null: "nulo",
+      function: "funci\xF3n",
+      map: "mapa",
+      record: "registro",
+      tuple: "tupla",
+      enum: "enumeraci\xF3n",
+      union: "uni\xF3n",
+      literal: "literal",
+      promise: "promesa",
+      void: "vac\xEDo",
+      never: "nunca",
+      unknown: "desconocido",
+      any: "cualquiera"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Entrada inv\xE1lida: se esperaba instanceof ${issue2.expected}, recibido ${received}`;
+          }
+          return `Entrada inv\xE1lida: se esperaba ${expected}, recibido ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Entrada inv\xE1lida: se esperaba ${stringifyPrimitive(issue2.values[0])}`;
+          return `Opci\xF3n inv\xE1lida: se esperaba una de ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          if (sizing)
+            return `Demasiado grande: se esperaba que ${origin ?? "valor"} tuviera ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementos"}`;
+          return `Demasiado grande: se esperaba que ${origin ?? "valor"} fuera ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          if (sizing) {
+            return `Demasiado peque\xF1o: se esperaba que ${origin} tuviera ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Demasiado peque\xF1o: se esperaba que ${origin} fuera ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Cadena inv\xE1lida: debe comenzar con "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Cadena inv\xE1lida: debe terminar en "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Cadena inv\xE1lida: debe incluir "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Cadena inv\xE1lida: debe coincidir con el patr\xF3n ${_issue.pattern}`;
+          return `Inv\xE1lido ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `N\xFAmero inv\xE1lido: debe ser m\xFAltiplo de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Llave${issue2.keys.length > 1 ? "s" : ""} desconocida${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Llave inv\xE1lida en ${TypeDictionary[issue2.origin] ?? issue2.origin}`;
+        case "invalid_union":
+          return "Entrada inv\xE1lida";
+        case "invalid_element":
+          return `Valor inv\xE1lido en ${TypeDictionary[issue2.origin] ?? issue2.origin}`;
+        default:
+          return `Entrada inv\xE1lida`;
+      }
+    };
+  };
+  function es_default() {
+    return {
+      localeError: error11()
+    };
+  }
+
+  // node_modules/zod/v4/locales/fa.js
+  var error12 = () => {
+    const Sizable = {
+      string: { unit: "\u06A9\u0627\u0631\u0627\u06A9\u062A\u0631", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
+      file: { unit: "\u0628\u0627\u06CC\u062A", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
+      array: { unit: "\u0622\u06CC\u062A\u0645", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
+      set: { unit: "\u0622\u06CC\u062A\u0645", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0648\u0631\u0648\u062F\u06CC",
+      email: "\u0622\u062F\u0631\u0633 \u0627\u06CC\u0645\u06CC\u0644",
+      url: "URL",
+      emoji: "\u0627\u06CC\u0645\u0648\u062C\u06CC",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u062A\u0627\u0631\u06CC\u062E \u0648 \u0632\u0645\u0627\u0646 \u0627\u06CC\u0632\u0648",
+      date: "\u062A\u0627\u0631\u06CC\u062E \u0627\u06CC\u0632\u0648",
+      time: "\u0632\u0645\u0627\u0646 \u0627\u06CC\u0632\u0648",
+      duration: "\u0645\u062F\u062A \u0632\u0645\u0627\u0646 \u0627\u06CC\u0632\u0648",
+      ipv4: "IPv4 \u0622\u062F\u0631\u0633",
+      ipv6: "IPv6 \u0622\u062F\u0631\u0633",
+      cidrv4: "IPv4 \u062F\u0627\u0645\u0646\u0647",
+      cidrv6: "IPv6 \u062F\u0627\u0645\u0646\u0647",
+      base64: "base64-encoded \u0631\u0634\u062A\u0647",
+      base64url: "base64url-encoded \u0631\u0634\u062A\u0647",
+      json_string: "JSON \u0631\u0634\u062A\u0647",
+      e164: "E.164 \u0639\u062F\u062F",
+      jwt: "JWT",
+      template_literal: "\u0648\u0631\u0648\u062F\u06CC"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0639\u062F\u062F",
+      array: "\u0622\u0631\u0627\u06CC\u0647"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0645\u06CC\u200C\u0628\u0627\u06CC\u0633\u062A instanceof ${issue2.expected} \u0645\u06CC\u200C\u0628\u0648\u062F\u060C ${received} \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F`;
+          }
+          return `\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0645\u06CC\u200C\u0628\u0627\u06CC\u0633\u062A ${expected} \u0645\u06CC\u200C\u0628\u0648\u062F\u060C ${received} \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1) {
+            return `\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0645\u06CC\u200C\u0628\u0627\u06CC\u0633\u062A ${stringifyPrimitive(issue2.values[0])} \u0645\u06CC\u200C\u0628\u0648\u062F`;
+          }
+          return `\u06AF\u0632\u06CC\u0646\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0645\u06CC\u200C\u0628\u0627\u06CC\u0633\u062A \u06CC\u06A9\u06CC \u0627\u0632 ${joinValues(issue2.values, "|")} \u0645\u06CC\u200C\u0628\u0648\u062F`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u062E\u06CC\u0644\u06CC \u0628\u0632\u0631\u06AF: ${issue2.origin ?? "\u0645\u0642\u062F\u0627\u0631"} \u0628\u0627\u06CC\u062F ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0639\u0646\u0635\u0631"} \u0628\u0627\u0634\u062F`;
+          }
+          return `\u062E\u06CC\u0644\u06CC \u0628\u0632\u0631\u06AF: ${issue2.origin ?? "\u0645\u0642\u062F\u0627\u0631"} \u0628\u0627\u06CC\u062F ${adj}${issue2.maximum.toString()} \u0628\u0627\u0634\u062F`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u062E\u06CC\u0644\u06CC \u06A9\u0648\u0686\u06A9: ${issue2.origin} \u0628\u0627\u06CC\u062F ${adj}${issue2.minimum.toString()} ${sizing.unit} \u0628\u0627\u0634\u062F`;
+          }
+          return `\u062E\u06CC\u0644\u06CC \u06A9\u0648\u0686\u06A9: ${issue2.origin} \u0628\u0627\u06CC\u062F ${adj}${issue2.minimum.toString()} \u0628\u0627\u0634\u062F`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u0631\u0634\u062A\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0628\u0627\u06CC\u062F \u0628\u0627 "${_issue.prefix}" \u0634\u0631\u0648\u0639 \u0634\u0648\u062F`;
+          }
+          if (_issue.format === "ends_with") {
+            return `\u0631\u0634\u062A\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0628\u0627\u06CC\u062F \u0628\u0627 "${_issue.suffix}" \u062A\u0645\u0627\u0645 \u0634\u0648\u062F`;
+          }
+          if (_issue.format === "includes") {
+            return `\u0631\u0634\u062A\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0628\u0627\u06CC\u062F \u0634\u0627\u0645\u0644 "${_issue.includes}" \u0628\u0627\u0634\u062F`;
+          }
+          if (_issue.format === "regex") {
+            return `\u0631\u0634\u062A\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0628\u0627\u06CC\u062F \u0628\u0627 \u0627\u0644\u06AF\u0648\u06CC ${_issue.pattern} \u0645\u0637\u0627\u0628\u0642\u062A \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F`;
+          }
+          return `${FormatDictionary[_issue.format] ?? issue2.format} \u0646\u0627\u0645\u0639\u062A\u0628\u0631`;
+        }
+        case "not_multiple_of":
+          return `\u0639\u062F\u062F \u0646\u0627\u0645\u0639\u062A\u0628\u0631: \u0628\u0627\u06CC\u062F \u0645\u0636\u0631\u0628 ${issue2.divisor} \u0628\u0627\u0634\u062F`;
+        case "unrecognized_keys":
+          return `\u06A9\u0644\u06CC\u062F${issue2.keys.length > 1 ? "\u0647\u0627\u06CC" : ""} \u0646\u0627\u0634\u0646\u0627\u0633: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u06A9\u0644\u06CC\u062F \u0646\u0627\u0634\u0646\u0627\u0633 \u062F\u0631 ${issue2.origin}`;
+        case "invalid_union":
+          return `\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631`;
+        case "invalid_element":
+          return `\u0645\u0642\u062F\u0627\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u062F\u0631 ${issue2.origin}`;
+        default:
+          return `\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631`;
+      }
+    };
+  };
+  function fa_default() {
+    return {
+      localeError: error12()
+    };
+  }
+
+  // node_modules/zod/v4/locales/fi.js
+  var error13 = () => {
+    const Sizable = {
+      string: { unit: "merkki\xE4", subject: "merkkijonon" },
+      file: { unit: "tavua", subject: "tiedoston" },
+      array: { unit: "alkiota", subject: "listan" },
+      set: { unit: "alkiota", subject: "joukon" },
+      number: { unit: "", subject: "luvun" },
+      bigint: { unit: "", subject: "suuren kokonaisluvun" },
+      int: { unit: "", subject: "kokonaisluvun" },
+      date: { unit: "", subject: "p\xE4iv\xE4m\xE4\xE4r\xE4n" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "s\xE4\xE4nn\xF6llinen lauseke",
+      email: "s\xE4hk\xF6postiosoite",
+      url: "URL-osoite",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO-aikaleima",
+      date: "ISO-p\xE4iv\xE4m\xE4\xE4r\xE4",
+      time: "ISO-aika",
+      duration: "ISO-kesto",
+      ipv4: "IPv4-osoite",
+      ipv6: "IPv6-osoite",
+      cidrv4: "IPv4-alue",
+      cidrv6: "IPv6-alue",
+      base64: "base64-koodattu merkkijono",
+      base64url: "base64url-koodattu merkkijono",
+      json_string: "JSON-merkkijono",
+      e164: "E.164-luku",
+      jwt: "JWT",
+      template_literal: "templaattimerkkijono"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Virheellinen tyyppi: odotettiin instanceof ${issue2.expected}, oli ${received}`;
+          }
+          return `Virheellinen tyyppi: odotettiin ${expected}, oli ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Virheellinen sy\xF6te: t\xE4ytyy olla ${stringifyPrimitive(issue2.values[0])}`;
+          return `Virheellinen valinta: t\xE4ytyy olla yksi seuraavista: ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Liian suuri: ${sizing.subject} t\xE4ytyy olla ${adj}${issue2.maximum.toString()} ${sizing.unit}`.trim();
+          }
+          return `Liian suuri: arvon t\xE4ytyy olla ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Liian pieni: ${sizing.subject} t\xE4ytyy olla ${adj}${issue2.minimum.toString()} ${sizing.unit}`.trim();
+          }
+          return `Liian pieni: arvon t\xE4ytyy olla ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Virheellinen sy\xF6te: t\xE4ytyy alkaa "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Virheellinen sy\xF6te: t\xE4ytyy loppua "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Virheellinen sy\xF6te: t\xE4ytyy sis\xE4lt\xE4\xE4 "${_issue.includes}"`;
+          if (_issue.format === "regex") {
+            return `Virheellinen sy\xF6te: t\xE4ytyy vastata s\xE4\xE4nn\xF6llist\xE4 lauseketta ${_issue.pattern}`;
+          }
+          return `Virheellinen ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Virheellinen luku: t\xE4ytyy olla luvun ${issue2.divisor} monikerta`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "Tuntemattomat avaimet" : "Tuntematon avain"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return "Virheellinen avain tietueessa";
+        case "invalid_union":
+          return "Virheellinen unioni";
+        case "invalid_element":
+          return "Virheellinen arvo joukossa";
+        default:
+          return `Virheellinen sy\xF6te`;
+      }
+    };
+  };
+  function fi_default() {
+    return {
+      localeError: error13()
+    };
+  }
+
+  // node_modules/zod/v4/locales/fr.js
+  var error14 = () => {
+    const Sizable = {
+      string: { unit: "caract\xE8res", verb: "avoir" },
+      file: { unit: "octets", verb: "avoir" },
+      array: { unit: "\xE9l\xE9ments", verb: "avoir" },
+      set: { unit: "\xE9l\xE9ments", verb: "avoir" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "entr\xE9e",
+      email: "adresse e-mail",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "date et heure ISO",
+      date: "date ISO",
+      time: "heure ISO",
+      duration: "dur\xE9e ISO",
+      ipv4: "adresse IPv4",
+      ipv6: "adresse IPv6",
+      cidrv4: "plage IPv4",
+      cidrv6: "plage IPv6",
+      base64: "cha\xEEne encod\xE9e en base64",
+      base64url: "cha\xEEne encod\xE9e en base64url",
+      json_string: "cha\xEEne JSON",
+      e164: "num\xE9ro E.164",
+      jwt: "JWT",
+      template_literal: "entr\xE9e"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "nombre",
+      array: "tableau"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Entr\xE9e invalide : instanceof ${issue2.expected} attendu, ${received} re\xE7u`;
+          }
+          return `Entr\xE9e invalide : ${expected} attendu, ${received} re\xE7u`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Entr\xE9e invalide : ${stringifyPrimitive(issue2.values[0])} attendu`;
+          return `Option invalide : une valeur parmi ${joinValues(issue2.values, "|")} attendue`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Trop grand : ${issue2.origin ?? "valeur"} doit ${sizing.verb} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\xE9l\xE9ment(s)"}`;
+          return `Trop grand : ${issue2.origin ?? "valeur"} doit \xEAtre ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Trop petit : ${issue2.origin} doit ${sizing.verb} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Trop petit : ${issue2.origin} doit \xEAtre ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Cha\xEEne invalide : doit commencer par "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Cha\xEEne invalide : doit se terminer par "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Cha\xEEne invalide : doit inclure "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Cha\xEEne invalide : doit correspondre au mod\xE8le ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} invalide`;
+        }
+        case "not_multiple_of":
+          return `Nombre invalide : doit \xEAtre un multiple de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Cl\xE9${issue2.keys.length > 1 ? "s" : ""} non reconnue${issue2.keys.length > 1 ? "s" : ""} : ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Cl\xE9 invalide dans ${issue2.origin}`;
+        case "invalid_union":
+          return "Entr\xE9e invalide";
+        case "invalid_element":
+          return `Valeur invalide dans ${issue2.origin}`;
+        default:
+          return `Entr\xE9e invalide`;
+      }
+    };
+  };
+  function fr_default() {
+    return {
+      localeError: error14()
+    };
+  }
+
+  // node_modules/zod/v4/locales/fr-CA.js
+  var error15 = () => {
+    const Sizable = {
+      string: { unit: "caract\xE8res", verb: "avoir" },
+      file: { unit: "octets", verb: "avoir" },
+      array: { unit: "\xE9l\xE9ments", verb: "avoir" },
+      set: { unit: "\xE9l\xE9ments", verb: "avoir" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "entr\xE9e",
+      email: "adresse courriel",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "date-heure ISO",
+      date: "date ISO",
+      time: "heure ISO",
+      duration: "dur\xE9e ISO",
+      ipv4: "adresse IPv4",
+      ipv6: "adresse IPv6",
+      cidrv4: "plage IPv4",
+      cidrv6: "plage IPv6",
+      base64: "cha\xEEne encod\xE9e en base64",
+      base64url: "cha\xEEne encod\xE9e en base64url",
+      json_string: "cha\xEEne JSON",
+      e164: "num\xE9ro E.164",
+      jwt: "JWT",
+      template_literal: "entr\xE9e"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Entr\xE9e invalide : attendu instanceof ${issue2.expected}, re\xE7u ${received}`;
+          }
+          return `Entr\xE9e invalide : attendu ${expected}, re\xE7u ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Entr\xE9e invalide : attendu ${stringifyPrimitive(issue2.values[0])}`;
+          return `Option invalide : attendu l'une des valeurs suivantes ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "\u2264" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Trop grand : attendu que ${issue2.origin ?? "la valeur"} ait ${adj}${issue2.maximum.toString()} ${sizing.unit}`;
+          return `Trop grand : attendu que ${issue2.origin ?? "la valeur"} soit ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? "\u2265" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Trop petit : attendu que ${issue2.origin} ait ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Trop petit : attendu que ${issue2.origin} soit ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Cha\xEEne invalide : doit commencer par "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `Cha\xEEne invalide : doit se terminer par "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Cha\xEEne invalide : doit inclure "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Cha\xEEne invalide : doit correspondre au motif ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} invalide`;
+        }
+        case "not_multiple_of":
+          return `Nombre invalide : doit \xEAtre un multiple de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Cl\xE9${issue2.keys.length > 1 ? "s" : ""} non reconnue${issue2.keys.length > 1 ? "s" : ""} : ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Cl\xE9 invalide dans ${issue2.origin}`;
+        case "invalid_union":
+          return "Entr\xE9e invalide";
+        case "invalid_element":
+          return `Valeur invalide dans ${issue2.origin}`;
+        default:
+          return `Entr\xE9e invalide`;
+      }
+    };
+  };
+  function fr_CA_default() {
+    return {
+      localeError: error15()
+    };
+  }
+
+  // node_modules/zod/v4/locales/he.js
+  var error16 = () => {
+    const TypeNames = {
+      string: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA", gender: "f" },
+      number: { label: "\u05DE\u05E1\u05E4\u05E8", gender: "m" },
+      boolean: { label: "\u05E2\u05E8\u05DA \u05D1\u05D5\u05DC\u05D9\u05D0\u05E0\u05D9", gender: "m" },
+      bigint: { label: "BigInt", gender: "m" },
+      date: { label: "\u05EA\u05D0\u05E8\u05D9\u05DA", gender: "m" },
+      array: { label: "\u05DE\u05E2\u05E8\u05DA", gender: "m" },
+      object: { label: "\u05D0\u05D5\u05D1\u05D9\u05D9\u05E7\u05D8", gender: "m" },
+      null: { label: "\u05E2\u05E8\u05DA \u05E8\u05D9\u05E7 (null)", gender: "m" },
+      undefined: { label: "\u05E2\u05E8\u05DA \u05DC\u05D0 \u05DE\u05D5\u05D2\u05D3\u05E8 (undefined)", gender: "m" },
+      symbol: { label: "\u05E1\u05D9\u05DE\u05D1\u05D5\u05DC (Symbol)", gender: "m" },
+      function: { label: "\u05E4\u05D5\u05E0\u05E7\u05E6\u05D9\u05D4", gender: "f" },
+      map: { label: "\u05DE\u05E4\u05D4 (Map)", gender: "f" },
+      set: { label: "\u05E7\u05D1\u05D5\u05E6\u05D4 (Set)", gender: "f" },
+      file: { label: "\u05E7\u05D5\u05D1\u05E5", gender: "m" },
+      promise: { label: "Promise", gender: "m" },
+      NaN: { label: "NaN", gender: "m" },
+      unknown: { label: "\u05E2\u05E8\u05DA \u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2", gender: "m" },
+      value: { label: "\u05E2\u05E8\u05DA", gender: "m" }
+    };
+    const Sizable = {
+      string: { unit: "\u05EA\u05D5\u05D5\u05D9\u05DD", shortLabel: "\u05E7\u05E6\u05E8", longLabel: "\u05D0\u05E8\u05D5\u05DA" },
+      file: { unit: "\u05D1\u05D9\u05D9\u05D8\u05D9\u05DD", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" },
+      array: { unit: "\u05E4\u05E8\u05D9\u05D8\u05D9\u05DD", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" },
+      set: { unit: "\u05E4\u05E8\u05D9\u05D8\u05D9\u05DD", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" },
+      number: { unit: "", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" }
+      // no unit
+    };
+    const typeEntry = (t) => t ? TypeNames[t] : void 0;
+    const typeLabel = (t) => {
+      const e = typeEntry(t);
+      if (e)
+        return e.label;
+      return t ?? TypeNames.unknown.label;
+    };
+    const withDefinite = (t) => `\u05D4${typeLabel(t)}`;
+    const verbFor = (t) => {
+      const e = typeEntry(t);
+      const gender = e?.gender ?? "m";
+      return gender === "f" ? "\u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA" : "\u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA";
+    };
+    const getSizing = (origin) => {
+      if (!origin)
+        return null;
+      return Sizable[origin] ?? null;
+    };
+    const FormatDictionary = {
+      regex: { label: "\u05E7\u05DC\u05D8", gender: "m" },
+      email: { label: "\u05DB\u05EA\u05D5\u05D1\u05EA \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC", gender: "f" },
+      url: { label: "\u05DB\u05EA\u05D5\u05D1\u05EA \u05E8\u05E9\u05EA", gender: "f" },
+      emoji: { label: "\u05D0\u05D9\u05DE\u05D5\u05D2'\u05D9", gender: "m" },
+      uuid: { label: "UUID", gender: "m" },
+      nanoid: { label: "nanoid", gender: "m" },
+      guid: { label: "GUID", gender: "m" },
+      cuid: { label: "cuid", gender: "m" },
+      cuid2: { label: "cuid2", gender: "m" },
+      ulid: { label: "ULID", gender: "m" },
+      xid: { label: "XID", gender: "m" },
+      ksuid: { label: "KSUID", gender: "m" },
+      datetime: { label: "\u05EA\u05D0\u05E8\u05D9\u05DA \u05D5\u05D6\u05DE\u05DF ISO", gender: "m" },
+      date: { label: "\u05EA\u05D0\u05E8\u05D9\u05DA ISO", gender: "m" },
+      time: { label: "\u05D6\u05DE\u05DF ISO", gender: "m" },
+      duration: { label: "\u05DE\u05E9\u05DA \u05D6\u05DE\u05DF ISO", gender: "m" },
+      ipv4: { label: "\u05DB\u05EA\u05D5\u05D1\u05EA IPv4", gender: "f" },
+      ipv6: { label: "\u05DB\u05EA\u05D5\u05D1\u05EA IPv6", gender: "f" },
+      cidrv4: { label: "\u05D8\u05D5\u05D5\u05D7 IPv4", gender: "m" },
+      cidrv6: { label: "\u05D8\u05D5\u05D5\u05D7 IPv6", gender: "m" },
+      base64: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D1\u05D1\u05E1\u05D9\u05E1 64", gender: "f" },
+      base64url: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D1\u05D1\u05E1\u05D9\u05E1 64 \u05DC\u05DB\u05EA\u05D5\u05D1\u05D5\u05EA \u05E8\u05E9\u05EA", gender: "f" },
+      json_string: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA JSON", gender: "f" },
+      e164: { label: "\u05DE\u05E1\u05E4\u05E8 E.164", gender: "m" },
+      jwt: { label: "JWT", gender: "m" },
+      ends_with: { label: "\u05E7\u05DC\u05D8", gender: "m" },
+      includes: { label: "\u05E7\u05DC\u05D8", gender: "m" },
+      lowercase: { label: "\u05E7\u05DC\u05D8", gender: "m" },
+      starts_with: { label: "\u05E7\u05DC\u05D8", gender: "m" },
+      uppercase: { label: "\u05E7\u05DC\u05D8", gender: "m" }
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expectedKey = issue2.expected;
+          const expected = TypeDictionary[expectedKey ?? ""] ?? typeLabel(expectedKey);
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? TypeNames[receivedType]?.label ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u05E7\u05DC\u05D8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA instanceof ${issue2.expected}, \u05D4\u05EA\u05E7\u05D1\u05DC ${received}`;
+          }
+          return `\u05E7\u05DC\u05D8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${expected}, \u05D4\u05EA\u05E7\u05D1\u05DC ${received}`;
+        }
+        case "invalid_value": {
+          if (issue2.values.length === 1) {
+            return `\u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05D4\u05E2\u05E8\u05DA \u05D7\u05D9\u05D9\u05D1 \u05DC\u05D4\u05D9\u05D5\u05EA ${stringifyPrimitive(issue2.values[0])}`;
+          }
+          const stringified = issue2.values.map((v) => stringifyPrimitive(v));
+          if (issue2.values.length === 2) {
+            return `\u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05D4\u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05EA \u05D4\u05DE\u05EA\u05D0\u05D9\u05DE\u05D5\u05EA \u05D4\u05DF ${stringified[0]} \u05D0\u05D5 ${stringified[1]}`;
+          }
+          const lastValue = stringified[stringified.length - 1];
+          const restValues = stringified.slice(0, -1).join(", ");
+          return `\u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05D4\u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05EA \u05D4\u05DE\u05EA\u05D0\u05D9\u05DE\u05D5\u05EA \u05D4\u05DF ${restValues} \u05D0\u05D5 ${lastValue}`;
+        }
+        case "too_big": {
+          const sizing = getSizing(issue2.origin);
+          const subject = withDefinite(issue2.origin ?? "value");
+          if (issue2.origin === "string") {
+            return `${sizing?.longLabel ?? "\u05D0\u05E8\u05D5\u05DA"} \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue2.maximum.toString()} ${sizing?.unit ?? ""} ${issue2.inclusive ? "\u05D0\u05D5 \u05E4\u05D7\u05D5\u05EA" : "\u05DC\u05DB\u05DC \u05D4\u05D9\u05D5\u05EA\u05E8"}`.trim();
+          }
+          if (issue2.origin === "number") {
+            const comparison = issue2.inclusive ? `\u05E7\u05D8\u05DF \u05D0\u05D5 \u05E9\u05D5\u05D5\u05D4 \u05DC-${issue2.maximum}` : `\u05E7\u05D8\u05DF \u05DE-${issue2.maximum}`;
+            return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
+          }
+          if (issue2.origin === "array" || issue2.origin === "set") {
+            const verb = issue2.origin === "set" ? "\u05E6\u05E8\u05D9\u05DB\u05D4" : "\u05E6\u05E8\u05D9\u05DA";
+            const comparison = issue2.inclusive ? `${issue2.maximum} ${sizing?.unit ?? ""} \u05D0\u05D5 \u05E4\u05D7\u05D5\u05EA` : `\u05E4\u05D7\u05D5\u05EA \u05DE-${issue2.maximum} ${sizing?.unit ?? ""}`;
+            return `\u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
+          }
+          const adj = issue2.inclusive ? "<=" : "<";
+          const be = verbFor(issue2.origin ?? "value");
+          if (sizing?.unit) {
+            return `${sizing.longLabel} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue2.maximum.toString()} ${sizing.unit}`;
+          }
+          return `${sizing?.longLabel ?? "\u05D2\u05D3\u05D5\u05DC"} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const sizing = getSizing(issue2.origin);
+          const subject = withDefinite(issue2.origin ?? "value");
+          if (issue2.origin === "string") {
+            return `${sizing?.shortLabel ?? "\u05E7\u05E6\u05E8"} \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05DB\u05D9\u05DC ${issue2.minimum.toString()} ${sizing?.unit ?? ""} ${issue2.inclusive ? "\u05D0\u05D5 \u05D9\u05D5\u05EA\u05E8" : "\u05DC\u05E4\u05D7\u05D5\u05EA"}`.trim();
+          }
+          if (issue2.origin === "number") {
+            const comparison = issue2.inclusive ? `\u05D2\u05D3\u05D5\u05DC \u05D0\u05D5 \u05E9\u05D5\u05D5\u05D4 \u05DC-${issue2.minimum}` : `\u05D2\u05D3\u05D5\u05DC \u05DE-${issue2.minimum}`;
+            return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA ${comparison}`;
+          }
+          if (issue2.origin === "array" || issue2.origin === "set") {
+            const verb = issue2.origin === "set" ? "\u05E6\u05E8\u05D9\u05DB\u05D4" : "\u05E6\u05E8\u05D9\u05DA";
+            if (issue2.minimum === 1 && issue2.inclusive) {
+              const singularPhrase = issue2.origin === "set" ? "\u05DC\u05E4\u05D7\u05D5\u05EA \u05E4\u05E8\u05D9\u05D8 \u05D0\u05D7\u05D3" : "\u05DC\u05E4\u05D7\u05D5\u05EA \u05E4\u05E8\u05D9\u05D8 \u05D0\u05D7\u05D3";
+              return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${singularPhrase}`;
+            }
+            const comparison = issue2.inclusive ? `${issue2.minimum} ${sizing?.unit ?? ""} \u05D0\u05D5 \u05D9\u05D5\u05EA\u05E8` : `\u05D9\u05D5\u05EA\u05E8 \u05DE-${issue2.minimum} ${sizing?.unit ?? ""}`;
+            return `\u05E7\u05D8\u05DF \u05DE\u05D3\u05D9: ${subject} ${verb} \u05DC\u05D4\u05DB\u05D9\u05DC ${comparison}`.trim();
+          }
+          const adj = issue2.inclusive ? ">=" : ">";
+          const be = verbFor(issue2.origin ?? "value");
+          if (sizing?.unit) {
+            return `${sizing.shortLabel} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `${sizing?.shortLabel ?? "\u05E7\u05D8\u05DF"} \u05DE\u05D3\u05D9: ${subject} ${be} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u05D4\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D1 "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u05D4\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05E1\u05EA\u05D9\u05D9\u05DD \u05D1 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u05D4\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05DB\u05DC\u05D5\u05DC "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u05D4\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05EA\u05D0\u05D9\u05DD \u05DC\u05EA\u05D1\u05E0\u05D9\u05EA ${_issue.pattern}`;
+          const nounEntry = FormatDictionary[_issue.format];
+          const noun = nounEntry?.label ?? _issue.format;
+          const gender = nounEntry?.gender ?? "m";
+          const adjective = gender === "f" ? "\u05EA\u05E7\u05D9\u05E0\u05D4" : "\u05EA\u05E7\u05D9\u05DF";
+          return `${noun} \u05DC\u05D0 ${adjective}`;
+        }
+        case "not_multiple_of":
+          return `\u05DE\u05E1\u05E4\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05D7\u05D9\u05D9\u05D1 \u05DC\u05D4\u05D9\u05D5\u05EA \u05DE\u05DB\u05E4\u05DC\u05D4 \u05E9\u05DC ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u05DE\u05E4\u05EA\u05D7${issue2.keys.length > 1 ? "\u05D5\u05EA" : ""} \u05DC\u05D0 \u05DE\u05D6\u05D5\u05D4${issue2.keys.length > 1 ? "\u05D9\u05DD" : "\u05D4"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key": {
+          return `\u05E9\u05D3\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF \u05D1\u05D0\u05D5\u05D1\u05D9\u05D9\u05E7\u05D8`;
+        }
+        case "invalid_union":
+          return "\u05E7\u05DC\u05D8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF";
+        case "invalid_element": {
+          const place = withDefinite(issue2.origin ?? "array");
+          return `\u05E2\u05E8\u05DA \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF \u05D1${place}`;
+        }
+        default:
+          return `\u05E7\u05DC\u05D8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF`;
+      }
+    };
+  };
+  function he_default() {
+    return {
+      localeError: error16()
+    };
+  }
+
+  // node_modules/zod/v4/locales/hu.js
+  var error17 = () => {
+    const Sizable = {
+      string: { unit: "karakter", verb: "legyen" },
+      file: { unit: "byte", verb: "legyen" },
+      array: { unit: "elem", verb: "legyen" },
+      set: { unit: "elem", verb: "legyen" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "bemenet",
+      email: "email c\xEDm",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO id\u0151b\xE9lyeg",
+      date: "ISO d\xE1tum",
+      time: "ISO id\u0151",
+      duration: "ISO id\u0151intervallum",
+      ipv4: "IPv4 c\xEDm",
+      ipv6: "IPv6 c\xEDm",
+      cidrv4: "IPv4 tartom\xE1ny",
+      cidrv6: "IPv6 tartom\xE1ny",
+      base64: "base64-k\xF3dolt string",
+      base64url: "base64url-k\xF3dolt string",
+      json_string: "JSON string",
+      e164: "E.164 sz\xE1m",
+      jwt: "JWT",
+      template_literal: "bemenet"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "sz\xE1m",
+      array: "t\xF6mb"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\xC9rv\xE9nytelen bemenet: a v\xE1rt \xE9rt\xE9k instanceof ${issue2.expected}, a kapott \xE9rt\xE9k ${received}`;
+          }
+          return `\xC9rv\xE9nytelen bemenet: a v\xE1rt \xE9rt\xE9k ${expected}, a kapott \xE9rt\xE9k ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\xC9rv\xE9nytelen bemenet: a v\xE1rt \xE9rt\xE9k ${stringifyPrimitive(issue2.values[0])}`;
+          return `\xC9rv\xE9nytelen opci\xF3: valamelyik \xE9rt\xE9k v\xE1rt ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `T\xFAl nagy: ${issue2.origin ?? "\xE9rt\xE9k"} m\xE9rete t\xFAl nagy ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elem"}`;
+          return `T\xFAl nagy: a bemeneti \xE9rt\xE9k ${issue2.origin ?? "\xE9rt\xE9k"} t\xFAl nagy: ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `T\xFAl kicsi: a bemeneti \xE9rt\xE9k ${issue2.origin} m\xE9rete t\xFAl kicsi ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `T\xFAl kicsi: a bemeneti \xE9rt\xE9k ${issue2.origin} t\xFAl kicsi ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\xC9rv\xE9nytelen string: "${_issue.prefix}" \xE9rt\xE9kkel kell kezd\u0151dnie`;
+          if (_issue.format === "ends_with")
+            return `\xC9rv\xE9nytelen string: "${_issue.suffix}" \xE9rt\xE9kkel kell v\xE9gz\u0151dnie`;
+          if (_issue.format === "includes")
+            return `\xC9rv\xE9nytelen string: "${_issue.includes}" \xE9rt\xE9ket kell tartalmaznia`;
+          if (_issue.format === "regex")
+            return `\xC9rv\xE9nytelen string: ${_issue.pattern} mint\xE1nak kell megfelelnie`;
+          return `\xC9rv\xE9nytelen ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\xC9rv\xE9nytelen sz\xE1m: ${issue2.divisor} t\xF6bbsz\xF6r\xF6s\xE9nek kell lennie`;
+        case "unrecognized_keys":
+          return `Ismeretlen kulcs${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\xC9rv\xE9nytelen kulcs ${issue2.origin}`;
+        case "invalid_union":
+          return "\xC9rv\xE9nytelen bemenet";
+        case "invalid_element":
+          return `\xC9rv\xE9nytelen \xE9rt\xE9k: ${issue2.origin}`;
+        default:
+          return `\xC9rv\xE9nytelen bemenet`;
+      }
+    };
+  };
+  function hu_default() {
+    return {
+      localeError: error17()
+    };
+  }
+
+  // node_modules/zod/v4/locales/hy.js
+  function getArmenianPlural(count, one, many) {
+    return Math.abs(count) === 1 ? one : many;
+  }
+  function withDefiniteArticle(word) {
+    if (!word)
+      return "";
+    const vowels = ["\u0561", "\u0565", "\u0568", "\u056B", "\u0578", "\u0578\u0582", "\u0585"];
+    const lastChar = word[word.length - 1];
+    return word + (vowels.includes(lastChar) ? "\u0576" : "\u0568");
+  }
+  var error18 = () => {
+    const Sizable = {
+      string: {
+        unit: {
+          one: "\u0576\u0577\u0561\u0576",
+          many: "\u0576\u0577\u0561\u0576\u0576\u0565\u0580"
+        },
+        verb: "\u0578\u0582\u0576\u0565\u0576\u0561\u056C"
+      },
+      file: {
+        unit: {
+          one: "\u0562\u0561\u0575\u0569",
+          many: "\u0562\u0561\u0575\u0569\u0565\u0580"
+        },
+        verb: "\u0578\u0582\u0576\u0565\u0576\u0561\u056C"
+      },
+      array: {
+        unit: {
+          one: "\u057F\u0561\u0580\u0580",
+          many: "\u057F\u0561\u0580\u0580\u0565\u0580"
+        },
+        verb: "\u0578\u0582\u0576\u0565\u0576\u0561\u056C"
+      },
+      set: {
+        unit: {
+          one: "\u057F\u0561\u0580\u0580",
+          many: "\u057F\u0561\u0580\u0580\u0565\u0580"
+        },
+        verb: "\u0578\u0582\u0576\u0565\u0576\u0561\u056C"
+      }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0574\u0578\u0582\u057F\u0584",
+      email: "\u0567\u056C. \u0570\u0561\u057D\u0581\u0565",
+      url: "URL",
+      emoji: "\u0567\u0574\u0578\u057B\u056B",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0561\u0574\u057D\u0561\u0569\u056B\u057E \u0587 \u056A\u0561\u0574",
+      date: "ISO \u0561\u0574\u057D\u0561\u0569\u056B\u057E",
+      time: "ISO \u056A\u0561\u0574",
+      duration: "ISO \u057F\u0587\u0578\u0572\u0578\u0582\u0569\u0575\u0578\u0582\u0576",
+      ipv4: "IPv4 \u0570\u0561\u057D\u0581\u0565",
+      ipv6: "IPv6 \u0570\u0561\u057D\u0581\u0565",
+      cidrv4: "IPv4 \u0574\u056B\u057B\u0561\u056F\u0561\u0575\u0584",
+      cidrv6: "IPv6 \u0574\u056B\u057B\u0561\u056F\u0561\u0575\u0584",
+      base64: "base64 \u0571\u0587\u0561\u0579\u0561\u0583\u0578\u057E \u057F\u0578\u0572",
+      base64url: "base64url \u0571\u0587\u0561\u0579\u0561\u0583\u0578\u057E \u057F\u0578\u0572",
+      json_string: "JSON \u057F\u0578\u0572",
+      e164: "E.164 \u0570\u0561\u0574\u0561\u0580",
+      jwt: "JWT",
+      template_literal: "\u0574\u0578\u0582\u057F\u0584"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0569\u056B\u057E",
+      array: "\u0566\u0561\u0576\u0563\u057E\u0561\u056E"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u054D\u056D\u0561\u056C \u0574\u0578\u0582\u057F\u0584\u0561\u0563\u0580\u0578\u0582\u0574\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567\u0580 instanceof ${issue2.expected}, \u057D\u057F\u0561\u0581\u057E\u0565\u056C \u0567 ${received}`;
+          }
+          return `\u054D\u056D\u0561\u056C \u0574\u0578\u0582\u057F\u0584\u0561\u0563\u0580\u0578\u0582\u0574\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567\u0580 ${expected}, \u057D\u057F\u0561\u0581\u057E\u0565\u056C \u0567 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u054D\u056D\u0561\u056C \u0574\u0578\u0582\u057F\u0584\u0561\u0563\u0580\u0578\u0582\u0574\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567\u0580 ${stringifyPrimitive(issue2.values[1])}`;
+          return `\u054D\u056D\u0561\u056C \u057F\u0561\u0580\u0562\u0565\u0580\u0561\u056F\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567\u0580 \u0570\u0565\u057F\u0587\u0575\u0561\u056C\u0576\u0565\u0580\u056B\u0581 \u0574\u0565\u056F\u0568\u055D ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const maxValue = Number(issue2.maximum);
+            const unit = getArmenianPlural(maxValue, sizing.unit.one, sizing.unit.many);
+            return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.maximum.toString()} ${unit}`;
+          }
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0574\u0565\u056E \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin ?? "\u0561\u0580\u056A\u0565\u0584")} \u056C\u056B\u0576\u056B ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const minValue = Number(issue2.minimum);
+            const unit = getArmenianPlural(minValue, sizing.unit.one, sizing.unit.many);
+            return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056F\u0578\u0582\u0576\u0565\u0576\u0561 ${adj}${issue2.minimum.toString()} ${unit}`;
+          }
+          return `\u0549\u0561\u0583\u0561\u0566\u0561\u0576\u0581 \u0583\u0578\u0584\u0580 \u0561\u0580\u056A\u0565\u0584\u2024 \u057D\u057A\u0561\u057D\u057E\u0578\u0582\u0574 \u0567, \u0578\u0580 ${withDefiniteArticle(issue2.origin)} \u056C\u056B\u0576\u056B ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u054D\u056D\u0561\u056C \u057F\u0578\u0572\u2024 \u057A\u0565\u057F\u0584 \u0567 \u057D\u056F\u057D\u057E\u056B "${_issue.prefix}"-\u0578\u057E`;
+          if (_issue.format === "ends_with")
+            return `\u054D\u056D\u0561\u056C \u057F\u0578\u0572\u2024 \u057A\u0565\u057F\u0584 \u0567 \u0561\u057E\u0561\u0580\u057F\u057E\u056B "${_issue.suffix}"-\u0578\u057E`;
+          if (_issue.format === "includes")
+            return `\u054D\u056D\u0561\u056C \u057F\u0578\u0572\u2024 \u057A\u0565\u057F\u0584 \u0567 \u057A\u0561\u0580\u0578\u0582\u0576\u0561\u056F\u056B "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u054D\u056D\u0561\u056C \u057F\u0578\u0572\u2024 \u057A\u0565\u057F\u0584 \u0567 \u0570\u0561\u0574\u0561\u057A\u0561\u057F\u0561\u057D\u056D\u0561\u0576\u056B ${_issue.pattern} \u0571\u0587\u0561\u0579\u0561\u0583\u056B\u0576`;
+          return `\u054D\u056D\u0561\u056C ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u054D\u056D\u0561\u056C \u0569\u056B\u057E\u2024 \u057A\u0565\u057F\u0584 \u0567 \u0562\u0561\u0566\u0574\u0561\u057A\u0561\u057F\u056B\u056F \u056C\u056B\u0576\u056B ${issue2.divisor}-\u056B`;
+        case "unrecognized_keys":
+          return `\u0549\u0573\u0561\u0576\u0561\u0579\u057E\u0561\u056E \u0562\u0561\u0576\u0561\u056C\u056B${issue2.keys.length > 1 ? "\u0576\u0565\u0580" : ""}. ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u054D\u056D\u0561\u056C \u0562\u0561\u0576\u0561\u056C\u056B ${withDefiniteArticle(issue2.origin)}-\u0578\u0582\u0574`;
+        case "invalid_union":
+          return "\u054D\u056D\u0561\u056C \u0574\u0578\u0582\u057F\u0584\u0561\u0563\u0580\u0578\u0582\u0574";
+        case "invalid_element":
+          return `\u054D\u056D\u0561\u056C \u0561\u0580\u056A\u0565\u0584 ${withDefiniteArticle(issue2.origin)}-\u0578\u0582\u0574`;
+        default:
+          return `\u054D\u056D\u0561\u056C \u0574\u0578\u0582\u057F\u0584\u0561\u0563\u0580\u0578\u0582\u0574`;
+      }
+    };
+  };
+  function hy_default() {
+    return {
+      localeError: error18()
+    };
+  }
+
+  // node_modules/zod/v4/locales/id.js
+  var error19 = () => {
+    const Sizable = {
+      string: { unit: "karakter", verb: "memiliki" },
+      file: { unit: "byte", verb: "memiliki" },
+      array: { unit: "item", verb: "memiliki" },
+      set: { unit: "item", verb: "memiliki" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "alamat email",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "tanggal dan waktu format ISO",
+      date: "tanggal format ISO",
+      time: "jam format ISO",
+      duration: "durasi format ISO",
+      ipv4: "alamat IPv4",
+      ipv6: "alamat IPv6",
+      cidrv4: "rentang alamat IPv4",
+      cidrv6: "rentang alamat IPv6",
+      base64: "string dengan enkode base64",
+      base64url: "string dengan enkode base64url",
+      json_string: "string JSON",
+      e164: "angka E.164",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Input tidak valid: diharapkan instanceof ${issue2.expected}, diterima ${received}`;
+          }
+          return `Input tidak valid: diharapkan ${expected}, diterima ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Input tidak valid: diharapkan ${stringifyPrimitive(issue2.values[0])}`;
+          return `Pilihan tidak valid: diharapkan salah satu dari ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Terlalu besar: diharapkan ${issue2.origin ?? "value"} memiliki ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elemen"}`;
+          return `Terlalu besar: diharapkan ${issue2.origin ?? "value"} menjadi ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Terlalu kecil: diharapkan ${issue2.origin} memiliki ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Terlalu kecil: diharapkan ${issue2.origin} menjadi ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `String tidak valid: harus dimulai dengan "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `String tidak valid: harus berakhir dengan "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `String tidak valid: harus menyertakan "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `String tidak valid: harus sesuai pola ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} tidak valid`;
+        }
+        case "not_multiple_of":
+          return `Angka tidak valid: harus kelipatan dari ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Kunci tidak dikenali ${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Kunci tidak valid di ${issue2.origin}`;
+        case "invalid_union":
+          return "Input tidak valid";
+        case "invalid_element":
+          return `Nilai tidak valid di ${issue2.origin}`;
+        default:
+          return `Input tidak valid`;
+      }
+    };
+  };
+  function id_default() {
+    return {
+      localeError: error19()
+    };
+  }
+
+  // node_modules/zod/v4/locales/is.js
+  var error20 = () => {
+    const Sizable = {
+      string: { unit: "stafi", verb: "a\xF0 hafa" },
+      file: { unit: "b\xE6ti", verb: "a\xF0 hafa" },
+      array: { unit: "hluti", verb: "a\xF0 hafa" },
+      set: { unit: "hluti", verb: "a\xF0 hafa" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "gildi",
+      email: "netfang",
+      url: "vefsl\xF3\xF0",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO dagsetning og t\xEDmi",
+      date: "ISO dagsetning",
+      time: "ISO t\xEDmi",
+      duration: "ISO t\xEDmalengd",
+      ipv4: "IPv4 address",
+      ipv6: "IPv6 address",
+      cidrv4: "IPv4 range",
+      cidrv6: "IPv6 range",
+      base64: "base64-encoded strengur",
+      base64url: "base64url-encoded strengur",
+      json_string: "JSON strengur",
+      e164: "E.164 t\xF6lugildi",
+      jwt: "JWT",
+      template_literal: "gildi"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "n\xFAmer",
+      array: "fylki"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Rangt gildi: \xDE\xFA sl\xF3st inn ${received} \xFEar sem \xE1 a\xF0 vera instanceof ${issue2.expected}`;
+          }
+          return `Rangt gildi: \xDE\xFA sl\xF3st inn ${received} \xFEar sem \xE1 a\xF0 vera ${expected}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Rangt gildi: gert r\xE1\xF0 fyrir ${stringifyPrimitive(issue2.values[0])}`;
+          return `\xD3gilt val: m\xE1 vera eitt af eftirfarandi ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Of st\xF3rt: gert er r\xE1\xF0 fyrir a\xF0 ${issue2.origin ?? "gildi"} hafi ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "hluti"}`;
+          return `Of st\xF3rt: gert er r\xE1\xF0 fyrir a\xF0 ${issue2.origin ?? "gildi"} s\xE9 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Of l\xEDti\xF0: gert er r\xE1\xF0 fyrir a\xF0 ${issue2.origin} hafi ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Of l\xEDti\xF0: gert er r\xE1\xF0 fyrir a\xF0 ${issue2.origin} s\xE9 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\xD3gildur strengur: ver\xF0ur a\xF0 byrja \xE1 "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `\xD3gildur strengur: ver\xF0ur a\xF0 enda \xE1 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\xD3gildur strengur: ver\xF0ur a\xF0 innihalda "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\xD3gildur strengur: ver\xF0ur a\xF0 fylgja mynstri ${_issue.pattern}`;
+          return `Rangt ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `R\xF6ng tala: ver\xF0ur a\xF0 vera margfeldi af ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\xD3\xFEekkt ${issue2.keys.length > 1 ? "ir lyklar" : "ur lykill"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Rangur lykill \xED ${issue2.origin}`;
+        case "invalid_union":
+          return "Rangt gildi";
+        case "invalid_element":
+          return `Rangt gildi \xED ${issue2.origin}`;
+        default:
+          return `Rangt gildi`;
+      }
+    };
+  };
+  function is_default() {
+    return {
+      localeError: error20()
+    };
+  }
+
+  // node_modules/zod/v4/locales/it.js
+  var error21 = () => {
+    const Sizable = {
+      string: { unit: "caratteri", verb: "avere" },
+      file: { unit: "byte", verb: "avere" },
+      array: { unit: "elementi", verb: "avere" },
+      set: { unit: "elementi", verb: "avere" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "indirizzo email",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "data e ora ISO",
+      date: "data ISO",
+      time: "ora ISO",
+      duration: "durata ISO",
+      ipv4: "indirizzo IPv4",
+      ipv6: "indirizzo IPv6",
+      cidrv4: "intervallo IPv4",
+      cidrv6: "intervallo IPv6",
+      base64: "stringa codificata in base64",
+      base64url: "URL codificata in base64",
+      json_string: "stringa JSON",
+      e164: "numero E.164",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "numero",
+      array: "vettore"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Input non valido: atteso instanceof ${issue2.expected}, ricevuto ${received}`;
+          }
+          return `Input non valido: atteso ${expected}, ricevuto ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Input non valido: atteso ${stringifyPrimitive(issue2.values[0])}`;
+          return `Opzione non valida: atteso uno tra ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Troppo grande: ${issue2.origin ?? "valore"} deve avere ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementi"}`;
+          return `Troppo grande: ${issue2.origin ?? "valore"} deve essere ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Troppo piccolo: ${issue2.origin} deve avere ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Troppo piccolo: ${issue2.origin} deve essere ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Stringa non valida: deve iniziare con "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Stringa non valida: deve terminare con "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Stringa non valida: deve includere "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Stringa non valida: deve corrispondere al pattern ${_issue.pattern}`;
+          return `Invalid ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Numero non valido: deve essere un multiplo di ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Chiav${issue2.keys.length > 1 ? "i" : "e"} non riconosciut${issue2.keys.length > 1 ? "e" : "a"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Chiave non valida in ${issue2.origin}`;
+        case "invalid_union":
+          return "Input non valido";
+        case "invalid_element":
+          return `Valore non valido in ${issue2.origin}`;
+        default:
+          return `Input non valido`;
+      }
+    };
+  };
+  function it_default() {
+    return {
+      localeError: error21()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ja.js
+  var error22 = () => {
+    const Sizable = {
+      string: { unit: "\u6587\u5B57", verb: "\u3067\u3042\u308B" },
+      file: { unit: "\u30D0\u30A4\u30C8", verb: "\u3067\u3042\u308B" },
+      array: { unit: "\u8981\u7D20", verb: "\u3067\u3042\u308B" },
+      set: { unit: "\u8981\u7D20", verb: "\u3067\u3042\u308B" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u5165\u529B\u5024",
+      email: "\u30E1\u30FC\u30EB\u30A2\u30C9\u30EC\u30B9",
+      url: "URL",
+      emoji: "\u7D75\u6587\u5B57",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO\u65E5\u6642",
+      date: "ISO\u65E5\u4ED8",
+      time: "ISO\u6642\u523B",
+      duration: "ISO\u671F\u9593",
+      ipv4: "IPv4\u30A2\u30C9\u30EC\u30B9",
+      ipv6: "IPv6\u30A2\u30C9\u30EC\u30B9",
+      cidrv4: "IPv4\u7BC4\u56F2",
+      cidrv6: "IPv6\u7BC4\u56F2",
+      base64: "base64\u30A8\u30F3\u30B3\u30FC\u30C9\u6587\u5B57\u5217",
+      base64url: "base64url\u30A8\u30F3\u30B3\u30FC\u30C9\u6587\u5B57\u5217",
+      json_string: "JSON\u6587\u5B57\u5217",
+      e164: "E.164\u756A\u53F7",
+      jwt: "JWT",
+      template_literal: "\u5165\u529B\u5024"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u6570\u5024",
+      array: "\u914D\u5217"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u7121\u52B9\u306A\u5165\u529B: instanceof ${issue2.expected}\u304C\u671F\u5F85\u3055\u308C\u307E\u3057\u305F\u304C\u3001${received}\u304C\u5165\u529B\u3055\u308C\u307E\u3057\u305F`;
+          }
+          return `\u7121\u52B9\u306A\u5165\u529B: ${expected}\u304C\u671F\u5F85\u3055\u308C\u307E\u3057\u305F\u304C\u3001${received}\u304C\u5165\u529B\u3055\u308C\u307E\u3057\u305F`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u7121\u52B9\u306A\u5165\u529B: ${stringifyPrimitive(issue2.values[0])}\u304C\u671F\u5F85\u3055\u308C\u307E\u3057\u305F`;
+          return `\u7121\u52B9\u306A\u9078\u629E: ${joinValues(issue2.values, "\u3001")}\u306E\u3044\u305A\u308C\u304B\u3067\u3042\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "\u4EE5\u4E0B\u3067\u3042\u308B" : "\u3088\u308A\u5C0F\u3055\u3044";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u5927\u304D\u3059\u304E\u308B\u5024: ${issue2.origin ?? "\u5024"}\u306F${issue2.maximum.toString()}${sizing.unit ?? "\u8981\u7D20"}${adj}\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          return `\u5927\u304D\u3059\u304E\u308B\u5024: ${issue2.origin ?? "\u5024"}\u306F${issue2.maximum.toString()}${adj}\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? "\u4EE5\u4E0A\u3067\u3042\u308B" : "\u3088\u308A\u5927\u304D\u3044";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u5C0F\u3055\u3059\u304E\u308B\u5024: ${issue2.origin}\u306F${issue2.minimum.toString()}${sizing.unit}${adj}\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          return `\u5C0F\u3055\u3059\u304E\u308B\u5024: ${issue2.origin}\u306F${issue2.minimum.toString()}${adj}\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u7121\u52B9\u306A\u6587\u5B57\u5217: "${_issue.prefix}"\u3067\u59CB\u307E\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          if (_issue.format === "ends_with")
+            return `\u7121\u52B9\u306A\u6587\u5B57\u5217: "${_issue.suffix}"\u3067\u7D42\u308F\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          if (_issue.format === "includes")
+            return `\u7121\u52B9\u306A\u6587\u5B57\u5217: "${_issue.includes}"\u3092\u542B\u3080\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          if (_issue.format === "regex")
+            return `\u7121\u52B9\u306A\u6587\u5B57\u5217: \u30D1\u30BF\u30FC\u30F3${_issue.pattern}\u306B\u4E00\u81F4\u3059\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+          return `\u7121\u52B9\u306A${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u7121\u52B9\u306A\u6570\u5024: ${issue2.divisor}\u306E\u500D\u6570\u3067\u3042\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059`;
+        case "unrecognized_keys":
+          return `\u8A8D\u8B58\u3055\u308C\u3066\u3044\u306A\u3044\u30AD\u30FC${issue2.keys.length > 1 ? "\u7FA4" : ""}: ${joinValues(issue2.keys, "\u3001")}`;
+        case "invalid_key":
+          return `${issue2.origin}\u5185\u306E\u7121\u52B9\u306A\u30AD\u30FC`;
+        case "invalid_union":
+          return "\u7121\u52B9\u306A\u5165\u529B";
+        case "invalid_element":
+          return `${issue2.origin}\u5185\u306E\u7121\u52B9\u306A\u5024`;
+        default:
+          return `\u7121\u52B9\u306A\u5165\u529B`;
+      }
+    };
+  };
+  function ja_default() {
+    return {
+      localeError: error22()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ka.js
+  var error23 = () => {
+    const Sizable = {
+      string: { unit: "\u10E1\u10D8\u10DB\u10D1\u10DD\u10DA\u10DD", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
+      file: { unit: "\u10D1\u10D0\u10D8\u10E2\u10D8", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
+      array: { unit: "\u10D4\u10DA\u10D4\u10DB\u10D4\u10DC\u10E2\u10D8", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
+      set: { unit: "\u10D4\u10DA\u10D4\u10DB\u10D4\u10DC\u10E2\u10D8", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0",
+      email: "\u10D4\u10DA-\u10E4\u10DD\u10E1\u10E2\u10D8\u10E1 \u10DB\u10D8\u10E1\u10D0\u10DB\u10D0\u10E0\u10D7\u10D8",
+      url: "URL",
+      emoji: "\u10D4\u10DB\u10DD\u10EF\u10D8",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u10D7\u10D0\u10E0\u10D8\u10E6\u10D8-\u10D3\u10E0\u10DD",
+      date: "\u10D7\u10D0\u10E0\u10D8\u10E6\u10D8",
+      time: "\u10D3\u10E0\u10DD",
+      duration: "\u10EE\u10D0\u10DC\u10D2\u10E0\u10EB\u10DA\u10D8\u10D5\u10DD\u10D1\u10D0",
+      ipv4: "IPv4 \u10DB\u10D8\u10E1\u10D0\u10DB\u10D0\u10E0\u10D7\u10D8",
+      ipv6: "IPv6 \u10DB\u10D8\u10E1\u10D0\u10DB\u10D0\u10E0\u10D7\u10D8",
+      cidrv4: "IPv4 \u10D3\u10D8\u10D0\u10DE\u10D0\u10D6\u10DD\u10DC\u10D8",
+      cidrv6: "IPv6 \u10D3\u10D8\u10D0\u10DE\u10D0\u10D6\u10DD\u10DC\u10D8",
+      base64: "base64-\u10D9\u10DD\u10D3\u10D8\u10E0\u10D4\u10D1\u10E3\u10DA\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8",
+      base64url: "base64url-\u10D9\u10DD\u10D3\u10D8\u10E0\u10D4\u10D1\u10E3\u10DA\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8",
+      json_string: "JSON \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8",
+      e164: "E.164 \u10DC\u10DD\u10DB\u10D4\u10E0\u10D8",
+      jwt: "JWT",
+      template_literal: "\u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u10E0\u10D8\u10EA\u10EE\u10D5\u10D8",
+      string: "\u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8",
+      boolean: "\u10D1\u10E3\u10DA\u10D4\u10D0\u10DC\u10D8",
+      function: "\u10E4\u10E3\u10DC\u10E5\u10EA\u10D8\u10D0",
+      array: "\u10DB\u10D0\u10E1\u10D8\u10D5\u10D8"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 instanceof ${issue2.expected}, \u10DB\u10D8\u10E6\u10D4\u10D1\u10E3\u10DA\u10D8 ${received}`;
+          }
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${expected}, \u10DB\u10D8\u10E6\u10D4\u10D1\u10E3\u10DA\u10D8 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10D5\u10D0\u10E0\u10D8\u10D0\u10DC\u10E2\u10D8: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8\u10D0 \u10D4\u10E0\u10D7-\u10D4\u10E0\u10D7\u10D8 ${joinValues(issue2.values, "|")}-\u10D3\u10D0\u10DC`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u10D6\u10D4\u10D3\u10DB\u10D4\u10E2\u10D0\u10D3 \u10D3\u10D8\u10D3\u10D8: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${issue2.origin ?? "\u10DB\u10DC\u10D8\u10E8\u10D5\u10DC\u10D4\u10DA\u10DD\u10D1\u10D0"} ${sizing.verb} ${adj}${issue2.maximum.toString()} ${sizing.unit}`;
+          return `\u10D6\u10D4\u10D3\u10DB\u10D4\u10E2\u10D0\u10D3 \u10D3\u10D8\u10D3\u10D8: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${issue2.origin ?? "\u10DB\u10DC\u10D8\u10E8\u10D5\u10DC\u10D4\u10DA\u10DD\u10D1\u10D0"} \u10D8\u10E7\u10DD\u10E1 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u10D6\u10D4\u10D3\u10DB\u10D4\u10E2\u10D0\u10D3 \u10DE\u10D0\u10E2\u10D0\u10E0\u10D0: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${issue2.origin} ${sizing.verb} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u10D6\u10D4\u10D3\u10DB\u10D4\u10E2\u10D0\u10D3 \u10DE\u10D0\u10E2\u10D0\u10E0\u10D0: \u10DB\u10DD\u10E1\u10D0\u10DA\u10DD\u10D3\u10DC\u10D4\u10DA\u10D8 ${issue2.origin} \u10D8\u10E7\u10DD\u10E1 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8: \u10E3\u10DC\u10D3\u10D0 \u10D8\u10EC\u10E7\u10D4\u10D1\u10DD\u10D3\u10D4\u10E1 "${_issue.prefix}"-\u10D8\u10D7`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8: \u10E3\u10DC\u10D3\u10D0 \u10DB\u10D7\u10D0\u10D5\u10E0\u10D3\u10D4\u10D1\u10DD\u10D3\u10D4\u10E1 "${_issue.suffix}"-\u10D8\u10D7`;
+          if (_issue.format === "includes")
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8: \u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1 "${_issue.includes}"-\u10E1`;
+          if (_issue.format === "regex")
+            return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E1\u10E2\u10E0\u10D8\u10DC\u10D2\u10D8: \u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D4\u10E1\u10D0\u10D1\u10D0\u10DB\u10D4\u10D1\u10DD\u10D3\u10D4\u10E1 \u10E8\u10D0\u10D1\u10DA\u10DD\u10DC\u10E1 ${_issue.pattern}`;
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E0\u10D8\u10EA\u10EE\u10D5\u10D8: \u10E3\u10DC\u10D3\u10D0 \u10D8\u10E7\u10DD\u10E1 ${issue2.divisor}-\u10D8\u10E1 \u10EF\u10D4\u10E0\u10D0\u10D3\u10D8`;
+        case "unrecognized_keys":
+          return `\u10E3\u10EA\u10DC\u10DD\u10D1\u10D8 \u10D2\u10D0\u10E1\u10D0\u10E6\u10D4\u10D1${issue2.keys.length > 1 ? "\u10D4\u10D1\u10D8" : "\u10D8"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10D2\u10D0\u10E1\u10D0\u10E6\u10D4\u10D1\u10D8 ${issue2.origin}-\u10E8\u10D8`;
+        case "invalid_union":
+          return "\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0";
+        case "invalid_element":
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10DB\u10DC\u10D8\u10E8\u10D5\u10DC\u10D4\u10DA\u10DD\u10D1\u10D0 ${issue2.origin}-\u10E8\u10D8`;
+        default:
+          return `\u10D0\u10E0\u10D0\u10E1\u10EC\u10DD\u10E0\u10D8 \u10E8\u10D4\u10E7\u10D5\u10D0\u10DC\u10D0`;
+      }
+    };
+  };
+  function ka_default() {
+    return {
+      localeError: error23()
+    };
+  }
+
+  // node_modules/zod/v4/locales/km.js
+  var error24 = () => {
+    const Sizable = {
+      string: { unit: "\u178F\u17BD\u17A2\u1780\u17D2\u179F\u179A", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
+      file: { unit: "\u1794\u17C3", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
+      array: { unit: "\u1792\u17B6\u178F\u17BB", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
+      set: { unit: "\u1792\u17B6\u178F\u17BB", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1794\u1789\u17D2\u1785\u17BC\u179B",
+      email: "\u17A2\u17B6\u179F\u1799\u178A\u17D2\u178B\u17B6\u1793\u17A2\u17CA\u17B8\u1798\u17C2\u179B",
+      url: "URL",
+      emoji: "\u179F\u1789\u17D2\u1789\u17B6\u17A2\u17B6\u179A\u1798\u17D2\u1798\u178E\u17CD",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u1780\u17B6\u179B\u1794\u179A\u17B7\u1785\u17D2\u1786\u17C1\u1791 \u1793\u17B7\u1784\u1798\u17C9\u17C4\u1784 ISO",
+      date: "\u1780\u17B6\u179B\u1794\u179A\u17B7\u1785\u17D2\u1786\u17C1\u1791 ISO",
+      time: "\u1798\u17C9\u17C4\u1784 ISO",
+      duration: "\u179A\u1799\u17C8\u1796\u17C1\u179B ISO",
+      ipv4: "\u17A2\u17B6\u179F\u1799\u178A\u17D2\u178B\u17B6\u1793 IPv4",
+      ipv6: "\u17A2\u17B6\u179F\u1799\u178A\u17D2\u178B\u17B6\u1793 IPv6",
+      cidrv4: "\u178A\u17C2\u1793\u17A2\u17B6\u179F\u1799\u178A\u17D2\u178B\u17B6\u1793 IPv4",
+      cidrv6: "\u178A\u17C2\u1793\u17A2\u17B6\u179F\u1799\u178A\u17D2\u178B\u17B6\u1793 IPv6",
+      base64: "\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u17A2\u17CA\u17B7\u1780\u17BC\u178A base64",
+      base64url: "\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u17A2\u17CA\u17B7\u1780\u17BC\u178A base64url",
+      json_string: "\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A JSON",
+      e164: "\u179B\u17C1\u1781 E.164",
+      jwt: "JWT",
+      template_literal: "\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1794\u1789\u17D2\u1785\u17BC\u179B"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u179B\u17C1\u1781",
+      array: "\u17A2\u17B6\u179A\u17C1 (Array)",
+      null: "\u1782\u17D2\u1798\u17B6\u1793\u178F\u1798\u17D2\u179B\u17C3 (null)"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1794\u1789\u17D2\u1785\u17BC\u179B\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A instanceof ${issue2.expected} \u1794\u17C9\u17BB\u1793\u17D2\u178F\u17C2\u1791\u1791\u17BD\u179B\u1794\u17B6\u1793 ${received}`;
+          }
+          return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1794\u1789\u17D2\u1785\u17BC\u179B\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${expected} \u1794\u17C9\u17BB\u1793\u17D2\u178F\u17C2\u1791\u1791\u17BD\u179B\u1794\u17B6\u1793 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1794\u1789\u17D2\u1785\u17BC\u179B\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u1787\u1798\u17D2\u179A\u17BE\u179F\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1787\u17B6\u1798\u17BD\u1799\u1780\u17D2\u1793\u17BB\u1784\u1785\u17C6\u178E\u17C4\u1798 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u1792\u17C6\u1796\u17C1\u1780\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${issue2.origin ?? "\u178F\u1798\u17D2\u179B\u17C3"} ${adj} ${issue2.maximum.toString()} ${sizing.unit ?? "\u1792\u17B6\u178F\u17BB"}`;
+          return `\u1792\u17C6\u1796\u17C1\u1780\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${issue2.origin ?? "\u178F\u1798\u17D2\u179B\u17C3"} ${adj} ${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u178F\u17BC\u1785\u1796\u17C1\u1780\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${issue2.origin} ${adj} ${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u178F\u17BC\u1785\u1796\u17C1\u1780\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1780\u17B6\u179A ${issue2.origin} ${adj} ${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1785\u17B6\u1794\u17CB\u1795\u17D2\u178F\u17BE\u1798\u178A\u17C4\u1799 "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1794\u1789\u17D2\u1785\u1794\u17CB\u178A\u17C4\u1799 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u1798\u17B6\u1793 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u1781\u17D2\u179F\u17C2\u17A2\u1780\u17D2\u179F\u179A\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u178F\u17C2\u1795\u17D2\u1782\u17BC\u1795\u17D2\u1782\u1784\u1793\u17B9\u1784\u1791\u1798\u17D2\u179A\u1784\u17CB\u178A\u17C2\u179B\u1794\u17B6\u1793\u1780\u17C6\u178E\u178F\u17CB ${_issue.pattern}`;
+          return `\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u179B\u17C1\u1781\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u17D6 \u178F\u17D2\u179A\u17BC\u179C\u178F\u17C2\u1787\u17B6\u1796\u17A0\u17BB\u1782\u17BB\u178E\u1793\u17C3 ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u179A\u1780\u1783\u17BE\u1789\u179F\u17C4\u1798\u17B7\u1793\u179F\u17D2\u1782\u17B6\u179B\u17CB\u17D6 ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u179F\u17C4\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u1793\u17C5\u1780\u17D2\u1793\u17BB\u1784 ${issue2.origin}`;
+        case "invalid_union":
+          return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C`;
+        case "invalid_element":
+          return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C\u1793\u17C5\u1780\u17D2\u1793\u17BB\u1784 ${issue2.origin}`;
+        default:
+          return `\u1791\u17B7\u1793\u17D2\u1793\u1793\u17D0\u1799\u1798\u17B7\u1793\u178F\u17D2\u179A\u17B9\u1798\u178F\u17D2\u179A\u17BC\u179C`;
+      }
+    };
+  };
+  function km_default() {
+    return {
+      localeError: error24()
+    };
+  }
+
+  // node_modules/zod/v4/locales/kh.js
+  function kh_default() {
+    return km_default();
+  }
+
+  // node_modules/zod/v4/locales/ko.js
+  var error25 = () => {
+    const Sizable = {
+      string: { unit: "\uBB38\uC790", verb: "to have" },
+      file: { unit: "\uBC14\uC774\uD2B8", verb: "to have" },
+      array: { unit: "\uAC1C", verb: "to have" },
+      set: { unit: "\uAC1C", verb: "to have" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\uC785\uB825",
+      email: "\uC774\uBA54\uC77C \uC8FC\uC18C",
+      url: "URL",
+      emoji: "\uC774\uBAA8\uC9C0",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \uB0A0\uC9DC\uC2DC\uAC04",
+      date: "ISO \uB0A0\uC9DC",
+      time: "ISO \uC2DC\uAC04",
+      duration: "ISO \uAE30\uAC04",
+      ipv4: "IPv4 \uC8FC\uC18C",
+      ipv6: "IPv6 \uC8FC\uC18C",
+      cidrv4: "IPv4 \uBC94\uC704",
+      cidrv6: "IPv6 \uBC94\uC704",
+      base64: "base64 \uC778\uCF54\uB529 \uBB38\uC790\uC5F4",
+      base64url: "base64url \uC778\uCF54\uB529 \uBB38\uC790\uC5F4",
+      json_string: "JSON \uBB38\uC790\uC5F4",
+      e164: "E.164 \uBC88\uD638",
+      jwt: "JWT",
+      template_literal: "\uC785\uB825"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\uC798\uBABB\uB41C \uC785\uB825: \uC608\uC0C1 \uD0C0\uC785\uC740 instanceof ${issue2.expected}, \uBC1B\uC740 \uD0C0\uC785\uC740 ${received}\uC785\uB2C8\uB2E4`;
+          }
+          return `\uC798\uBABB\uB41C \uC785\uB825: \uC608\uC0C1 \uD0C0\uC785\uC740 ${expected}, \uBC1B\uC740 \uD0C0\uC785\uC740 ${received}\uC785\uB2C8\uB2E4`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\uC798\uBABB\uB41C \uC785\uB825: \uAC12\uC740 ${stringifyPrimitive(issue2.values[0])} \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4`;
+          return `\uC798\uBABB\uB41C \uC635\uC158: ${joinValues(issue2.values, "\uB610\uB294 ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "\uC774\uD558" : "\uBBF8\uB9CC";
+          const suffix = adj === "\uBBF8\uB9CC" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
+          const sizing = getSizing(issue2.origin);
+          const unit = sizing?.unit ?? "\uC694\uC18C";
+          if (sizing)
+            return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()}${unit} ${adj}${suffix}`;
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uD07D\uB2C8\uB2E4: ${issue2.maximum.toString()} ${adj}${suffix}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? "\uC774\uC0C1" : "\uCD08\uACFC";
+          const suffix = adj === "\uC774\uC0C1" ? "\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4" : "\uC5EC\uC57C \uD569\uB2C8\uB2E4";
+          const sizing = getSizing(issue2.origin);
+          const unit = sizing?.unit ?? "\uC694\uC18C";
+          if (sizing) {
+            return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()}${unit} ${adj}${suffix}`;
+          }
+          return `${issue2.origin ?? "\uAC12"}\uC774 \uB108\uBB34 \uC791\uC2B5\uB2C8\uB2E4: ${issue2.minimum.toString()} ${adj}${suffix}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\uC798\uBABB\uB41C \uBB38\uC790\uC5F4: "${_issue.prefix}"(\uC73C)\uB85C \uC2DC\uC791\uD574\uC57C \uD569\uB2C8\uB2E4`;
+          }
+          if (_issue.format === "ends_with")
+            return `\uC798\uBABB\uB41C \uBB38\uC790\uC5F4: "${_issue.suffix}"(\uC73C)\uB85C \uB05D\uB098\uC57C \uD569\uB2C8\uB2E4`;
+          if (_issue.format === "includes")
+            return `\uC798\uBABB\uB41C \uBB38\uC790\uC5F4: "${_issue.includes}"\uC744(\uB97C) \uD3EC\uD568\uD574\uC57C \uD569\uB2C8\uB2E4`;
+          if (_issue.format === "regex")
+            return `\uC798\uBABB\uB41C \uBB38\uC790\uC5F4: \uC815\uADDC\uC2DD ${_issue.pattern} \uD328\uD134\uACFC \uC77C\uCE58\uD574\uC57C \uD569\uB2C8\uB2E4`;
+          return `\uC798\uBABB\uB41C ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\uC798\uBABB\uB41C \uC22B\uC790: ${issue2.divisor}\uC758 \uBC30\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4`;
+        case "unrecognized_keys":
+          return `\uC778\uC2DD\uD560 \uC218 \uC5C6\uB294 \uD0A4: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\uC798\uBABB\uB41C \uD0A4: ${issue2.origin}`;
+        case "invalid_union":
+          return `\uC798\uBABB\uB41C \uC785\uB825`;
+        case "invalid_element":
+          return `\uC798\uBABB\uB41C \uAC12: ${issue2.origin}`;
+        default:
+          return `\uC798\uBABB\uB41C \uC785\uB825`;
+      }
+    };
+  };
+  function ko_default() {
+    return {
+      localeError: error25()
+    };
+  }
+
+  // node_modules/zod/v4/locales/lt.js
+  var capitalizeFirstCharacter = (text) => {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+  function getUnitTypeFromNumber(number5) {
+    const abs = Math.abs(number5);
+    const last = abs % 10;
+    const last2 = abs % 100;
+    if (last2 >= 11 && last2 <= 19 || last === 0)
+      return "many";
+    if (last === 1)
+      return "one";
+    return "few";
+  }
+  var error26 = () => {
+    const Sizable = {
+      string: {
+        unit: {
+          one: "simbolis",
+          few: "simboliai",
+          many: "simboli\u0173"
+        },
+        verb: {
+          smaller: {
+            inclusive: "turi b\u016Bti ne ilgesn\u0117 kaip",
+            notInclusive: "turi b\u016Bti trumpesn\u0117 kaip"
+          },
+          bigger: {
+            inclusive: "turi b\u016Bti ne trumpesn\u0117 kaip",
+            notInclusive: "turi b\u016Bti ilgesn\u0117 kaip"
+          }
+        }
+      },
+      file: {
+        unit: {
+          one: "baitas",
+          few: "baitai",
+          many: "bait\u0173"
+        },
+        verb: {
+          smaller: {
+            inclusive: "turi b\u016Bti ne didesnis kaip",
+            notInclusive: "turi b\u016Bti ma\u017Eesnis kaip"
+          },
+          bigger: {
+            inclusive: "turi b\u016Bti ne ma\u017Eesnis kaip",
+            notInclusive: "turi b\u016Bti didesnis kaip"
+          }
+        }
+      },
+      array: {
+        unit: {
+          one: "element\u0105",
+          few: "elementus",
+          many: "element\u0173"
+        },
+        verb: {
+          smaller: {
+            inclusive: "turi tur\u0117ti ne daugiau kaip",
+            notInclusive: "turi tur\u0117ti ma\u017Eiau kaip"
+          },
+          bigger: {
+            inclusive: "turi tur\u0117ti ne ma\u017Eiau kaip",
+            notInclusive: "turi tur\u0117ti daugiau kaip"
+          }
+        }
+      },
+      set: {
+        unit: {
+          one: "element\u0105",
+          few: "elementus",
+          many: "element\u0173"
+        },
+        verb: {
+          smaller: {
+            inclusive: "turi tur\u0117ti ne daugiau kaip",
+            notInclusive: "turi tur\u0117ti ma\u017Eiau kaip"
+          },
+          bigger: {
+            inclusive: "turi tur\u0117ti ne ma\u017Eiau kaip",
+            notInclusive: "turi tur\u0117ti daugiau kaip"
+          }
+        }
+      }
+    };
+    function getSizing(origin, unitType, inclusive, targetShouldBe) {
+      const result = Sizable[origin] ?? null;
+      if (result === null)
+        return result;
+      return {
+        unit: result.unit[unitType],
+        verb: result.verb[targetShouldBe][inclusive ? "inclusive" : "notInclusive"]
+      };
+    }
+    const FormatDictionary = {
+      regex: "\u012Fvestis",
+      email: "el. pa\u0161to adresas",
+      url: "URL",
+      emoji: "jaustukas",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO data ir laikas",
+      date: "ISO data",
+      time: "ISO laikas",
+      duration: "ISO trukm\u0117",
+      ipv4: "IPv4 adresas",
+      ipv6: "IPv6 adresas",
+      cidrv4: "IPv4 tinklo prefiksas (CIDR)",
+      cidrv6: "IPv6 tinklo prefiksas (CIDR)",
+      base64: "base64 u\u017Ekoduota eilut\u0117",
+      base64url: "base64url u\u017Ekoduota eilut\u0117",
+      json_string: "JSON eilut\u0117",
+      e164: "E.164 numeris",
+      jwt: "JWT",
+      template_literal: "\u012Fvestis"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "skai\u010Dius",
+      bigint: "sveikasis skai\u010Dius",
+      string: "eilut\u0117",
+      boolean: "login\u0117 reik\u0161m\u0117",
+      undefined: "neapibr\u0117\u017Eta reik\u0161m\u0117",
+      function: "funkcija",
+      symbol: "simbolis",
+      array: "masyvas",
+      object: "objektas",
+      null: "nulin\u0117 reik\u0161m\u0117"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Gautas tipas ${received}, o tik\u0117tasi - instanceof ${issue2.expected}`;
+          }
+          return `Gautas tipas ${received}, o tik\u0117tasi - ${expected}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Privalo b\u016Bti ${stringifyPrimitive(issue2.values[0])}`;
+          return `Privalo b\u016Bti vienas i\u0161 ${joinValues(issue2.values, "|")} pasirinkim\u0173`;
+        case "too_big": {
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          const sizing = getSizing(issue2.origin, getUnitTypeFromNumber(Number(issue2.maximum)), issue2.inclusive ?? false, "smaller");
+          if (sizing?.verb)
+            return `${capitalizeFirstCharacter(origin ?? issue2.origin ?? "reik\u0161m\u0117")} ${sizing.verb} ${issue2.maximum.toString()} ${sizing.unit ?? "element\u0173"}`;
+          const adj = issue2.inclusive ? "ne didesnis kaip" : "ma\u017Eesnis kaip";
+          return `${capitalizeFirstCharacter(origin ?? issue2.origin ?? "reik\u0161m\u0117")} turi b\u016Bti ${adj} ${issue2.maximum.toString()} ${sizing?.unit}`;
+        }
+        case "too_small": {
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          const sizing = getSizing(issue2.origin, getUnitTypeFromNumber(Number(issue2.minimum)), issue2.inclusive ?? false, "bigger");
+          if (sizing?.verb)
+            return `${capitalizeFirstCharacter(origin ?? issue2.origin ?? "reik\u0161m\u0117")} ${sizing.verb} ${issue2.minimum.toString()} ${sizing.unit ?? "element\u0173"}`;
+          const adj = issue2.inclusive ? "ne ma\u017Eesnis kaip" : "didesnis kaip";
+          return `${capitalizeFirstCharacter(origin ?? issue2.origin ?? "reik\u0161m\u0117")} turi b\u016Bti ${adj} ${issue2.minimum.toString()} ${sizing?.unit}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Eilut\u0117 privalo prasid\u0117ti "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `Eilut\u0117 privalo pasibaigti "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Eilut\u0117 privalo \u012Ftraukti "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Eilut\u0117 privalo atitikti ${_issue.pattern}`;
+          return `Neteisingas ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Skai\u010Dius privalo b\u016Bti ${issue2.divisor} kartotinis.`;
+        case "unrecognized_keys":
+          return `Neatpa\u017Eint${issue2.keys.length > 1 ? "i" : "as"} rakt${issue2.keys.length > 1 ? "ai" : "as"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return "Rastas klaidingas raktas";
+        case "invalid_union":
+          return "Klaidinga \u012Fvestis";
+        case "invalid_element": {
+          const origin = TypeDictionary[issue2.origin] ?? issue2.origin;
+          return `${capitalizeFirstCharacter(origin ?? issue2.origin ?? "reik\u0161m\u0117")} turi klaiding\u0105 \u012Fvest\u012F`;
+        }
+        default:
+          return "Klaidinga \u012Fvestis";
+      }
+    };
+  };
+  function lt_default() {
+    return {
+      localeError: error26()
+    };
+  }
+
+  // node_modules/zod/v4/locales/mk.js
+  var error27 = () => {
+    const Sizable = {
+      string: { unit: "\u0437\u043D\u0430\u0446\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
+      file: { unit: "\u0431\u0430\u0458\u0442\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
+      array: { unit: "\u0441\u0442\u0430\u0432\u043A\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
+      set: { unit: "\u0441\u0442\u0430\u0432\u043A\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0432\u043D\u0435\u0441",
+      email: "\u0430\u0434\u0440\u0435\u0441\u0430 \u043D\u0430 \u0435-\u043F\u043E\u0448\u0442\u0430",
+      url: "URL",
+      emoji: "\u0435\u043C\u043E\u045F\u0438",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0434\u0430\u0442\u0443\u043C \u0438 \u0432\u0440\u0435\u043C\u0435",
+      date: "ISO \u0434\u0430\u0442\u0443\u043C",
+      time: "ISO \u0432\u0440\u0435\u043C\u0435",
+      duration: "ISO \u0432\u0440\u0435\u043C\u0435\u0442\u0440\u0430\u0435\u045A\u0435",
+      ipv4: "IPv4 \u0430\u0434\u0440\u0435\u0441\u0430",
+      ipv6: "IPv6 \u0430\u0434\u0440\u0435\u0441\u0430",
+      cidrv4: "IPv4 \u043E\u043F\u0441\u0435\u0433",
+      cidrv6: "IPv6 \u043E\u043F\u0441\u0435\u0433",
+      base64: "base64-\u0435\u043D\u043A\u043E\u0434\u0438\u0440\u0430\u043D\u0430 \u043D\u0438\u0437\u0430",
+      base64url: "base64url-\u0435\u043D\u043A\u043E\u0434\u0438\u0440\u0430\u043D\u0430 \u043D\u0438\u0437\u0430",
+      json_string: "JSON \u043D\u0438\u0437\u0430",
+      e164: "E.164 \u0431\u0440\u043E\u0458",
+      jwt: "JWT",
+      template_literal: "\u0432\u043D\u0435\u0441"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0431\u0440\u043E\u0458",
+      array: "\u043D\u0438\u0437\u0430"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0413\u0440\u0435\u0448\u0435\u043D \u0432\u043D\u0435\u0441: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 instanceof ${issue2.expected}, \u043F\u0440\u0438\u043C\u0435\u043D\u043E ${received}`;
+          }
+          return `\u0413\u0440\u0435\u0448\u0435\u043D \u0432\u043D\u0435\u0441: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 ${expected}, \u043F\u0440\u0438\u043C\u0435\u043D\u043E ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Invalid input: expected ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u0413\u0440\u0435\u0448\u0430\u043D\u0430 \u043E\u043F\u0446\u0438\u0458\u0430: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 \u0435\u0434\u043D\u0430 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u041F\u0440\u0435\u043C\u043D\u043E\u0433\u0443 \u0433\u043E\u043B\u0435\u043C: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 ${issue2.origin ?? "\u0432\u0440\u0435\u0434\u043D\u043E\u0441\u0442\u0430"} \u0434\u0430 \u0438\u043C\u0430 ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0438"}`;
+          return `\u041F\u0440\u0435\u043C\u043D\u043E\u0433\u0443 \u0433\u043E\u043B\u0435\u043C: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 ${issue2.origin ?? "\u0432\u0440\u0435\u0434\u043D\u043E\u0441\u0442\u0430"} \u0434\u0430 \u0431\u0438\u0434\u0435 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u041F\u0440\u0435\u043C\u043D\u043E\u0433\u0443 \u043C\u0430\u043B: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 ${issue2.origin} \u0434\u0430 \u0438\u043C\u0430 ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u041F\u0440\u0435\u043C\u043D\u043E\u0433\u0443 \u043C\u0430\u043B: \u0441\u0435 \u043E\u0447\u0435\u043A\u0443\u0432\u0430 ${issue2.origin} \u0434\u0430 \u0431\u0438\u0434\u0435 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u041D\u0435\u0432\u0430\u0436\u0435\u0447\u043A\u0430 \u043D\u0438\u0437\u0430: \u043C\u043E\u0440\u0430 \u0434\u0430 \u0437\u0430\u043F\u043E\u0447\u043D\u0443\u0432\u0430 \u0441\u043E "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u041D\u0435\u0432\u0430\u0436\u0435\u0447\u043A\u0430 \u043D\u0438\u0437\u0430: \u043C\u043E\u0440\u0430 \u0434\u0430 \u0437\u0430\u0432\u0440\u0448\u0443\u0432\u0430 \u0441\u043E "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u041D\u0435\u0432\u0430\u0436\u0435\u0447\u043A\u0430 \u043D\u0438\u0437\u0430: \u043C\u043E\u0440\u0430 \u0434\u0430 \u0432\u043A\u043B\u0443\u0447\u0443\u0432\u0430 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u041D\u0435\u0432\u0430\u0436\u0435\u0447\u043A\u0430 \u043D\u0438\u0437\u0430: \u043C\u043E\u0440\u0430 \u0434\u0430 \u043E\u0434\u0433\u043E\u0430\u0440\u0430 \u043D\u0430 \u043F\u0430\u0442\u0435\u0440\u043D\u043E\u0442 ${_issue.pattern}`;
+          return `Invalid ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u0413\u0440\u0435\u0448\u0435\u043D \u0431\u0440\u043E\u0458: \u043C\u043E\u0440\u0430 \u0434\u0430 \u0431\u0438\u0434\u0435 \u0434\u0435\u043B\u0438\u0432 \u0441\u043E ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "\u041D\u0435\u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D\u0438 \u043A\u043B\u0443\u0447\u0435\u0432\u0438" : "\u041D\u0435\u043F\u0440\u0435\u043F\u043E\u0437\u043D\u0430\u0435\u043D \u043A\u043B\u0443\u0447"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u0413\u0440\u0435\u0448\u0435\u043D \u043A\u043B\u0443\u0447 \u0432\u043E ${issue2.origin}`;
+        case "invalid_union":
+          return "\u0413\u0440\u0435\u0448\u0435\u043D \u0432\u043D\u0435\u0441";
+        case "invalid_element":
+          return `\u0413\u0440\u0435\u0448\u043D\u0430 \u0432\u0440\u0435\u0434\u043D\u043E\u0441\u0442 \u0432\u043E ${issue2.origin}`;
+        default:
+          return `\u0413\u0440\u0435\u0448\u0435\u043D \u0432\u043D\u0435\u0441`;
+      }
+    };
+  };
+  function mk_default() {
+    return {
+      localeError: error27()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ms.js
+  var error28 = () => {
+    const Sizable = {
+      string: { unit: "aksara", verb: "mempunyai" },
+      file: { unit: "bait", verb: "mempunyai" },
+      array: { unit: "elemen", verb: "mempunyai" },
+      set: { unit: "elemen", verb: "mempunyai" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "alamat e-mel",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "tarikh masa ISO",
+      date: "tarikh ISO",
+      time: "masa ISO",
+      duration: "tempoh ISO",
+      ipv4: "alamat IPv4",
+      ipv6: "alamat IPv6",
+      cidrv4: "julat IPv4",
+      cidrv6: "julat IPv6",
+      base64: "string dikodkan base64",
+      base64url: "string dikodkan base64url",
+      json_string: "string JSON",
+      e164: "nombor E.164",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "nombor"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Input tidak sah: dijangka instanceof ${issue2.expected}, diterima ${received}`;
+          }
+          return `Input tidak sah: dijangka ${expected}, diterima ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Input tidak sah: dijangka ${stringifyPrimitive(issue2.values[0])}`;
+          return `Pilihan tidak sah: dijangka salah satu daripada ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Terlalu besar: dijangka ${issue2.origin ?? "nilai"} ${sizing.verb} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elemen"}`;
+          return `Terlalu besar: dijangka ${issue2.origin ?? "nilai"} adalah ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Terlalu kecil: dijangka ${issue2.origin} ${sizing.verb} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Terlalu kecil: dijangka ${issue2.origin} adalah ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `String tidak sah: mesti bermula dengan "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `String tidak sah: mesti berakhir dengan "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `String tidak sah: mesti mengandungi "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `String tidak sah: mesti sepadan dengan corak ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} tidak sah`;
+        }
+        case "not_multiple_of":
+          return `Nombor tidak sah: perlu gandaan ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Kunci tidak dikenali: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Kunci tidak sah dalam ${issue2.origin}`;
+        case "invalid_union":
+          return "Input tidak sah";
+        case "invalid_element":
+          return `Nilai tidak sah dalam ${issue2.origin}`;
+        default:
+          return `Input tidak sah`;
+      }
+    };
+  };
+  function ms_default() {
+    return {
+      localeError: error28()
+    };
+  }
+
+  // node_modules/zod/v4/locales/nl.js
+  var error29 = () => {
+    const Sizable = {
+      string: { unit: "tekens", verb: "heeft" },
+      file: { unit: "bytes", verb: "heeft" },
+      array: { unit: "elementen", verb: "heeft" },
+      set: { unit: "elementen", verb: "heeft" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "invoer",
+      email: "emailadres",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO datum en tijd",
+      date: "ISO datum",
+      time: "ISO tijd",
+      duration: "ISO duur",
+      ipv4: "IPv4-adres",
+      ipv6: "IPv6-adres",
+      cidrv4: "IPv4-bereik",
+      cidrv6: "IPv6-bereik",
+      base64: "base64-gecodeerde tekst",
+      base64url: "base64 URL-gecodeerde tekst",
+      json_string: "JSON string",
+      e164: "E.164-nummer",
+      jwt: "JWT",
+      template_literal: "invoer"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "getal"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ongeldige invoer: verwacht instanceof ${issue2.expected}, ontving ${received}`;
+          }
+          return `Ongeldige invoer: verwacht ${expected}, ontving ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ongeldige invoer: verwacht ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ongeldige optie: verwacht \xE9\xE9n van ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          const longName = issue2.origin === "date" ? "laat" : issue2.origin === "string" ? "lang" : "groot";
+          if (sizing)
+            return `Te ${longName}: verwacht dat ${issue2.origin ?? "waarde"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementen"} ${sizing.verb}`;
+          return `Te ${longName}: verwacht dat ${issue2.origin ?? "waarde"} ${adj}${issue2.maximum.toString()} is`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          const shortName = issue2.origin === "date" ? "vroeg" : issue2.origin === "string" ? "kort" : "klein";
+          if (sizing) {
+            return `Te ${shortName}: verwacht dat ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit} ${sizing.verb}`;
+          }
+          return `Te ${shortName}: verwacht dat ${issue2.origin} ${adj}${issue2.minimum.toString()} is`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Ongeldige tekst: moet met "${_issue.prefix}" beginnen`;
+          }
+          if (_issue.format === "ends_with")
+            return `Ongeldige tekst: moet op "${_issue.suffix}" eindigen`;
+          if (_issue.format === "includes")
+            return `Ongeldige tekst: moet "${_issue.includes}" bevatten`;
+          if (_issue.format === "regex")
+            return `Ongeldige tekst: moet overeenkomen met patroon ${_issue.pattern}`;
+          return `Ongeldig: ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ongeldig getal: moet een veelvoud van ${issue2.divisor} zijn`;
+        case "unrecognized_keys":
+          return `Onbekende key${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Ongeldige key in ${issue2.origin}`;
+        case "invalid_union":
+          return "Ongeldige invoer";
+        case "invalid_element":
+          return `Ongeldige waarde in ${issue2.origin}`;
+        default:
+          return `Ongeldige invoer`;
+      }
+    };
+  };
+  function nl_default() {
+    return {
+      localeError: error29()
+    };
+  }
+
+  // node_modules/zod/v4/locales/no.js
+  var error30 = () => {
+    const Sizable = {
+      string: { unit: "tegn", verb: "\xE5 ha" },
+      file: { unit: "bytes", verb: "\xE5 ha" },
+      array: { unit: "elementer", verb: "\xE5 inneholde" },
+      set: { unit: "elementer", verb: "\xE5 inneholde" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "input",
+      email: "e-postadresse",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO dato- og klokkeslett",
+      date: "ISO-dato",
+      time: "ISO-klokkeslett",
+      duration: "ISO-varighet",
+      ipv4: "IPv4-omr\xE5de",
+      ipv6: "IPv6-omr\xE5de",
+      cidrv4: "IPv4-spekter",
+      cidrv6: "IPv6-spekter",
+      base64: "base64-enkodet streng",
+      base64url: "base64url-enkodet streng",
+      json_string: "JSON-streng",
+      e164: "E.164-nummer",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "tall",
+      array: "liste"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ugyldig input: forventet instanceof ${issue2.expected}, fikk ${received}`;
+          }
+          return `Ugyldig input: forventet ${expected}, fikk ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ugyldig verdi: forventet ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ugyldig valg: forventet en av ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `For stor(t): forventet ${issue2.origin ?? "value"} til \xE5 ha ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementer"}`;
+          return `For stor(t): forventet ${issue2.origin ?? "value"} til \xE5 ha ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `For lite(n): forventet ${issue2.origin} til \xE5 ha ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `For lite(n): forventet ${issue2.origin} til \xE5 ha ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Ugyldig streng: m\xE5 starte med "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Ugyldig streng: m\xE5 ende med "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Ugyldig streng: m\xE5 inneholde "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Ugyldig streng: m\xE5 matche m\xF8nsteret ${_issue.pattern}`;
+          return `Ugyldig ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ugyldig tall: m\xE5 v\xE6re et multiplum av ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "Ukjente n\xF8kler" : "Ukjent n\xF8kkel"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Ugyldig n\xF8kkel i ${issue2.origin}`;
+        case "invalid_union":
+          return "Ugyldig input";
+        case "invalid_element":
+          return `Ugyldig verdi i ${issue2.origin}`;
+        default:
+          return `Ugyldig input`;
+      }
+    };
+  };
+  function no_default() {
+    return {
+      localeError: error30()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ota.js
+  var error31 = () => {
+    const Sizable = {
+      string: { unit: "harf", verb: "olmal\u0131d\u0131r" },
+      file: { unit: "bayt", verb: "olmal\u0131d\u0131r" },
+      array: { unit: "unsur", verb: "olmal\u0131d\u0131r" },
+      set: { unit: "unsur", verb: "olmal\u0131d\u0131r" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "giren",
+      email: "epostag\xE2h",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO heng\xE2m\u0131",
+      date: "ISO tarihi",
+      time: "ISO zaman\u0131",
+      duration: "ISO m\xFCddeti",
+      ipv4: "IPv4 ni\u015F\xE2n\u0131",
+      ipv6: "IPv6 ni\u015F\xE2n\u0131",
+      cidrv4: "IPv4 menzili",
+      cidrv6: "IPv6 menzili",
+      base64: "base64-\u015Fifreli metin",
+      base64url: "base64url-\u015Fifreli metin",
+      json_string: "JSON metin",
+      e164: "E.164 say\u0131s\u0131",
+      jwt: "JWT",
+      template_literal: "giren"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "numara",
+      array: "saf",
+      null: "gayb"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `F\xE2sit giren: umulan instanceof ${issue2.expected}, al\u0131nan ${received}`;
+          }
+          return `F\xE2sit giren: umulan ${expected}, al\u0131nan ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `F\xE2sit giren: umulan ${stringifyPrimitive(issue2.values[0])}`;
+          return `F\xE2sit tercih: m\xFBteberler ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Fazla b\xFCy\xFCk: ${issue2.origin ?? "value"}, ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elements"} sahip olmal\u0131yd\u0131.`;
+          return `Fazla b\xFCy\xFCk: ${issue2.origin ?? "value"}, ${adj}${issue2.maximum.toString()} olmal\u0131yd\u0131.`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Fazla k\xFC\xE7\xFCk: ${issue2.origin}, ${adj}${issue2.minimum.toString()} ${sizing.unit} sahip olmal\u0131yd\u0131.`;
+          }
+          return `Fazla k\xFC\xE7\xFCk: ${issue2.origin}, ${adj}${issue2.minimum.toString()} olmal\u0131yd\u0131.`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `F\xE2sit metin: "${_issue.prefix}" ile ba\u015Flamal\u0131.`;
+          if (_issue.format === "ends_with")
+            return `F\xE2sit metin: "${_issue.suffix}" ile bitmeli.`;
+          if (_issue.format === "includes")
+            return `F\xE2sit metin: "${_issue.includes}" ihtiv\xE2 etmeli.`;
+          if (_issue.format === "regex")
+            return `F\xE2sit metin: ${_issue.pattern} nak\u015F\u0131na uymal\u0131.`;
+          return `F\xE2sit ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `F\xE2sit say\u0131: ${issue2.divisor} kat\u0131 olmal\u0131yd\u0131.`;
+        case "unrecognized_keys":
+          return `Tan\u0131nmayan anahtar ${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} i\xE7in tan\u0131nmayan anahtar var.`;
+        case "invalid_union":
+          return "Giren tan\u0131namad\u0131.";
+        case "invalid_element":
+          return `${issue2.origin} i\xE7in tan\u0131nmayan k\u0131ymet var.`;
+        default:
+          return `K\u0131ymet tan\u0131namad\u0131.`;
+      }
+    };
+  };
+  function ota_default() {
+    return {
+      localeError: error31()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ps.js
+  var error32 = () => {
+    const Sizable = {
+      string: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" },
+      file: { unit: "\u0628\u0627\u06CC\u067C\u0633", verb: "\u0648\u0644\u0631\u064A" },
+      array: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" },
+      set: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0648\u0631\u0648\u062F\u064A",
+      email: "\u0628\u0631\u06CC\u069A\u0646\u0627\u0644\u06CC\u06A9",
+      url: "\u06CC\u0648 \u0622\u0631 \u0627\u0644",
+      emoji: "\u0627\u06CC\u0645\u0648\u062C\u064A",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u0646\u06CC\u067C\u0647 \u0627\u0648 \u0648\u062E\u062A",
+      date: "\u0646\u06D0\u067C\u0647",
+      time: "\u0648\u062E\u062A",
+      duration: "\u0645\u0648\u062F\u0647",
+      ipv4: "\u062F IPv4 \u067E\u062A\u0647",
+      ipv6: "\u062F IPv6 \u067E\u062A\u0647",
+      cidrv4: "\u062F IPv4 \u0633\u0627\u062D\u0647",
+      cidrv6: "\u062F IPv6 \u0633\u0627\u062D\u0647",
+      base64: "base64-encoded \u0645\u062A\u0646",
+      base64url: "base64url-encoded \u0645\u062A\u0646",
+      json_string: "JSON \u0645\u062A\u0646",
+      e164: "\u062F E.164 \u0634\u0645\u06D0\u0631\u0647",
+      jwt: "JWT",
+      template_literal: "\u0648\u0631\u0648\u062F\u064A"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0639\u062F\u062F",
+      array: "\u0627\u0631\u06D0"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0646\u0627\u0633\u0645 \u0648\u0631\u0648\u062F\u064A: \u0628\u0627\u06CC\u062F instanceof ${issue2.expected} \u0648\u0627\u06CC, \u0645\u06AB\u0631 ${received} \u062A\u0631\u0644\u0627\u0633\u0647 \u0634\u0648`;
+          }
+          return `\u0646\u0627\u0633\u0645 \u0648\u0631\u0648\u062F\u064A: \u0628\u0627\u06CC\u062F ${expected} \u0648\u0627\u06CC, \u0645\u06AB\u0631 ${received} \u062A\u0631\u0644\u0627\u0633\u0647 \u0634\u0648`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1) {
+            return `\u0646\u0627\u0633\u0645 \u0648\u0631\u0648\u062F\u064A: \u0628\u0627\u06CC\u062F ${stringifyPrimitive(issue2.values[0])} \u0648\u0627\u06CC`;
+          }
+          return `\u0646\u0627\u0633\u0645 \u0627\u0646\u062A\u062E\u0627\u0628: \u0628\u0627\u06CC\u062F \u06CC\u0648 \u0644\u0647 ${joinValues(issue2.values, "|")} \u0685\u062E\u0647 \u0648\u0627\u06CC`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0689\u06CC\u0631 \u0644\u0648\u06CC: ${issue2.origin ?? "\u0627\u0631\u0632\u069A\u062A"} \u0628\u0627\u06CC\u062F ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0639\u0646\u0635\u0631\u0648\u0646\u0647"} \u0648\u0644\u0631\u064A`;
+          }
+          return `\u0689\u06CC\u0631 \u0644\u0648\u06CC: ${issue2.origin ?? "\u0627\u0631\u0632\u069A\u062A"} \u0628\u0627\u06CC\u062F ${adj}${issue2.maximum.toString()} \u0648\u064A`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0689\u06CC\u0631 \u06A9\u0648\u0686\u0646\u06CC: ${issue2.origin} \u0628\u0627\u06CC\u062F ${adj}${issue2.minimum.toString()} ${sizing.unit} \u0648\u0644\u0631\u064A`;
+          }
+          return `\u0689\u06CC\u0631 \u06A9\u0648\u0686\u0646\u06CC: ${issue2.origin} \u0628\u0627\u06CC\u062F ${adj}${issue2.minimum.toString()} \u0648\u064A`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u0646\u0627\u0633\u0645 \u0645\u062A\u0646: \u0628\u0627\u06CC\u062F \u062F "${_issue.prefix}" \u0633\u0631\u0647 \u067E\u06CC\u0644 \u0634\u064A`;
+          }
+          if (_issue.format === "ends_with") {
+            return `\u0646\u0627\u0633\u0645 \u0645\u062A\u0646: \u0628\u0627\u06CC\u062F \u062F "${_issue.suffix}" \u0633\u0631\u0647 \u067E\u0627\u06CC \u062A\u0647 \u0648\u0631\u0633\u064A\u0696\u064A`;
+          }
+          if (_issue.format === "includes") {
+            return `\u0646\u0627\u0633\u0645 \u0645\u062A\u0646: \u0628\u0627\u06CC\u062F "${_issue.includes}" \u0648\u0644\u0631\u064A`;
+          }
+          if (_issue.format === "regex") {
+            return `\u0646\u0627\u0633\u0645 \u0645\u062A\u0646: \u0628\u0627\u06CC\u062F \u062F ${_issue.pattern} \u0633\u0631\u0647 \u0645\u0637\u0627\u0628\u0642\u062A \u0648\u0644\u0631\u064A`;
+          }
+          return `${FormatDictionary[_issue.format] ?? issue2.format} \u0646\u0627\u0633\u0645 \u062F\u06CC`;
+        }
+        case "not_multiple_of":
+          return `\u0646\u0627\u0633\u0645 \u0639\u062F\u062F: \u0628\u0627\u06CC\u062F \u062F ${issue2.divisor} \u0645\u0636\u0631\u0628 \u0648\u064A`;
+        case "unrecognized_keys":
+          return `\u0646\u0627\u0633\u0645 ${issue2.keys.length > 1 ? "\u06A9\u0644\u06CC\u0689\u0648\u0646\u0647" : "\u06A9\u0644\u06CC\u0689"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u0646\u0627\u0633\u0645 \u06A9\u0644\u06CC\u0689 \u067E\u0647 ${issue2.origin} \u06A9\u06D0`;
+        case "invalid_union":
+          return `\u0646\u0627\u0633\u0645\u0647 \u0648\u0631\u0648\u062F\u064A`;
+        case "invalid_element":
+          return `\u0646\u0627\u0633\u0645 \u0639\u0646\u0635\u0631 \u067E\u0647 ${issue2.origin} \u06A9\u06D0`;
+        default:
+          return `\u0646\u0627\u0633\u0645\u0647 \u0648\u0631\u0648\u062F\u064A`;
+      }
+    };
+  };
+  function ps_default() {
+    return {
+      localeError: error32()
+    };
+  }
+
+  // node_modules/zod/v4/locales/pl.js
+  var error33 = () => {
+    const Sizable = {
+      string: { unit: "znak\xF3w", verb: "mie\u0107" },
+      file: { unit: "bajt\xF3w", verb: "mie\u0107" },
+      array: { unit: "element\xF3w", verb: "mie\u0107" },
+      set: { unit: "element\xF3w", verb: "mie\u0107" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "wyra\u017Cenie",
+      email: "adres email",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "data i godzina w formacie ISO",
+      date: "data w formacie ISO",
+      time: "godzina w formacie ISO",
+      duration: "czas trwania ISO",
+      ipv4: "adres IPv4",
+      ipv6: "adres IPv6",
+      cidrv4: "zakres IPv4",
+      cidrv6: "zakres IPv6",
+      base64: "ci\u0105g znak\xF3w zakodowany w formacie base64",
+      base64url: "ci\u0105g znak\xF3w zakodowany w formacie base64url",
+      json_string: "ci\u0105g znak\xF3w w formacie JSON",
+      e164: "liczba E.164",
+      jwt: "JWT",
+      template_literal: "wej\u015Bcie"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "liczba",
+      array: "tablica"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Nieprawid\u0142owe dane wej\u015Bciowe: oczekiwano instanceof ${issue2.expected}, otrzymano ${received}`;
+          }
+          return `Nieprawid\u0142owe dane wej\u015Bciowe: oczekiwano ${expected}, otrzymano ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Nieprawid\u0142owe dane wej\u015Bciowe: oczekiwano ${stringifyPrimitive(issue2.values[0])}`;
+          return `Nieprawid\u0142owa opcja: oczekiwano jednej z warto\u015Bci ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Za du\u017Ca warto\u015B\u0107: oczekiwano, \u017Ce ${issue2.origin ?? "warto\u015B\u0107"} b\u0119dzie mie\u0107 ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "element\xF3w"}`;
+          }
+          return `Zbyt du\u017C(y/a/e): oczekiwano, \u017Ce ${issue2.origin ?? "warto\u015B\u0107"} b\u0119dzie wynosi\u0107 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Za ma\u0142a warto\u015B\u0107: oczekiwano, \u017Ce ${issue2.origin ?? "warto\u015B\u0107"} b\u0119dzie mie\u0107 ${adj}${issue2.minimum.toString()} ${sizing.unit ?? "element\xF3w"}`;
+          }
+          return `Zbyt ma\u0142(y/a/e): oczekiwano, \u017Ce ${issue2.origin ?? "warto\u015B\u0107"} b\u0119dzie wynosi\u0107 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Nieprawid\u0142owy ci\u0105g znak\xF3w: musi zaczyna\u0107 si\u0119 od "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Nieprawid\u0142owy ci\u0105g znak\xF3w: musi ko\u0144czy\u0107 si\u0119 na "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Nieprawid\u0142owy ci\u0105g znak\xF3w: musi zawiera\u0107 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Nieprawid\u0142owy ci\u0105g znak\xF3w: musi odpowiada\u0107 wzorcowi ${_issue.pattern}`;
+          return `Nieprawid\u0142ow(y/a/e) ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Nieprawid\u0142owa liczba: musi by\u0107 wielokrotno\u015Bci\u0105 ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Nierozpoznane klucze${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Nieprawid\u0142owy klucz w ${issue2.origin}`;
+        case "invalid_union":
+          return "Nieprawid\u0142owe dane wej\u015Bciowe";
+        case "invalid_element":
+          return `Nieprawid\u0142owa warto\u015B\u0107 w ${issue2.origin}`;
+        default:
+          return `Nieprawid\u0142owe dane wej\u015Bciowe`;
+      }
+    };
+  };
+  function pl_default() {
+    return {
+      localeError: error33()
+    };
+  }
+
+  // node_modules/zod/v4/locales/pt.js
+  var error34 = () => {
+    const Sizable = {
+      string: { unit: "caracteres", verb: "ter" },
+      file: { unit: "bytes", verb: "ter" },
+      array: { unit: "itens", verb: "ter" },
+      set: { unit: "itens", verb: "ter" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "padr\xE3o",
+      email: "endere\xE7o de e-mail",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "data e hora ISO",
+      date: "data ISO",
+      time: "hora ISO",
+      duration: "dura\xE7\xE3o ISO",
+      ipv4: "endere\xE7o IPv4",
+      ipv6: "endere\xE7o IPv6",
+      cidrv4: "faixa de IPv4",
+      cidrv6: "faixa de IPv6",
+      base64: "texto codificado em base64",
+      base64url: "URL codificada em base64",
+      json_string: "texto JSON",
+      e164: "n\xFAmero E.164",
+      jwt: "JWT",
+      template_literal: "entrada"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "n\xFAmero",
+      null: "nulo"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Tipo inv\xE1lido: esperado instanceof ${issue2.expected}, recebido ${received}`;
+          }
+          return `Tipo inv\xE1lido: esperado ${expected}, recebido ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Entrada inv\xE1lida: esperado ${stringifyPrimitive(issue2.values[0])}`;
+          return `Op\xE7\xE3o inv\xE1lida: esperada uma das ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Muito grande: esperado que ${issue2.origin ?? "valor"} tivesse ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementos"}`;
+          return `Muito grande: esperado que ${issue2.origin ?? "valor"} fosse ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Muito pequeno: esperado que ${issue2.origin} tivesse ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Muito pequeno: esperado que ${issue2.origin} fosse ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Texto inv\xE1lido: deve come\xE7ar com "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Texto inv\xE1lido: deve terminar com "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Texto inv\xE1lido: deve incluir "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Texto inv\xE1lido: deve corresponder ao padr\xE3o ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} inv\xE1lido`;
+        }
+        case "not_multiple_of":
+          return `N\xFAmero inv\xE1lido: deve ser m\xFAltiplo de ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Chave${issue2.keys.length > 1 ? "s" : ""} desconhecida${issue2.keys.length > 1 ? "s" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Chave inv\xE1lida em ${issue2.origin}`;
+        case "invalid_union":
+          return "Entrada inv\xE1lida";
+        case "invalid_element":
+          return `Valor inv\xE1lido em ${issue2.origin}`;
+        default:
+          return `Campo inv\xE1lido`;
+      }
+    };
+  };
+  function pt_default() {
+    return {
+      localeError: error34()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ru.js
+  function getRussianPlural(count, one, few, many) {
+    const absCount = Math.abs(count);
+    const lastDigit = absCount % 10;
+    const lastTwoDigits = absCount % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+      return many;
+    }
+    if (lastDigit === 1) {
+      return one;
+    }
+    if (lastDigit >= 2 && lastDigit <= 4) {
+      return few;
+    }
+    return many;
+  }
+  var error35 = () => {
+    const Sizable = {
+      string: {
+        unit: {
+          one: "\u0441\u0438\u043C\u0432\u043E\u043B",
+          few: "\u0441\u0438\u043C\u0432\u043E\u043B\u0430",
+          many: "\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432"
+        },
+        verb: "\u0438\u043C\u0435\u0442\u044C"
+      },
+      file: {
+        unit: {
+          one: "\u0431\u0430\u0439\u0442",
+          few: "\u0431\u0430\u0439\u0442\u0430",
+          many: "\u0431\u0430\u0439\u0442"
+        },
+        verb: "\u0438\u043C\u0435\u0442\u044C"
+      },
+      array: {
+        unit: {
+          one: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442",
+          few: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u0430",
+          many: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u043E\u0432"
+        },
+        verb: "\u0438\u043C\u0435\u0442\u044C"
+      },
+      set: {
+        unit: {
+          one: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442",
+          few: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u0430",
+          many: "\u044D\u043B\u0435\u043C\u0435\u043D\u0442\u043E\u0432"
+        },
+        verb: "\u0438\u043C\u0435\u0442\u044C"
+      }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0432\u0432\u043E\u0434",
+      email: "email \u0430\u0434\u0440\u0435\u0441",
+      url: "URL",
+      emoji: "\u044D\u043C\u043E\u0434\u0437\u0438",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0434\u0430\u0442\u0430 \u0438 \u0432\u0440\u0435\u043C\u044F",
+      date: "ISO \u0434\u0430\u0442\u0430",
+      time: "ISO \u0432\u0440\u0435\u043C\u044F",
+      duration: "ISO \u0434\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C",
+      ipv4: "IPv4 \u0430\u0434\u0440\u0435\u0441",
+      ipv6: "IPv6 \u0430\u0434\u0440\u0435\u0441",
+      cidrv4: "IPv4 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D",
+      cidrv6: "IPv6 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D",
+      base64: "\u0441\u0442\u0440\u043E\u043A\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 base64",
+      base64url: "\u0441\u0442\u0440\u043E\u043A\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 base64url",
+      json_string: "JSON \u0441\u0442\u0440\u043E\u043A\u0430",
+      e164: "\u043D\u043E\u043C\u0435\u0440 E.164",
+      jwt: "JWT",
+      template_literal: "\u0432\u0432\u043E\u0434"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0447\u0438\u0441\u043B\u043E",
+      array: "\u043C\u0430\u0441\u0441\u0438\u0432"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0432\u0432\u043E\u0434: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C instanceof ${issue2.expected}, \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E ${received}`;
+          }
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0432\u0432\u043E\u0434: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C ${expected}, \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0432\u0432\u043E\u0434: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0434\u043D\u043E \u0438\u0437 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const maxValue = Number(issue2.maximum);
+            const unit = getRussianPlural(maxValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+            return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.maximum.toString()} ${unit}`;
+          }
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435"} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            const minValue = Number(issue2.minimum);
+            const unit = getRussianPlural(minValue, sizing.unit.one, sizing.unit.few, sizing.unit.many);
+            return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 \u0438\u043C\u0435\u0442\u044C ${adj}${issue2.minimum.toString()} ${unit}`;
+          }
+          return `\u0421\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C, \u0447\u0442\u043E ${issue2.origin} \u0431\u0443\u0434\u0435\u0442 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430: \u0434\u043E\u043B\u0436\u043D\u0430 \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430: \u0434\u043E\u043B\u0436\u043D\u0430 \u0437\u0430\u043A\u0430\u043D\u0447\u0438\u0432\u0430\u0442\u044C\u0441\u044F \u043D\u0430 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430: \u0434\u043E\u043B\u0436\u043D\u0430 \u0441\u043E\u0434\u0435\u0440\u0436\u0430\u0442\u044C "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u041D\u0435\u0432\u0435\u0440\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430: \u0434\u043E\u043B\u0436\u043D\u0430 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0448\u0430\u0431\u043B\u043E\u043D\u0443 ${_issue.pattern}`;
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u043E\u0435 \u0447\u0438\u0441\u043B\u043E: \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u043A\u0440\u0430\u0442\u043D\u044B\u043C ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u041D\u0435\u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u043D${issue2.keys.length > 1 ? "\u044B\u0435" : "\u044B\u0439"} \u043A\u043B\u044E\u0447${issue2.keys.length > 1 ? "\u0438" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u0432 ${issue2.origin}`;
+        case "invalid_union":
+          return "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0435 \u0432\u0445\u043E\u0434\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435";
+        case "invalid_element":
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u0432 ${issue2.origin}`;
+        default:
+          return `\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0435 \u0432\u0445\u043E\u0434\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435`;
+      }
+    };
+  };
+  function ru_default() {
+    return {
+      localeError: error35()
+    };
+  }
+
+  // node_modules/zod/v4/locales/sl.js
+  var error36 = () => {
+    const Sizable = {
+      string: { unit: "znakov", verb: "imeti" },
+      file: { unit: "bajtov", verb: "imeti" },
+      array: { unit: "elementov", verb: "imeti" },
+      set: { unit: "elementov", verb: "imeti" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "vnos",
+      email: "e-po\u0161tni naslov",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO datum in \u010Das",
+      date: "ISO datum",
+      time: "ISO \u010Das",
+      duration: "ISO trajanje",
+      ipv4: "IPv4 naslov",
+      ipv6: "IPv6 naslov",
+      cidrv4: "obseg IPv4",
+      cidrv6: "obseg IPv6",
+      base64: "base64 kodiran niz",
+      base64url: "base64url kodiran niz",
+      json_string: "JSON niz",
+      e164: "E.164 \u0161tevilka",
+      jwt: "JWT",
+      template_literal: "vnos"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0161tevilo",
+      array: "tabela"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Neveljaven vnos: pri\u010Dakovano instanceof ${issue2.expected}, prejeto ${received}`;
+          }
+          return `Neveljaven vnos: pri\u010Dakovano ${expected}, prejeto ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Neveljaven vnos: pri\u010Dakovano ${stringifyPrimitive(issue2.values[0])}`;
+          return `Neveljavna mo\u017Enost: pri\u010Dakovano eno izmed ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Preveliko: pri\u010Dakovano, da bo ${issue2.origin ?? "vrednost"} imelo ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "elementov"}`;
+          return `Preveliko: pri\u010Dakovano, da bo ${issue2.origin ?? "vrednost"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Premajhno: pri\u010Dakovano, da bo ${issue2.origin} imelo ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Premajhno: pri\u010Dakovano, da bo ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Neveljaven niz: mora se za\u010Deti z "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `Neveljaven niz: mora se kon\u010Dati z "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Neveljaven niz: mora vsebovati "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Neveljaven niz: mora ustrezati vzorcu ${_issue.pattern}`;
+          return `Neveljaven ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Neveljavno \u0161tevilo: mora biti ve\u010Dkratnik ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Neprepoznan${issue2.keys.length > 1 ? "i klju\u010Di" : " klju\u010D"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Neveljaven klju\u010D v ${issue2.origin}`;
+        case "invalid_union":
+          return "Neveljaven vnos";
+        case "invalid_element":
+          return `Neveljavna vrednost v ${issue2.origin}`;
+        default:
+          return "Neveljaven vnos";
+      }
+    };
+  };
+  function sl_default() {
+    return {
+      localeError: error36()
+    };
+  }
+
+  // node_modules/zod/v4/locales/sv.js
+  var error37 = () => {
+    const Sizable = {
+      string: { unit: "tecken", verb: "att ha" },
+      file: { unit: "bytes", verb: "att ha" },
+      array: { unit: "objekt", verb: "att inneh\xE5lla" },
+      set: { unit: "objekt", verb: "att inneh\xE5lla" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "regulj\xE4rt uttryck",
+      email: "e-postadress",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO-datum och tid",
+      date: "ISO-datum",
+      time: "ISO-tid",
+      duration: "ISO-varaktighet",
+      ipv4: "IPv4-intervall",
+      ipv6: "IPv6-intervall",
+      cidrv4: "IPv4-spektrum",
+      cidrv6: "IPv6-spektrum",
+      base64: "base64-kodad str\xE4ng",
+      base64url: "base64url-kodad str\xE4ng",
+      json_string: "JSON-str\xE4ng",
+      e164: "E.164-nummer",
+      jwt: "JWT",
+      template_literal: "mall-literal"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "antal",
+      array: "lista"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ogiltig inmatning: f\xF6rv\xE4ntat instanceof ${issue2.expected}, fick ${received}`;
+          }
+          return `Ogiltig inmatning: f\xF6rv\xE4ntat ${expected}, fick ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ogiltig inmatning: f\xF6rv\xE4ntat ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ogiltigt val: f\xF6rv\xE4ntade en av ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `F\xF6r stor(t): f\xF6rv\xE4ntade ${issue2.origin ?? "v\xE4rdet"} att ha ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "element"}`;
+          }
+          return `F\xF6r stor(t): f\xF6rv\xE4ntat ${issue2.origin ?? "v\xE4rdet"} att ha ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `F\xF6r lite(t): f\xF6rv\xE4ntade ${issue2.origin ?? "v\xE4rdet"} att ha ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `F\xF6r lite(t): f\xF6rv\xE4ntade ${issue2.origin ?? "v\xE4rdet"} att ha ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `Ogiltig str\xE4ng: m\xE5ste b\xF6rja med "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `Ogiltig str\xE4ng: m\xE5ste sluta med "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Ogiltig str\xE4ng: m\xE5ste inneh\xE5lla "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Ogiltig str\xE4ng: m\xE5ste matcha m\xF6nstret "${_issue.pattern}"`;
+          return `Ogiltig(t) ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ogiltigt tal: m\xE5ste vara en multipel av ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `${issue2.keys.length > 1 ? "Ok\xE4nda nycklar" : "Ok\xE4nd nyckel"}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Ogiltig nyckel i ${issue2.origin ?? "v\xE4rdet"}`;
+        case "invalid_union":
+          return "Ogiltig input";
+        case "invalid_element":
+          return `Ogiltigt v\xE4rde i ${issue2.origin ?? "v\xE4rdet"}`;
+        default:
+          return `Ogiltig input`;
+      }
+    };
+  };
+  function sv_default() {
+    return {
+      localeError: error37()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ta.js
+  var error38 = () => {
+    const Sizable = {
+      string: { unit: "\u0B8E\u0BB4\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
+      file: { unit: "\u0BAA\u0BC8\u0B9F\u0BCD\u0B9F\u0BC1\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
+      array: { unit: "\u0B89\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
+      set: { unit: "\u0B89\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1",
+      email: "\u0BAE\u0BBF\u0BA9\u0BCD\u0BA9\u0B9E\u0BCD\u0B9A\u0BB2\u0BCD \u0BAE\u0BC1\u0B95\u0BB5\u0BB0\u0BBF",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u0BA4\u0BC7\u0BA4\u0BBF \u0BA8\u0BC7\u0BB0\u0BAE\u0BCD",
+      date: "ISO \u0BA4\u0BC7\u0BA4\u0BBF",
+      time: "ISO \u0BA8\u0BC7\u0BB0\u0BAE\u0BCD",
+      duration: "ISO \u0B95\u0BBE\u0BB2 \u0B85\u0BB3\u0BB5\u0BC1",
+      ipv4: "IPv4 \u0BAE\u0BC1\u0B95\u0BB5\u0BB0\u0BBF",
+      ipv6: "IPv6 \u0BAE\u0BC1\u0B95\u0BB5\u0BB0\u0BBF",
+      cidrv4: "IPv4 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1",
+      cidrv6: "IPv6 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1",
+      base64: "base64-encoded \u0B9A\u0BB0\u0BAE\u0BCD",
+      base64url: "base64url-encoded \u0B9A\u0BB0\u0BAE\u0BCD",
+      json_string: "JSON \u0B9A\u0BB0\u0BAE\u0BCD",
+      e164: "E.164 \u0B8E\u0BA3\u0BCD",
+      jwt: "JWT",
+      template_literal: "input"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0B8E\u0BA3\u0BCD",
+      array: "\u0B85\u0BA3\u0BBF",
+      null: "\u0BB5\u0BC6\u0BB1\u0BC1\u0BAE\u0BC8"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 instanceof ${issue2.expected}, \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${received}`;
+          }
+          return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${expected}, \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0BB5\u0BBF\u0BB0\u0BC1\u0BAA\u0BCD\u0BAA\u0BAE\u0BCD: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${joinValues(issue2.values, "|")} \u0B87\u0BB2\u0BCD \u0B92\u0BA9\u0BCD\u0BB1\u0BC1`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0BAE\u0BBF\u0B95 \u0BAA\u0BC6\u0BB0\u0BBF\u0BAF\u0BA4\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${issue2.origin ?? "\u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0B89\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD"} \u0B86\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          }
+          return `\u0BAE\u0BBF\u0B95 \u0BAA\u0BC6\u0BB0\u0BBF\u0BAF\u0BA4\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${issue2.origin ?? "\u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1"} ${adj}${issue2.maximum.toString()} \u0B86\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0BAE\u0BBF\u0B95\u0B9A\u0BCD \u0B9A\u0BBF\u0BB1\u0BBF\u0BAF\u0BA4\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit} \u0B86\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          }
+          return `\u0BAE\u0BBF\u0B95\u0B9A\u0BCD \u0B9A\u0BBF\u0BB1\u0BBF\u0BAF\u0BA4\u0BC1: \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ${issue2.origin} ${adj}${issue2.minimum.toString()} \u0B86\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B9A\u0BB0\u0BAE\u0BCD: "${_issue.prefix}" \u0B87\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0B99\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          if (_issue.format === "ends_with")
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B9A\u0BB0\u0BAE\u0BCD: "${_issue.suffix}" \u0B87\u0BB2\u0BCD \u0BAE\u0BC1\u0B9F\u0BBF\u0BB5\u0B9F\u0BC8\u0BAF \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          if (_issue.format === "includes")
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B9A\u0BB0\u0BAE\u0BCD: "${_issue.includes}" \u0B90 \u0B89\u0BB3\u0BCD\u0BB3\u0B9F\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          if (_issue.format === "regex")
+            return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B9A\u0BB0\u0BAE\u0BCD: ${_issue.pattern} \u0BAE\u0BC1\u0BB1\u0BC8\u0BAA\u0BBE\u0B9F\u0BCD\u0B9F\u0BC1\u0B9F\u0BA9\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+          return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B8E\u0BA3\u0BCD: ${issue2.divisor} \u0B87\u0BA9\u0BCD \u0BAA\u0BB2\u0BAE\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD`;
+        case "unrecognized_keys":
+          return `\u0B85\u0B9F\u0BC8\u0BAF\u0BBE\u0BB3\u0BAE\u0BCD \u0BA4\u0BC6\u0BB0\u0BBF\u0BAF\u0BBE\u0BA4 \u0BB5\u0BBF\u0B9A\u0BC8${issue2.keys.length > 1 ? "\u0B95\u0BB3\u0BCD" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} \u0B87\u0BB2\u0BCD \u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0BB5\u0BBF\u0B9A\u0BC8`;
+        case "invalid_union":
+          return "\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1";
+        case "invalid_element":
+          return `${issue2.origin} \u0B87\u0BB2\u0BCD \u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1`;
+        default:
+          return `\u0BA4\u0BB5\u0BB1\u0BBE\u0BA9 \u0B89\u0BB3\u0BCD\u0BB3\u0BC0\u0B9F\u0BC1`;
+      }
+    };
+  };
+  function ta_default() {
+    return {
+      localeError: error38()
+    };
+  }
+
+  // node_modules/zod/v4/locales/th.js
+  var error39 = () => {
+    const Sizable = {
+      string: { unit: "\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
+      file: { unit: "\u0E44\u0E1A\u0E15\u0E4C", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
+      array: { unit: "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
+      set: { unit: "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E1B\u0E49\u0E2D\u0E19",
+      email: "\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48\u0E2D\u0E35\u0E40\u0E21\u0E25",
+      url: "URL",
+      emoji: "\u0E2D\u0E34\u0E42\u0E21\u0E08\u0E34",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E40\u0E27\u0E25\u0E32\u0E41\u0E1A\u0E1A ISO",
+      date: "\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E41\u0E1A\u0E1A ISO",
+      time: "\u0E40\u0E27\u0E25\u0E32\u0E41\u0E1A\u0E1A ISO",
+      duration: "\u0E0A\u0E48\u0E27\u0E07\u0E40\u0E27\u0E25\u0E32\u0E41\u0E1A\u0E1A ISO",
+      ipv4: "\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 IPv4",
+      ipv6: "\u0E17\u0E35\u0E48\u0E2D\u0E22\u0E39\u0E48 IPv6",
+      cidrv4: "\u0E0A\u0E48\u0E27\u0E07 IP \u0E41\u0E1A\u0E1A IPv4",
+      cidrv6: "\u0E0A\u0E48\u0E27\u0E07 IP \u0E41\u0E1A\u0E1A IPv6",
+      base64: "\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E41\u0E1A\u0E1A Base64",
+      base64url: "\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E41\u0E1A\u0E1A Base64 \u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A URL",
+      json_string: "\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E41\u0E1A\u0E1A JSON",
+      e164: "\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C\u0E23\u0E30\u0E2B\u0E27\u0E48\u0E32\u0E07\u0E1B\u0E23\u0E30\u0E40\u0E17\u0E28 (E.164)",
+      jwt: "\u0E42\u0E17\u0E40\u0E04\u0E19 JWT",
+      template_literal: "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E17\u0E35\u0E48\u0E1B\u0E49\u0E2D\u0E19"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02",
+      array: "\u0E2D\u0E32\u0E23\u0E4C\u0E40\u0E23\u0E22\u0E4C (Array)",
+      null: "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E48\u0E32 (null)"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0E1B\u0E23\u0E30\u0E40\u0E20\u0E17\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E04\u0E27\u0E23\u0E40\u0E1B\u0E47\u0E19 instanceof ${issue2.expected} \u0E41\u0E15\u0E48\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A ${received}`;
+          }
+          return `\u0E1B\u0E23\u0E30\u0E40\u0E20\u0E17\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E04\u0E27\u0E23\u0E40\u0E1B\u0E47\u0E19 ${expected} \u0E41\u0E15\u0E48\u0E44\u0E14\u0E49\u0E23\u0E31\u0E1A ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u0E04\u0E48\u0E32\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E04\u0E27\u0E23\u0E40\u0E1B\u0E47\u0E19 ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u0E15\u0E31\u0E27\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E04\u0E27\u0E23\u0E40\u0E1B\u0E47\u0E19\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E43\u0E19 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19" : "\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u0E40\u0E01\u0E34\u0E19\u0E01\u0E33\u0E2B\u0E19\u0E14: ${issue2.origin ?? "\u0E04\u0E48\u0E32"} \u0E04\u0E27\u0E23\u0E21\u0E35${adj} ${issue2.maximum.toString()} ${sizing.unit ?? "\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"}`;
+          return `\u0E40\u0E01\u0E34\u0E19\u0E01\u0E33\u0E2B\u0E19\u0E14: ${issue2.origin ?? "\u0E04\u0E48\u0E32"} \u0E04\u0E27\u0E23\u0E21\u0E35${adj} ${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? "\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22" : "\u0E21\u0E32\u0E01\u0E01\u0E27\u0E48\u0E32";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32\u0E01\u0E33\u0E2B\u0E19\u0E14: ${issue2.origin} \u0E04\u0E27\u0E23\u0E21\u0E35${adj} ${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32\u0E01\u0E33\u0E2B\u0E19\u0E14: ${issue2.origin} \u0E04\u0E27\u0E23\u0E21\u0E35${adj} ${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E15\u0E49\u0E2D\u0E07\u0E02\u0E36\u0E49\u0E19\u0E15\u0E49\u0E19\u0E14\u0E49\u0E27\u0E22 "${_issue.prefix}"`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E15\u0E49\u0E2D\u0E07\u0E25\u0E07\u0E17\u0E49\u0E32\u0E22\u0E14\u0E49\u0E27\u0E22 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E15\u0E49\u0E2D\u0E07\u0E21\u0E35 "${_issue.includes}" \u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21`;
+          if (_issue.format === "regex")
+            return `\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E15\u0E49\u0E2D\u0E07\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E17\u0E35\u0E48\u0E01\u0E33\u0E2B\u0E19\u0E14 ${_issue.pattern}`;
+          return `\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u0E15\u0E31\u0E27\u0E40\u0E25\u0E02\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E08\u0E33\u0E19\u0E27\u0E19\u0E17\u0E35\u0E48\u0E2B\u0E32\u0E23\u0E14\u0E49\u0E27\u0E22 ${issue2.divisor} \u0E44\u0E14\u0E49\u0E25\u0E07\u0E15\u0E31\u0E27`;
+        case "unrecognized_keys":
+          return `\u0E1E\u0E1A\u0E04\u0E35\u0E22\u0E4C\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E23\u0E39\u0E49\u0E08\u0E31\u0E01: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u0E04\u0E35\u0E22\u0E4C\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E43\u0E19 ${issue2.origin}`;
+        case "invalid_union":
+          return "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07: \u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E23\u0E39\u0E1B\u0E41\u0E1A\u0E1A\u0E22\u0E39\u0E40\u0E19\u0E35\u0E22\u0E19\u0E17\u0E35\u0E48\u0E01\u0E33\u0E2B\u0E19\u0E14\u0E44\u0E27\u0E49";
+        case "invalid_element":
+          return `\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07\u0E43\u0E19 ${issue2.origin}`;
+        default:
+          return `\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07`;
+      }
+    };
+  };
+  function th_default() {
+    return {
+      localeError: error39()
+    };
+  }
+
+  // node_modules/zod/v4/locales/tr.js
+  var error40 = () => {
+    const Sizable = {
+      string: { unit: "karakter", verb: "olmal\u0131" },
+      file: { unit: "bayt", verb: "olmal\u0131" },
+      array: { unit: "\xF6\u011Fe", verb: "olmal\u0131" },
+      set: { unit: "\xF6\u011Fe", verb: "olmal\u0131" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "girdi",
+      email: "e-posta adresi",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO tarih ve saat",
+      date: "ISO tarih",
+      time: "ISO saat",
+      duration: "ISO s\xFCre",
+      ipv4: "IPv4 adresi",
+      ipv6: "IPv6 adresi",
+      cidrv4: "IPv4 aral\u0131\u011F\u0131",
+      cidrv6: "IPv6 aral\u0131\u011F\u0131",
+      base64: "base64 ile \u015Fifrelenmi\u015F metin",
+      base64url: "base64url ile \u015Fifrelenmi\u015F metin",
+      json_string: "JSON dizesi",
+      e164: "E.164 say\u0131s\u0131",
+      jwt: "JWT",
+      template_literal: "\u015Eablon dizesi"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Ge\xE7ersiz de\u011Fer: beklenen instanceof ${issue2.expected}, al\u0131nan ${received}`;
+          }
+          return `Ge\xE7ersiz de\u011Fer: beklenen ${expected}, al\u0131nan ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Ge\xE7ersiz de\u011Fer: beklenen ${stringifyPrimitive(issue2.values[0])}`;
+          return `Ge\xE7ersiz se\xE7enek: a\u015Fa\u011F\u0131dakilerden biri olmal\u0131: ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\xC7ok b\xFCy\xFCk: beklenen ${issue2.origin ?? "de\u011Fer"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\xF6\u011Fe"}`;
+          return `\xC7ok b\xFCy\xFCk: beklenen ${issue2.origin ?? "de\u011Fer"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\xC7ok k\xFC\xE7\xFCk: beklenen ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          return `\xC7ok k\xFC\xE7\xFCk: beklenen ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Ge\xE7ersiz metin: "${_issue.prefix}" ile ba\u015Flamal\u0131`;
+          if (_issue.format === "ends_with")
+            return `Ge\xE7ersiz metin: "${_issue.suffix}" ile bitmeli`;
+          if (_issue.format === "includes")
+            return `Ge\xE7ersiz metin: "${_issue.includes}" i\xE7ermeli`;
+          if (_issue.format === "regex")
+            return `Ge\xE7ersiz metin: ${_issue.pattern} desenine uymal\u0131`;
+          return `Ge\xE7ersiz ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Ge\xE7ersiz say\u0131: ${issue2.divisor} ile tam b\xF6l\xFCnebilmeli`;
+        case "unrecognized_keys":
+          return `Tan\u0131nmayan anahtar${issue2.keys.length > 1 ? "lar" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} i\xE7inde ge\xE7ersiz anahtar`;
+        case "invalid_union":
+          return "Ge\xE7ersiz de\u011Fer";
+        case "invalid_element":
+          return `${issue2.origin} i\xE7inde ge\xE7ersiz de\u011Fer`;
+        default:
+          return `Ge\xE7ersiz de\u011Fer`;
+      }
+    };
+  };
+  function tr_default() {
+    return {
+      localeError: error40()
+    };
+  }
+
+  // node_modules/zod/v4/locales/uk.js
+  var error41 = () => {
+    const Sizable = {
+      string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
+      file: { unit: "\u0431\u0430\u0439\u0442\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
+      array: { unit: "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
+      set: { unit: "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456",
+      email: "\u0430\u0434\u0440\u0435\u0441\u0430 \u0435\u043B\u0435\u043A\u0442\u0440\u043E\u043D\u043D\u043E\u0457 \u043F\u043E\u0448\u0442\u0438",
+      url: "URL",
+      emoji: "\u0435\u043C\u043E\u0434\u0437\u0456",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\u0434\u0430\u0442\u0430 \u0442\u0430 \u0447\u0430\u0441 ISO",
+      date: "\u0434\u0430\u0442\u0430 ISO",
+      time: "\u0447\u0430\u0441 ISO",
+      duration: "\u0442\u0440\u0438\u0432\u0430\u043B\u0456\u0441\u0442\u044C ISO",
+      ipv4: "\u0430\u0434\u0440\u0435\u0441\u0430 IPv4",
+      ipv6: "\u0430\u0434\u0440\u0435\u0441\u0430 IPv6",
+      cidrv4: "\u0434\u0456\u0430\u043F\u0430\u0437\u043E\u043D IPv4",
+      cidrv6: "\u0434\u0456\u0430\u043F\u0430\u0437\u043E\u043D IPv6",
+      base64: "\u0440\u044F\u0434\u043E\u043A \u0443 \u043A\u043E\u0434\u0443\u0432\u0430\u043D\u043D\u0456 base64",
+      base64url: "\u0440\u044F\u0434\u043E\u043A \u0443 \u043A\u043E\u0434\u0443\u0432\u0430\u043D\u043D\u0456 base64url",
+      json_string: "\u0440\u044F\u0434\u043E\u043A JSON",
+      e164: "\u043D\u043E\u043C\u0435\u0440 E.164",
+      jwt: "JWT",
+      template_literal: "\u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0447\u0438\u0441\u043B\u043E",
+      array: "\u043C\u0430\u0441\u0438\u0432"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0456 \u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F instanceof ${issue2.expected}, \u043E\u0442\u0440\u0438\u043C\u0430\u043D\u043E ${received}`;
+          }
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0456 \u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F ${expected}, \u043E\u0442\u0440\u0438\u043C\u0430\u043D\u043E ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0456 \u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0430 \u043E\u043F\u0446\u0456\u044F: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F \u043E\u0434\u043D\u0435 \u0437 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u0417\u0430\u043D\u0430\u0434\u0442\u043E \u0432\u0435\u043B\u0438\u043A\u0435: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F, \u0449\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u043D\u044F"} ${sizing.verb} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0435\u043B\u0435\u043C\u0435\u043D\u0442\u0456\u0432"}`;
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u043E \u0432\u0435\u043B\u0438\u043A\u0435: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F, \u0449\u043E ${issue2.origin ?? "\u0437\u043D\u0430\u0447\u0435\u043D\u043D\u044F"} \u0431\u0443\u0434\u0435 ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0417\u0430\u043D\u0430\u0434\u0442\u043E \u043C\u0430\u043B\u0435: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F, \u0449\u043E ${issue2.origin} ${sizing.verb} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u0417\u0430\u043D\u0430\u0434\u0442\u043E \u043C\u0430\u043B\u0435: \u043E\u0447\u0456\u043A\u0443\u0454\u0442\u044C\u0441\u044F, \u0449\u043E ${issue2.origin} \u0431\u0443\u0434\u0435 ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u0440\u044F\u0434\u043E\u043A: \u043F\u043E\u0432\u0438\u043D\u0435\u043D \u043F\u043E\u0447\u0438\u043D\u0430\u0442\u0438\u0441\u044F \u0437 "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u0440\u044F\u0434\u043E\u043A: \u043F\u043E\u0432\u0438\u043D\u0435\u043D \u0437\u0430\u043A\u0456\u043D\u0447\u0443\u0432\u0430\u0442\u0438\u0441\u044F \u043D\u0430 "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u0440\u044F\u0434\u043E\u043A: \u043F\u043E\u0432\u0438\u043D\u0435\u043D \u043C\u0456\u0441\u0442\u0438\u0442\u0438 "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u0440\u044F\u0434\u043E\u043A: \u043F\u043E\u0432\u0438\u043D\u0435\u043D \u0432\u0456\u0434\u043F\u043E\u0432\u0456\u0434\u0430\u0442\u0438 \u0448\u0430\u0431\u043B\u043E\u043D\u0443 ${_issue.pattern}`;
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0435 \u0447\u0438\u0441\u043B\u043E: \u043F\u043E\u0432\u0438\u043D\u043D\u043E \u0431\u0443\u0442\u0438 \u043A\u0440\u0430\u0442\u043D\u0438\u043C ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `\u041D\u0435\u0440\u043E\u0437\u043F\u0456\u0437\u043D\u0430\u043D\u0438\u0439 \u043A\u043B\u044E\u0447${issue2.keys.length > 1 ? "\u0456" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0438\u0439 \u043A\u043B\u044E\u0447 \u0443 ${issue2.origin}`;
+        case "invalid_union":
+          return "\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0456 \u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456";
+        case "invalid_element":
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u043D\u044F \u0443 ${issue2.origin}`;
+        default:
+          return `\u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u0456 \u0432\u0445\u0456\u0434\u043D\u0456 \u0434\u0430\u043D\u0456`;
+      }
+    };
+  };
+  function uk_default() {
+    return {
+      localeError: error41()
+    };
+  }
+
+  // node_modules/zod/v4/locales/ua.js
+  function ua_default() {
+    return uk_default();
+  }
+
+  // node_modules/zod/v4/locales/ur.js
+  var error42 = () => {
+    const Sizable = {
+      string: { unit: "\u062D\u0631\u0648\u0641", verb: "\u06C1\u0648\u0646\u0627" },
+      file: { unit: "\u0628\u0627\u0626\u0679\u0633", verb: "\u06C1\u0648\u0646\u0627" },
+      array: { unit: "\u0622\u0626\u0679\u0645\u0632", verb: "\u06C1\u0648\u0646\u0627" },
+      set: { unit: "\u0622\u0626\u0679\u0645\u0632", verb: "\u06C1\u0648\u0646\u0627" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0627\u0646 \u067E\u0679",
+      email: "\u0627\u06CC \u0645\u06CC\u0644 \u0627\u06CC\u0688\u0631\u06CC\u0633",
+      url: "\u06CC\u0648 \u0622\u0631 \u0627\u06CC\u0644",
+      emoji: "\u0627\u06CC\u0645\u0648\u062C\u06CC",
+      uuid: "\u06CC\u0648 \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC",
+      uuidv4: "\u06CC\u0648 \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC \u0648\u06CC 4",
+      uuidv6: "\u06CC\u0648 \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC \u0648\u06CC 6",
+      nanoid: "\u0646\u06CC\u0646\u0648 \u0622\u0626\u06CC \u0688\u06CC",
+      guid: "\u062C\u06CC \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC",
+      cuid: "\u0633\u06CC \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC",
+      cuid2: "\u0633\u06CC \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC 2",
+      ulid: "\u06CC\u0648 \u0627\u06CC\u0644 \u0622\u0626\u06CC \u0688\u06CC",
+      xid: "\u0627\u06CC\u06A9\u0633 \u0622\u0626\u06CC \u0688\u06CC",
+      ksuid: "\u06A9\u06D2 \u0627\u06CC\u0633 \u06CC\u0648 \u0622\u0626\u06CC \u0688\u06CC",
+      datetime: "\u0622\u0626\u06CC \u0627\u06CC\u0633 \u0627\u0648 \u0688\u06CC\u0679 \u0679\u0627\u0626\u0645",
+      date: "\u0622\u0626\u06CC \u0627\u06CC\u0633 \u0627\u0648 \u062A\u0627\u0631\u06CC\u062E",
+      time: "\u0622\u0626\u06CC \u0627\u06CC\u0633 \u0627\u0648 \u0648\u0642\u062A",
+      duration: "\u0622\u0626\u06CC \u0627\u06CC\u0633 \u0627\u0648 \u0645\u062F\u062A",
+      ipv4: "\u0622\u0626\u06CC \u067E\u06CC \u0648\u06CC 4 \u0627\u06CC\u0688\u0631\u06CC\u0633",
+      ipv6: "\u0622\u0626\u06CC \u067E\u06CC \u0648\u06CC 6 \u0627\u06CC\u0688\u0631\u06CC\u0633",
+      cidrv4: "\u0622\u0626\u06CC \u067E\u06CC \u0648\u06CC 4 \u0631\u06CC\u0646\u062C",
+      cidrv6: "\u0622\u0626\u06CC \u067E\u06CC \u0648\u06CC 6 \u0631\u06CC\u0646\u062C",
+      base64: "\u0628\u06CC\u0633 64 \u0627\u0646 \u06A9\u0648\u0688\u0688 \u0633\u0679\u0631\u0646\u06AF",
+      base64url: "\u0628\u06CC\u0633 64 \u06CC\u0648 \u0622\u0631 \u0627\u06CC\u0644 \u0627\u0646 \u06A9\u0648\u0688\u0688 \u0633\u0679\u0631\u0646\u06AF",
+      json_string: "\u062C\u06D2 \u0627\u06CC\u0633 \u0627\u0648 \u0627\u06CC\u0646 \u0633\u0679\u0631\u0646\u06AF",
+      e164: "\u0627\u06CC 164 \u0646\u0645\u0628\u0631",
+      jwt: "\u062C\u06D2 \u0688\u0628\u0644\u06CC\u0648 \u0679\u06CC",
+      template_literal: "\u0627\u0646 \u067E\u0679"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u0646\u0645\u0628\u0631",
+      array: "\u0622\u0631\u06D2",
+      null: "\u0646\u0644"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u063A\u0644\u0637 \u0627\u0646 \u067E\u0679: instanceof ${issue2.expected} \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627\u060C ${received} \u0645\u0648\u0635\u0648\u0644 \u06C1\u0648\u0627`;
+          }
+          return `\u063A\u0644\u0637 \u0627\u0646 \u067E\u0679: ${expected} \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627\u060C ${received} \u0645\u0648\u0635\u0648\u0644 \u06C1\u0648\u0627`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u063A\u0644\u0637 \u0627\u0646 \u067E\u0679: ${stringifyPrimitive(issue2.values[0])} \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627`;
+          return `\u063A\u0644\u0637 \u0622\u067E\u0634\u0646: ${joinValues(issue2.values, "|")} \u0645\u06CC\u06BA \u0633\u06D2 \u0627\u06CC\u06A9 \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u0628\u06C1\u062A \u0628\u0691\u0627: ${issue2.origin ?? "\u0648\u06CC\u0644\u06CC\u0648"} \u06A9\u06D2 ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u0639\u0646\u0627\u0635\u0631"} \u06C1\u0648\u0646\u06D2 \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u06D2`;
+          return `\u0628\u06C1\u062A \u0628\u0691\u0627: ${issue2.origin ?? "\u0648\u06CC\u0644\u06CC\u0648"} \u06A9\u0627 ${adj}${issue2.maximum.toString()} \u06C1\u0648\u0646\u0627 \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u0628\u06C1\u062A \u0686\u06BE\u0648\u0679\u0627: ${issue2.origin} \u06A9\u06D2 ${adj}${issue2.minimum.toString()} ${sizing.unit} \u06C1\u0648\u0646\u06D2 \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u06D2`;
+          }
+          return `\u0628\u06C1\u062A \u0686\u06BE\u0648\u0679\u0627: ${issue2.origin} \u06A9\u0627 ${adj}${issue2.minimum.toString()} \u06C1\u0648\u0646\u0627 \u0645\u062A\u0648\u0642\u0639 \u062A\u06BE\u0627`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u063A\u0644\u0637 \u0633\u0679\u0631\u0646\u06AF: "${_issue.prefix}" \u0633\u06D2 \u0634\u0631\u0648\u0639 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u063A\u0644\u0637 \u0633\u0679\u0631\u0646\u06AF: "${_issue.suffix}" \u067E\u0631 \u062E\u062A\u0645 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2`;
+          if (_issue.format === "includes")
+            return `\u063A\u0644\u0637 \u0633\u0679\u0631\u0646\u06AF: "${_issue.includes}" \u0634\u0627\u0645\u0644 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2`;
+          if (_issue.format === "regex")
+            return `\u063A\u0644\u0637 \u0633\u0679\u0631\u0646\u06AF: \u067E\u06CC\u0679\u0631\u0646 ${_issue.pattern} \u0633\u06D2 \u0645\u06CC\u0686 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2`;
+          return `\u063A\u0644\u0637 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u063A\u0644\u0637 \u0646\u0645\u0628\u0631: ${issue2.divisor} \u06A9\u0627 \u0645\u0636\u0627\u0639\u0641 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2`;
+        case "unrecognized_keys":
+          return `\u063A\u06CC\u0631 \u062A\u0633\u0644\u06CC\u0645 \u0634\u062F\u06C1 \u06A9\u06CC${issue2.keys.length > 1 ? "\u0632" : ""}: ${joinValues(issue2.keys, "\u060C ")}`;
+        case "invalid_key":
+          return `${issue2.origin} \u0645\u06CC\u06BA \u063A\u0644\u0637 \u06A9\u06CC`;
+        case "invalid_union":
+          return "\u063A\u0644\u0637 \u0627\u0646 \u067E\u0679";
+        case "invalid_element":
+          return `${issue2.origin} \u0645\u06CC\u06BA \u063A\u0644\u0637 \u0648\u06CC\u0644\u06CC\u0648`;
+        default:
+          return `\u063A\u0644\u0637 \u0627\u0646 \u067E\u0679`;
+      }
+    };
+  };
+  function ur_default() {
+    return {
+      localeError: error42()
+    };
+  }
+
+  // node_modules/zod/v4/locales/uz.js
+  var error43 = () => {
+    const Sizable = {
+      string: { unit: "belgi", verb: "bo\u2018lishi kerak" },
+      file: { unit: "bayt", verb: "bo\u2018lishi kerak" },
+      array: { unit: "element", verb: "bo\u2018lishi kerak" },
+      set: { unit: "element", verb: "bo\u2018lishi kerak" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "kirish",
+      email: "elektron pochta manzili",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO sana va vaqti",
+      date: "ISO sana",
+      time: "ISO vaqt",
+      duration: "ISO davomiylik",
+      ipv4: "IPv4 manzil",
+      ipv6: "IPv6 manzil",
+      mac: "MAC manzil",
+      cidrv4: "IPv4 diapazon",
+      cidrv6: "IPv6 diapazon",
+      base64: "base64 kodlangan satr",
+      base64url: "base64url kodlangan satr",
+      json_string: "JSON satr",
+      e164: "E.164 raqam",
+      jwt: "JWT",
+      template_literal: "kirish"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "raqam",
+      array: "massiv"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `Noto\u2018g\u2018ri kirish: kutilgan instanceof ${issue2.expected}, qabul qilingan ${received}`;
+          }
+          return `Noto\u2018g\u2018ri kirish: kutilgan ${expected}, qabul qilingan ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `Noto\u2018g\u2018ri kirish: kutilgan ${stringifyPrimitive(issue2.values[0])}`;
+          return `Noto\u2018g\u2018ri variant: quyidagilardan biri kutilgan ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Juda katta: kutilgan ${issue2.origin ?? "qiymat"} ${adj}${issue2.maximum.toString()} ${sizing.unit} ${sizing.verb}`;
+          return `Juda katta: kutilgan ${issue2.origin ?? "qiymat"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Juda kichik: kutilgan ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit} ${sizing.verb}`;
+          }
+          return `Juda kichik: kutilgan ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Noto\u2018g\u2018ri satr: "${_issue.prefix}" bilan boshlanishi kerak`;
+          if (_issue.format === "ends_with")
+            return `Noto\u2018g\u2018ri satr: "${_issue.suffix}" bilan tugashi kerak`;
+          if (_issue.format === "includes")
+            return `Noto\u2018g\u2018ri satr: "${_issue.includes}" ni o\u2018z ichiga olishi kerak`;
+          if (_issue.format === "regex")
+            return `Noto\u2018g\u2018ri satr: ${_issue.pattern} shabloniga mos kelishi kerak`;
+          return `Noto\u2018g\u2018ri ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `Noto\u2018g\u2018ri raqam: ${issue2.divisor} ning karralisi bo\u2018lishi kerak`;
+        case "unrecognized_keys":
+          return `Noma\u2019lum kalit${issue2.keys.length > 1 ? "lar" : ""}: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} dagi kalit noto\u2018g\u2018ri`;
+        case "invalid_union":
+          return "Noto\u2018g\u2018ri kirish";
+        case "invalid_element":
+          return `${issue2.origin} da noto\u2018g\u2018ri qiymat`;
+        default:
+          return `Noto\u2018g\u2018ri kirish`;
+      }
+    };
+  };
+  function uz_default() {
+    return {
+      localeError: error43()
+    };
+  }
+
+  // node_modules/zod/v4/locales/vi.js
+  var error44 = () => {
+    const Sizable = {
+      string: { unit: "k\xFD t\u1EF1", verb: "c\xF3" },
+      file: { unit: "byte", verb: "c\xF3" },
+      array: { unit: "ph\u1EA7n t\u1EED", verb: "c\xF3" },
+      set: { unit: "ph\u1EA7n t\u1EED", verb: "c\xF3" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u0111\u1EA7u v\xE0o",
+      email: "\u0111\u1ECBa ch\u1EC9 email",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ng\xE0y gi\u1EDD ISO",
+      date: "ng\xE0y ISO",
+      time: "gi\u1EDD ISO",
+      duration: "kho\u1EA3ng th\u1EDDi gian ISO",
+      ipv4: "\u0111\u1ECBa ch\u1EC9 IPv4",
+      ipv6: "\u0111\u1ECBa ch\u1EC9 IPv6",
+      cidrv4: "d\u1EA3i IPv4",
+      cidrv6: "d\u1EA3i IPv6",
+      base64: "chu\u1ED7i m\xE3 h\xF3a base64",
+      base64url: "chu\u1ED7i m\xE3 h\xF3a base64url",
+      json_string: "chu\u1ED7i JSON",
+      e164: "s\u1ED1 E.164",
+      jwt: "JWT",
+      template_literal: "\u0111\u1EA7u v\xE0o"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "s\u1ED1",
+      array: "m\u1EA3ng"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u0110\u1EA7u v\xE0o kh\xF4ng h\u1EE3p l\u1EC7: mong \u0111\u1EE3i instanceof ${issue2.expected}, nh\u1EADn \u0111\u01B0\u1EE3c ${received}`;
+          }
+          return `\u0110\u1EA7u v\xE0o kh\xF4ng h\u1EE3p l\u1EC7: mong \u0111\u1EE3i ${expected}, nh\u1EADn \u0111\u01B0\u1EE3c ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u0110\u1EA7u v\xE0o kh\xF4ng h\u1EE3p l\u1EC7: mong \u0111\u1EE3i ${stringifyPrimitive(issue2.values[0])}`;
+          return `T\xF9y ch\u1ECDn kh\xF4ng h\u1EE3p l\u1EC7: mong \u0111\u1EE3i m\u1ED9t trong c\xE1c gi\xE1 tr\u1ECB ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `Qu\xE1 l\u1EDBn: mong \u0111\u1EE3i ${issue2.origin ?? "gi\xE1 tr\u1ECB"} ${sizing.verb} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "ph\u1EA7n t\u1EED"}`;
+          return `Qu\xE1 l\u1EDBn: mong \u0111\u1EE3i ${issue2.origin ?? "gi\xE1 tr\u1ECB"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `Qu\xE1 nh\u1ECF: mong \u0111\u1EE3i ${issue2.origin} ${sizing.verb} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `Qu\xE1 nh\u1ECF: mong \u0111\u1EE3i ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `Chu\u1ED7i kh\xF4ng h\u1EE3p l\u1EC7: ph\u1EA3i b\u1EAFt \u0111\u1EA7u b\u1EB1ng "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Chu\u1ED7i kh\xF4ng h\u1EE3p l\u1EC7: ph\u1EA3i k\u1EBFt th\xFAc b\u1EB1ng "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Chu\u1ED7i kh\xF4ng h\u1EE3p l\u1EC7: ph\u1EA3i bao g\u1ED3m "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Chu\u1ED7i kh\xF4ng h\u1EE3p l\u1EC7: ph\u1EA3i kh\u1EDBp v\u1EDBi m\u1EABu ${_issue.pattern}`;
+          return `${FormatDictionary[_issue.format] ?? issue2.format} kh\xF4ng h\u1EE3p l\u1EC7`;
+        }
+        case "not_multiple_of":
+          return `S\u1ED1 kh\xF4ng h\u1EE3p l\u1EC7: ph\u1EA3i l\xE0 b\u1ED9i s\u1ED1 c\u1EE7a ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `Kh\xF3a kh\xF4ng \u0111\u01B0\u1EE3c nh\u1EADn d\u1EA1ng: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `Kh\xF3a kh\xF4ng h\u1EE3p l\u1EC7 trong ${issue2.origin}`;
+        case "invalid_union":
+          return "\u0110\u1EA7u v\xE0o kh\xF4ng h\u1EE3p l\u1EC7";
+        case "invalid_element":
+          return `Gi\xE1 tr\u1ECB kh\xF4ng h\u1EE3p l\u1EC7 trong ${issue2.origin}`;
+        default:
+          return `\u0110\u1EA7u v\xE0o kh\xF4ng h\u1EE3p l\u1EC7`;
+      }
+    };
+  };
+  function vi_default() {
+    return {
+      localeError: error44()
+    };
+  }
+
+  // node_modules/zod/v4/locales/zh-CN.js
+  var error45 = () => {
+    const Sizable = {
+      string: { unit: "\u5B57\u7B26", verb: "\u5305\u542B" },
+      file: { unit: "\u5B57\u8282", verb: "\u5305\u542B" },
+      array: { unit: "\u9879", verb: "\u5305\u542B" },
+      set: { unit: "\u9879", verb: "\u5305\u542B" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u8F93\u5165",
+      email: "\u7535\u5B50\u90AE\u4EF6",
+      url: "URL",
+      emoji: "\u8868\u60C5\u7B26\u53F7",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO\u65E5\u671F\u65F6\u95F4",
+      date: "ISO\u65E5\u671F",
+      time: "ISO\u65F6\u95F4",
+      duration: "ISO\u65F6\u957F",
+      ipv4: "IPv4\u5730\u5740",
+      ipv6: "IPv6\u5730\u5740",
+      cidrv4: "IPv4\u7F51\u6BB5",
+      cidrv6: "IPv6\u7F51\u6BB5",
+      base64: "base64\u7F16\u7801\u5B57\u7B26\u4E32",
+      base64url: "base64url\u7F16\u7801\u5B57\u7B26\u4E32",
+      json_string: "JSON\u5B57\u7B26\u4E32",
+      e164: "E.164\u53F7\u7801",
+      jwt: "JWT",
+      template_literal: "\u8F93\u5165"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "\u6570\u5B57",
+      array: "\u6570\u7EC4",
+      null: "\u7A7A\u503C(null)"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u65E0\u6548\u8F93\u5165\uFF1A\u671F\u671B instanceof ${issue2.expected}\uFF0C\u5B9E\u9645\u63A5\u6536 ${received}`;
+          }
+          return `\u65E0\u6548\u8F93\u5165\uFF1A\u671F\u671B ${expected}\uFF0C\u5B9E\u9645\u63A5\u6536 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u65E0\u6548\u8F93\u5165\uFF1A\u671F\u671B ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u65E0\u6548\u9009\u9879\uFF1A\u671F\u671B\u4EE5\u4E0B\u4E4B\u4E00 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u6570\u503C\u8FC7\u5927\uFF1A\u671F\u671B ${issue2.origin ?? "\u503C"} ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u4E2A\u5143\u7D20"}`;
+          return `\u6570\u503C\u8FC7\u5927\uFF1A\u671F\u671B ${issue2.origin ?? "\u503C"} ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u6570\u503C\u8FC7\u5C0F\uFF1A\u671F\u671B ${issue2.origin} ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u6570\u503C\u8FC7\u5C0F\uFF1A\u671F\u671B ${issue2.origin} ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u65E0\u6548\u5B57\u7B26\u4E32\uFF1A\u5FC5\u987B\u4EE5 "${_issue.prefix}" \u5F00\u5934`;
+          if (_issue.format === "ends_with")
+            return `\u65E0\u6548\u5B57\u7B26\u4E32\uFF1A\u5FC5\u987B\u4EE5 "${_issue.suffix}" \u7ED3\u5C3E`;
+          if (_issue.format === "includes")
+            return `\u65E0\u6548\u5B57\u7B26\u4E32\uFF1A\u5FC5\u987B\u5305\u542B "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u65E0\u6548\u5B57\u7B26\u4E32\uFF1A\u5FC5\u987B\u6EE1\u8DB3\u6B63\u5219\u8868\u8FBE\u5F0F ${_issue.pattern}`;
+          return `\u65E0\u6548${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u65E0\u6548\u6570\u5B57\uFF1A\u5FC5\u987B\u662F ${issue2.divisor} \u7684\u500D\u6570`;
+        case "unrecognized_keys":
+          return `\u51FA\u73B0\u672A\u77E5\u7684\u952E(key): ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `${issue2.origin} \u4E2D\u7684\u952E(key)\u65E0\u6548`;
+        case "invalid_union":
+          return "\u65E0\u6548\u8F93\u5165";
+        case "invalid_element":
+          return `${issue2.origin} \u4E2D\u5305\u542B\u65E0\u6548\u503C(value)`;
+        default:
+          return `\u65E0\u6548\u8F93\u5165`;
+      }
+    };
+  };
+  function zh_CN_default() {
+    return {
+      localeError: error45()
+    };
+  }
+
+  // node_modules/zod/v4/locales/zh-TW.js
+  var error46 = () => {
+    const Sizable = {
+      string: { unit: "\u5B57\u5143", verb: "\u64C1\u6709" },
+      file: { unit: "\u4F4D\u5143\u7D44", verb: "\u64C1\u6709" },
+      array: { unit: "\u9805\u76EE", verb: "\u64C1\u6709" },
+      set: { unit: "\u9805\u76EE", verb: "\u64C1\u6709" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u8F38\u5165",
+      email: "\u90F5\u4EF6\u5730\u5740",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO \u65E5\u671F\u6642\u9593",
+      date: "ISO \u65E5\u671F",
+      time: "ISO \u6642\u9593",
+      duration: "ISO \u671F\u9593",
+      ipv4: "IPv4 \u4F4D\u5740",
+      ipv6: "IPv6 \u4F4D\u5740",
+      cidrv4: "IPv4 \u7BC4\u570D",
+      cidrv6: "IPv6 \u7BC4\u570D",
+      base64: "base64 \u7DE8\u78BC\u5B57\u4E32",
+      base64url: "base64url \u7DE8\u78BC\u5B57\u4E32",
+      json_string: "JSON \u5B57\u4E32",
+      e164: "E.164 \u6578\u503C",
+      jwt: "JWT",
+      template_literal: "\u8F38\u5165"
+    };
+    const TypeDictionary = {
+      nan: "NaN"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\u7121\u6548\u7684\u8F38\u5165\u503C\uFF1A\u9810\u671F\u70BA instanceof ${issue2.expected}\uFF0C\u4F46\u6536\u5230 ${received}`;
+          }
+          return `\u7121\u6548\u7684\u8F38\u5165\u503C\uFF1A\u9810\u671F\u70BA ${expected}\uFF0C\u4F46\u6536\u5230 ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\u7121\u6548\u7684\u8F38\u5165\u503C\uFF1A\u9810\u671F\u70BA ${stringifyPrimitive(issue2.values[0])}`;
+          return `\u7121\u6548\u7684\u9078\u9805\uFF1A\u9810\u671F\u70BA\u4EE5\u4E0B\u5176\u4E2D\u4E4B\u4E00 ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `\u6578\u503C\u904E\u5927\uFF1A\u9810\u671F ${issue2.origin ?? "\u503C"} \u61C9\u70BA ${adj}${issue2.maximum.toString()} ${sizing.unit ?? "\u500B\u5143\u7D20"}`;
+          return `\u6578\u503C\u904E\u5927\uFF1A\u9810\u671F ${issue2.origin ?? "\u503C"} \u61C9\u70BA ${adj}${issue2.maximum.toString()}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing) {
+            return `\u6578\u503C\u904E\u5C0F\uFF1A\u9810\u671F ${issue2.origin} \u61C9\u70BA ${adj}${issue2.minimum.toString()} ${sizing.unit}`;
+          }
+          return `\u6578\u503C\u904E\u5C0F\uFF1A\u9810\u671F ${issue2.origin} \u61C9\u70BA ${adj}${issue2.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with") {
+            return `\u7121\u6548\u7684\u5B57\u4E32\uFF1A\u5FC5\u9808\u4EE5 "${_issue.prefix}" \u958B\u982D`;
+          }
+          if (_issue.format === "ends_with")
+            return `\u7121\u6548\u7684\u5B57\u4E32\uFF1A\u5FC5\u9808\u4EE5 "${_issue.suffix}" \u7D50\u5C3E`;
+          if (_issue.format === "includes")
+            return `\u7121\u6548\u7684\u5B57\u4E32\uFF1A\u5FC5\u9808\u5305\u542B "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u7121\u6548\u7684\u5B57\u4E32\uFF1A\u5FC5\u9808\u7B26\u5408\u683C\u5F0F ${_issue.pattern}`;
+          return `\u7121\u6548\u7684 ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `\u7121\u6548\u7684\u6578\u5B57\uFF1A\u5FC5\u9808\u70BA ${issue2.divisor} \u7684\u500D\u6578`;
+        case "unrecognized_keys":
+          return `\u7121\u6CD5\u8B58\u5225\u7684\u9375\u503C${issue2.keys.length > 1 ? "\u5011" : ""}\uFF1A${joinValues(issue2.keys, "\u3001")}`;
+        case "invalid_key":
+          return `${issue2.origin} \u4E2D\u6709\u7121\u6548\u7684\u9375\u503C`;
+        case "invalid_union":
+          return "\u7121\u6548\u7684\u8F38\u5165\u503C";
+        case "invalid_element":
+          return `${issue2.origin} \u4E2D\u6709\u7121\u6548\u7684\u503C`;
+        default:
+          return `\u7121\u6548\u7684\u8F38\u5165\u503C`;
+      }
+    };
+  };
+  function zh_TW_default() {
+    return {
+      localeError: error46()
+    };
+  }
+
+  // node_modules/zod/v4/locales/yo.js
+  var error47 = () => {
+    const Sizable = {
+      string: { unit: "\xE0mi", verb: "n\xED" },
+      file: { unit: "bytes", verb: "n\xED" },
+      array: { unit: "nkan", verb: "n\xED" },
+      set: { unit: "nkan", verb: "n\xED" }
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    const FormatDictionary = {
+      regex: "\u1EB9\u0300r\u1ECD \xECb\xE1w\u1ECDl\xE9",
+      email: "\xE0d\xEDr\u1EB9\u0301s\xEC \xECm\u1EB9\u0301l\xEC",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "\xE0k\xF3k\xF2 ISO",
+      date: "\u1ECDj\u1ECD\u0301 ISO",
+      time: "\xE0k\xF3k\xF2 ISO",
+      duration: "\xE0k\xF3k\xF2 t\xF3 p\xE9 ISO",
+      ipv4: "\xE0d\xEDr\u1EB9\u0301s\xEC IPv4",
+      ipv6: "\xE0d\xEDr\u1EB9\u0301s\xEC IPv6",
+      cidrv4: "\xE0gb\xE8gb\xE8 IPv4",
+      cidrv6: "\xE0gb\xE8gb\xE8 IPv6",
+      base64: "\u1ECD\u0300r\u1ECD\u0300 t\xED a k\u1ECD\u0301 n\xED base64",
+      base64url: "\u1ECD\u0300r\u1ECD\u0300 base64url",
+      json_string: "\u1ECD\u0300r\u1ECD\u0300 JSON",
+      e164: "n\u1ECD\u0301mb\xE0 E.164",
+      jwt: "JWT",
+      template_literal: "\u1EB9\u0300r\u1ECD \xECb\xE1w\u1ECDl\xE9"
+    };
+    const TypeDictionary = {
+      nan: "NaN",
+      number: "n\u1ECD\u0301mb\xE0",
+      array: "akop\u1ECD"
+    };
+    return (issue2) => {
+      switch (issue2.code) {
+        case "invalid_type": {
+          const expected = TypeDictionary[issue2.expected] ?? issue2.expected;
+          const receivedType = parsedType(issue2.input);
+          const received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue2.expected)) {
+            return `\xCCb\xE1w\u1ECDl\xE9 a\u1E63\xEC\u1E63e: a n\xED l\xE1ti fi instanceof ${issue2.expected}, \xE0m\u1ECD\u0300 a r\xED ${received}`;
+          }
+          return `\xCCb\xE1w\u1ECDl\xE9 a\u1E63\xEC\u1E63e: a n\xED l\xE1ti fi ${expected}, \xE0m\u1ECD\u0300 a r\xED ${received}`;
+        }
+        case "invalid_value":
+          if (issue2.values.length === 1)
+            return `\xCCb\xE1w\u1ECDl\xE9 a\u1E63\xEC\u1E63e: a n\xED l\xE1ti fi ${stringifyPrimitive(issue2.values[0])}`;
+          return `\xC0\u1E63\xE0y\xE0n a\u1E63\xEC\u1E63e: yan \u1ECD\u0300kan l\xE1ra ${joinValues(issue2.values, "|")}`;
+        case "too_big": {
+          const adj = issue2.inclusive ? "<=" : "<";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `T\xF3 p\u1ECD\u0300 j\xF9: a n\xED l\xE1ti j\u1EB9\u0301 p\xE9 ${issue2.origin ?? "iye"} ${sizing.verb} ${adj}${issue2.maximum} ${sizing.unit}`;
+          return `T\xF3 p\u1ECD\u0300 j\xF9: a n\xED l\xE1ti j\u1EB9\u0301 ${adj}${issue2.maximum}`;
+        }
+        case "too_small": {
+          const adj = issue2.inclusive ? ">=" : ">";
+          const sizing = getSizing(issue2.origin);
+          if (sizing)
+            return `K\xE9r\xE9 ju: a n\xED l\xE1ti j\u1EB9\u0301 p\xE9 ${issue2.origin} ${sizing.verb} ${adj}${issue2.minimum} ${sizing.unit}`;
+          return `K\xE9r\xE9 ju: a n\xED l\xE1ti j\u1EB9\u0301 ${adj}${issue2.minimum}`;
+        }
+        case "invalid_format": {
+          const _issue = issue2;
+          if (_issue.format === "starts_with")
+            return `\u1ECC\u0300r\u1ECD\u0300 a\u1E63\xEC\u1E63e: gb\u1ECD\u0301d\u1ECD\u0300 b\u1EB9\u0300r\u1EB9\u0300 p\u1EB9\u0300l\xFA "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `\u1ECC\u0300r\u1ECD\u0300 a\u1E63\xEC\u1E63e: gb\u1ECD\u0301d\u1ECD\u0300 par\xED p\u1EB9\u0300l\xFA "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `\u1ECC\u0300r\u1ECD\u0300 a\u1E63\xEC\u1E63e: gb\u1ECD\u0301d\u1ECD\u0300 n\xED "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `\u1ECC\u0300r\u1ECD\u0300 a\u1E63\xEC\u1E63e: gb\u1ECD\u0301d\u1ECD\u0300 b\xE1 \xE0p\u1EB9\u1EB9r\u1EB9 mu ${_issue.pattern}`;
+          return `A\u1E63\xEC\u1E63e: ${FormatDictionary[_issue.format] ?? issue2.format}`;
+        }
+        case "not_multiple_of":
+          return `N\u1ECD\u0301mb\xE0 a\u1E63\xEC\u1E63e: gb\u1ECD\u0301d\u1ECD\u0300 j\u1EB9\u0301 \xE8y\xE0 p\xEDp\xEDn ti ${issue2.divisor}`;
+        case "unrecognized_keys":
+          return `B\u1ECDt\xECn\xEC \xE0\xECm\u1ECD\u0300: ${joinValues(issue2.keys, ", ")}`;
+        case "invalid_key":
+          return `B\u1ECDt\xECn\xEC a\u1E63\xEC\u1E63e n\xEDn\xFA ${issue2.origin}`;
+        case "invalid_union":
+          return "\xCCb\xE1w\u1ECDl\xE9 a\u1E63\xEC\u1E63e";
+        case "invalid_element":
+          return `Iye a\u1E63\xEC\u1E63e n\xEDn\xFA ${issue2.origin}`;
+        default:
+          return "\xCCb\xE1w\u1ECDl\xE9 a\u1E63\xEC\u1E63e";
+      }
+    };
+  };
+  function yo_default() {
+    return {
+      localeError: error47()
     };
   }
 
   // node_modules/zod/v4/core/registries.js
   var _a;
+  var $output = /* @__PURE__ */ Symbol("ZodOutput");
+  var $input = /* @__PURE__ */ Symbol("ZodInput");
   var $ZodRegistry = class {
     constructor() {
       this._map = /* @__PURE__ */ new WeakMap();
@@ -3870,6 +11122,14 @@
   function _string(Class2, params) {
     return new Class2({
       type: "string",
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _coercedString(Class2, params) {
+    return new Class2({
+      type: "string",
+      coerce: true,
       ...normalizeParams(params)
     });
   }
@@ -4106,6 +11366,13 @@
       ...normalizeParams(params)
     });
   }
+  var TimePrecision = {
+    Any: null,
+    Minute: -1,
+    Second: 0,
+    Millisecond: 3,
+    Microsecond: 6
+  };
   // @__NO_SIDE_EFFECTS__
   function _isoDateTime(Class2, params) {
     return new Class2({
@@ -4150,6 +11417,15 @@
   function _number(Class2, params) {
     return new Class2({
       type: "number",
+      checks: [],
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _coercedNumber(Class2, params) {
+    return new Class2({
+      type: "number",
+      coerce: true,
       checks: [],
       ...normalizeParams(params)
     });
@@ -4212,9 +11488,25 @@
     });
   }
   // @__NO_SIDE_EFFECTS__
+  function _coercedBoolean(Class2, params) {
+    return new Class2({
+      type: "boolean",
+      coerce: true,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
   function _bigint(Class2, params) {
     return new Class2({
       type: "bigint",
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _coercedBigint(Class2, params) {
+    return new Class2({
+      type: "bigint",
+      coerce: true,
       ...normalizeParams(params)
     });
   }
@@ -4289,6 +11581,14 @@
   function _date(Class2, params) {
     return new Class2({
       type: "date",
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _coercedDate(Class2, params) {
+    return new Class2({
+      type: "date",
+      coerce: true,
       ...normalizeParams(params)
     });
   }
@@ -4516,10 +11816,197 @@
     });
   }
   // @__NO_SIDE_EFFECTS__
+  function _union(Class2, options, params) {
+    return new Class2({
+      type: "union",
+      options,
+      ...normalizeParams(params)
+    });
+  }
+  function _xor(Class2, options, params) {
+    return new Class2({
+      type: "union",
+      options,
+      inclusive: false,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _discriminatedUnion(Class2, discriminator, options, params) {
+    return new Class2({
+      type: "union",
+      options,
+      discriminator,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _intersection(Class2, left, right) {
+    return new Class2({
+      type: "intersection",
+      left,
+      right
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _tuple(Class2, items, _paramsOrRest, _params) {
+    const hasRest = _paramsOrRest instanceof $ZodType;
+    const params = hasRest ? _params : _paramsOrRest;
+    const rest = hasRest ? _paramsOrRest : null;
+    return new Class2({
+      type: "tuple",
+      items,
+      rest,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _record(Class2, keyType, valueType, params) {
+    return new Class2({
+      type: "record",
+      keyType,
+      valueType,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _map(Class2, keyType, valueType, params) {
+    return new Class2({
+      type: "map",
+      keyType,
+      valueType,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _set(Class2, valueType, params) {
+    return new Class2({
+      type: "set",
+      valueType,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _enum(Class2, values, params) {
+    const entries = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+    return new Class2({
+      type: "enum",
+      entries,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _nativeEnum(Class2, entries, params) {
+    return new Class2({
+      type: "enum",
+      entries,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _literal(Class2, value, params) {
+    return new Class2({
+      type: "literal",
+      values: Array.isArray(value) ? value : [value],
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
   function _file(Class2, params) {
     return new Class2({
       type: "file",
       ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _transform(Class2, fn) {
+    return new Class2({
+      type: "transform",
+      transform: fn
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _optional(Class2, innerType) {
+    return new Class2({
+      type: "optional",
+      innerType
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _nullable(Class2, innerType) {
+    return new Class2({
+      type: "nullable",
+      innerType
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _default(Class2, innerType, defaultValue) {
+    return new Class2({
+      type: "default",
+      innerType,
+      get defaultValue() {
+        return typeof defaultValue === "function" ? defaultValue() : shallowClone(defaultValue);
+      }
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _nonoptional(Class2, innerType, params) {
+    return new Class2({
+      type: "nonoptional",
+      innerType,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _success(Class2, innerType) {
+    return new Class2({
+      type: "success",
+      innerType
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _catch(Class2, innerType, catchValue) {
+    return new Class2({
+      type: "catch",
+      innerType,
+      catchValue: typeof catchValue === "function" ? catchValue : () => catchValue
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _pipe(Class2, in_, out) {
+    return new Class2({
+      type: "pipe",
+      in: in_,
+      out
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _readonly(Class2, innerType) {
+    return new Class2({
+      type: "readonly",
+      innerType
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _templateLiteral(Class2, parts, params) {
+    return new Class2({
+      type: "template_literal",
+      parts,
+      ...normalizeParams(params)
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _lazy(Class2, getter) {
+    return new Class2({
+      type: "lazy",
+      getter
+    });
+  }
+  // @__NO_SIDE_EFFECTS__
+  function _promise(Class2, innerType) {
+    return new Class2({
+      type: "promise",
+      innerType
     });
   }
   // @__NO_SIDE_EFFECTS__
@@ -4614,12 +12101,12 @@
     const _Codec = Classes.Codec ?? $ZodCodec;
     const _Boolean = Classes.Boolean ?? $ZodBoolean;
     const _String = Classes.String ?? $ZodString;
-    const stringSchema = new _String({ type: "string", error: params.error });
-    const booleanSchema = new _Boolean({ type: "boolean", error: params.error });
+    const stringSchema2 = new _String({ type: "string", error: params.error });
+    const booleanSchema2 = new _Boolean({ type: "boolean", error: params.error });
     const codec2 = new _Codec({
       type: "pipe",
-      in: stringSchema,
-      out: booleanSchema,
+      in: stringSchema2,
+      out: booleanSchema2,
       transform: ((input, payload) => {
         let data = input;
         if (params.case !== "sensitive")
@@ -5031,29 +12518,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     // do not set
   };
   var stringProcessor = (schema, ctx, _json, _params) => {
-    const json2 = _json;
-    json2.type = "string";
+    const json3 = _json;
+    json3.type = "string";
     const { minimum, maximum, format, patterns, contentEncoding } = schema._zod.bag;
     if (typeof minimum === "number")
-      json2.minLength = minimum;
+      json3.minLength = minimum;
     if (typeof maximum === "number")
-      json2.maxLength = maximum;
+      json3.maxLength = maximum;
     if (format) {
-      json2.format = formatMap[format] ?? format;
-      if (json2.format === "")
-        delete json2.format;
+      json3.format = formatMap[format] ?? format;
+      if (json3.format === "")
+        delete json3.format;
       if (format === "time") {
-        delete json2.format;
+        delete json3.format;
       }
     }
     if (contentEncoding)
-      json2.contentEncoding = contentEncoding;
+      json3.contentEncoding = contentEncoding;
     if (patterns && patterns.size > 0) {
       const regexes = [...patterns];
       if (regexes.length === 1)
-        json2.pattern = regexes[0].source;
+        json3.pattern = regexes[0].source;
       else if (regexes.length > 1) {
-        json2.allOf = [
+        json3.allOf = [
           ...regexes.map((regex) => ({
             ...ctx.target === "draft-07" || ctx.target === "draft-04" || ctx.target === "openapi-3.0" ? { type: "string" } : {},
             pattern: regex.source
@@ -5063,51 +12550,51 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   };
   var numberProcessor = (schema, ctx, _json, _params) => {
-    const json2 = _json;
+    const json3 = _json;
     const { minimum, maximum, format, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema._zod.bag;
     if (typeof format === "string" && format.includes("int"))
-      json2.type = "integer";
+      json3.type = "integer";
     else
-      json2.type = "number";
+      json3.type = "number";
     if (typeof exclusiveMinimum === "number") {
       if (ctx.target === "draft-04" || ctx.target === "openapi-3.0") {
-        json2.minimum = exclusiveMinimum;
-        json2.exclusiveMinimum = true;
+        json3.minimum = exclusiveMinimum;
+        json3.exclusiveMinimum = true;
       } else {
-        json2.exclusiveMinimum = exclusiveMinimum;
+        json3.exclusiveMinimum = exclusiveMinimum;
       }
     }
     if (typeof minimum === "number") {
-      json2.minimum = minimum;
+      json3.minimum = minimum;
       if (typeof exclusiveMinimum === "number" && ctx.target !== "draft-04") {
         if (exclusiveMinimum >= minimum)
-          delete json2.minimum;
+          delete json3.minimum;
         else
-          delete json2.exclusiveMinimum;
+          delete json3.exclusiveMinimum;
       }
     }
     if (typeof exclusiveMaximum === "number") {
       if (ctx.target === "draft-04" || ctx.target === "openapi-3.0") {
-        json2.maximum = exclusiveMaximum;
-        json2.exclusiveMaximum = true;
+        json3.maximum = exclusiveMaximum;
+        json3.exclusiveMaximum = true;
       } else {
-        json2.exclusiveMaximum = exclusiveMaximum;
+        json3.exclusiveMaximum = exclusiveMaximum;
       }
     }
     if (typeof maximum === "number") {
-      json2.maximum = maximum;
+      json3.maximum = maximum;
       if (typeof exclusiveMaximum === "number" && ctx.target !== "draft-04") {
         if (exclusiveMaximum <= maximum)
-          delete json2.maximum;
+          delete json3.maximum;
         else
-          delete json2.exclusiveMaximum;
+          delete json3.exclusiveMaximum;
       }
     }
     if (typeof multipleOf === "number")
-      json2.multipleOf = multipleOf;
+      json3.multipleOf = multipleOf;
   };
-  var booleanProcessor = (_schema, _ctx, json2, _params) => {
-    json2.type = "boolean";
+  var booleanProcessor = (_schema, _ctx, json3, _params) => {
+    json3.type = "boolean";
   };
   var bigintProcessor = (_schema, ctx, _json, _params) => {
     if (ctx.unrepresentable === "throw") {
@@ -5119,13 +12606,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       throw new Error("Symbols cannot be represented in JSON Schema");
     }
   };
-  var nullProcessor = (_schema, ctx, json2, _params) => {
+  var nullProcessor = (_schema, ctx, json3, _params) => {
     if (ctx.target === "openapi-3.0") {
-      json2.type = "string";
-      json2.nullable = true;
-      json2.enum = [null];
+      json3.type = "string";
+      json3.nullable = true;
+      json3.enum = [null];
     } else {
-      json2.type = "null";
+      json3.type = "null";
     }
   };
   var undefinedProcessor = (_schema, ctx, _json, _params) => {
@@ -5138,8 +12625,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       throw new Error("Void cannot be represented in JSON Schema");
     }
   };
-  var neverProcessor = (_schema, _ctx, json2, _params) => {
-    json2.not = {};
+  var neverProcessor = (_schema, _ctx, json3, _params) => {
+    json3.not = {};
   };
   var anyProcessor = (_schema, _ctx, _json, _params) => {
   };
@@ -5150,16 +12637,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       throw new Error("Date cannot be represented in JSON Schema");
     }
   };
-  var enumProcessor = (schema, _ctx, json2, _params) => {
+  var enumProcessor = (schema, _ctx, json3, _params) => {
     const def = schema._zod.def;
     const values = getEnumValues(def.entries);
     if (values.every((v) => typeof v === "number"))
-      json2.type = "number";
+      json3.type = "number";
     if (values.every((v) => typeof v === "string"))
-      json2.type = "string";
-    json2.enum = values;
+      json3.type = "string";
+    json3.enum = values;
   };
-  var literalProcessor = (schema, ctx, json2, _params) => {
+  var literalProcessor = (schema, ctx, json3, _params) => {
     const def = schema._zod.def;
     const vals = [];
     for (const val of def.values) {
@@ -5181,22 +12668,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (vals.length === 0) {
     } else if (vals.length === 1) {
       const val = vals[0];
-      json2.type = val === null ? "null" : typeof val;
+      json3.type = val === null ? "null" : typeof val;
       if (ctx.target === "draft-04" || ctx.target === "openapi-3.0") {
-        json2.enum = [val];
+        json3.enum = [val];
       } else {
-        json2.const = val;
+        json3.const = val;
       }
     } else {
       if (vals.every((v) => typeof v === "number"))
-        json2.type = "number";
+        json3.type = "number";
       if (vals.every((v) => typeof v === "string"))
-        json2.type = "string";
+        json3.type = "string";
       if (vals.every((v) => typeof v === "boolean"))
-        json2.type = "boolean";
+        json3.type = "boolean";
       if (vals.every((v) => v === null))
-        json2.type = "null";
-      json2.enum = vals;
+        json3.type = "null";
+      json3.enum = vals;
     }
   };
   var nanProcessor = (_schema, ctx, _json, _params) => {
@@ -5204,16 +12691,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       throw new Error("NaN cannot be represented in JSON Schema");
     }
   };
-  var templateLiteralProcessor = (schema, _ctx, json2, _params) => {
-    const _json = json2;
+  var templateLiteralProcessor = (schema, _ctx, json3, _params) => {
+    const _json = json3;
     const pattern = schema._zod.pattern;
     if (!pattern)
       throw new Error("Pattern not found in template literal");
     _json.type = "string";
     _json.pattern = pattern.source;
   };
-  var fileProcessor = (schema, _ctx, json2, _params) => {
-    const _json = json2;
+  var fileProcessor = (schema, _ctx, json3, _params) => {
+    const _json = json3;
     const file2 = {
       type: "string",
       format: "binary",
@@ -5236,8 +12723,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       Object.assign(_json, file2);
     }
   };
-  var successProcessor = (_schema, _ctx, json2, _params) => {
-    json2.type = "boolean";
+  var successProcessor = (_schema, _ctx, json3, _params) => {
+    json3.type = "boolean";
   };
   var customProcessor = (_schema, ctx, _json, _params) => {
     if (ctx.unrepresentable === "throw") {
@@ -5265,24 +12752,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   };
   var arrayProcessor = (schema, ctx, _json, params) => {
-    const json2 = _json;
+    const json3 = _json;
     const def = schema._zod.def;
     const { minimum, maximum } = schema._zod.bag;
     if (typeof minimum === "number")
-      json2.minItems = minimum;
+      json3.minItems = minimum;
     if (typeof maximum === "number")
-      json2.maxItems = maximum;
-    json2.type = "array";
-    json2.items = process(def.element, ctx, { ...params, path: [...params.path, "items"] });
+      json3.maxItems = maximum;
+    json3.type = "array";
+    json3.items = process(def.element, ctx, { ...params, path: [...params.path, "items"] });
   };
   var objectProcessor = (schema, ctx, _json, params) => {
-    const json2 = _json;
+    const json3 = _json;
     const def = schema._zod.def;
-    json2.type = "object";
-    json2.properties = {};
+    json3.type = "object";
+    json3.properties = {};
     const shape = def.shape;
     for (const key in shape) {
-      json2.properties[key] = process(shape[key], ctx, {
+      json3.properties[key] = process(shape[key], ctx, {
         ...params,
         path: [...params.path, "properties", key]
       });
@@ -5297,21 +12784,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }));
     if (requiredKeys.size > 0) {
-      json2.required = Array.from(requiredKeys);
+      json3.required = Array.from(requiredKeys);
     }
     if (def.catchall?._zod.def.type === "never") {
-      json2.additionalProperties = false;
+      json3.additionalProperties = false;
     } else if (!def.catchall) {
       if (ctx.io === "output")
-        json2.additionalProperties = false;
+        json3.additionalProperties = false;
     } else if (def.catchall) {
-      json2.additionalProperties = process(def.catchall, ctx, {
+      json3.additionalProperties = process(def.catchall, ctx, {
         ...params,
         path: [...params.path, "additionalProperties"]
       });
     }
   };
-  var unionProcessor = (schema, ctx, json2, params) => {
+  var unionProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     const isExclusive = def.inclusive === false;
     const options = def.options.map((x, i) => process(x, ctx, {
@@ -5319,12 +12806,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       path: [...params.path, isExclusive ? "oneOf" : "anyOf", i]
     }));
     if (isExclusive) {
-      json2.oneOf = options;
+      json3.oneOf = options;
     } else {
-      json2.anyOf = options;
+      json3.anyOf = options;
     }
   };
-  var intersectionProcessor = (schema, ctx, json2, params) => {
+  var intersectionProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     const a = process(def.left, ctx, {
       ...params,
@@ -5339,12 +12826,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       ...isSimpleIntersection(a) ? a.allOf : [a],
       ...isSimpleIntersection(b) ? b.allOf : [b]
     ];
-    json2.allOf = allOf;
+    json3.allOf = allOf;
   };
   var tupleProcessor = (schema, ctx, _json, params) => {
-    const json2 = _json;
+    const json3 = _json;
     const def = schema._zod.def;
-    json2.type = "array";
+    json3.type = "array";
     const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
     const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
     const prefixItems = def.items.map((x, i) => process(x, ctx, {
@@ -5356,37 +12843,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       path: [...params.path, restPath, ...ctx.target === "openapi-3.0" ? [def.items.length] : []]
     }) : null;
     if (ctx.target === "draft-2020-12") {
-      json2.prefixItems = prefixItems;
+      json3.prefixItems = prefixItems;
       if (rest) {
-        json2.items = rest;
+        json3.items = rest;
       }
     } else if (ctx.target === "openapi-3.0") {
-      json2.items = {
+      json3.items = {
         anyOf: prefixItems
       };
       if (rest) {
-        json2.items.anyOf.push(rest);
+        json3.items.anyOf.push(rest);
       }
-      json2.minItems = prefixItems.length;
+      json3.minItems = prefixItems.length;
       if (!rest) {
-        json2.maxItems = prefixItems.length;
+        json3.maxItems = prefixItems.length;
       }
     } else {
-      json2.items = prefixItems;
+      json3.items = prefixItems;
       if (rest) {
-        json2.additionalItems = rest;
+        json3.additionalItems = rest;
       }
     }
     const { minimum, maximum } = schema._zod.bag;
     if (typeof minimum === "number")
-      json2.minItems = minimum;
+      json3.minItems = minimum;
     if (typeof maximum === "number")
-      json2.maxItems = maximum;
+      json3.maxItems = maximum;
   };
   var recordProcessor = (schema, ctx, _json, params) => {
-    const json2 = _json;
+    const json3 = _json;
     const def = schema._zod.def;
-    json2.type = "object";
+    json3.type = "object";
     const keyType = def.keyType;
     const keyBag = keyType._zod.bag;
     const patterns = keyBag?.patterns;
@@ -5395,18 +12882,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         ...params,
         path: [...params.path, "patternProperties", "*"]
       });
-      json2.patternProperties = {};
+      json3.patternProperties = {};
       for (const pattern of patterns) {
-        json2.patternProperties[pattern.source] = valueSchema;
+        json3.patternProperties[pattern.source] = valueSchema;
       }
     } else {
       if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
-        json2.propertyNames = process(def.keyType, ctx, {
+        json3.propertyNames = process(def.keyType, ctx, {
           ...params,
           path: [...params.path, "propertyNames"]
         });
       }
-      json2.additionalProperties = process(def.valueType, ctx, {
+      json3.additionalProperties = process(def.valueType, ctx, {
         ...params,
         path: [...params.path, "additionalProperties"]
       });
@@ -5415,19 +12902,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (keyValues) {
       const validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
       if (validKeyValues.length > 0) {
-        json2.required = validKeyValues;
+        json3.required = validKeyValues;
       }
     }
   };
-  var nullableProcessor = (schema, ctx, json2, params) => {
+  var nullableProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     const inner = process(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     if (ctx.target === "openapi-3.0") {
       seen.ref = def.innerType;
-      json2.nullable = true;
+      json3.nullable = true;
     } else {
-      json2.anyOf = [inner, { type: "null" }];
+      json3.anyOf = [inner, { type: "null" }];
     }
   };
   var nonoptionalProcessor = (schema, ctx, _json, params) => {
@@ -5436,22 +12923,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
   };
-  var defaultProcessor = (schema, ctx, json2, params) => {
+  var defaultProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     process(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
-    json2.default = JSON.parse(JSON.stringify(def.defaultValue));
+    json3.default = JSON.parse(JSON.stringify(def.defaultValue));
   };
-  var prefaultProcessor = (schema, ctx, json2, params) => {
+  var prefaultProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     process(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
     if (ctx.io === "input")
-      json2._prefault = JSON.parse(JSON.stringify(def.defaultValue));
+      json3._prefault = JSON.parse(JSON.stringify(def.defaultValue));
   };
-  var catchProcessor = (schema, ctx, json2, params) => {
+  var catchProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     process(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
@@ -5462,7 +12949,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     } catch {
       throw new Error("Dynamic catch values are not supported in JSON Schema");
     }
-    json2.default = catchValue;
+    json3.default = catchValue;
   };
   var pipeProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
@@ -5471,12 +12958,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const seen = ctx.seen.get(schema);
     seen.ref = innerType;
   };
-  var readonlyProcessor = (schema, ctx, json2, params) => {
+  var readonlyProcessor = (schema, ctx, json3, params) => {
     const def = schema._zod.def;
     process(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
-    json2.readOnly = true;
+    json3.readOnly = true;
   };
   var promiseProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
@@ -5496,6 +12983,159 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const seen = ctx.seen.get(schema);
     seen.ref = innerType;
   };
+  var allProcessors = {
+    string: stringProcessor,
+    number: numberProcessor,
+    boolean: booleanProcessor,
+    bigint: bigintProcessor,
+    symbol: symbolProcessor,
+    null: nullProcessor,
+    undefined: undefinedProcessor,
+    void: voidProcessor,
+    never: neverProcessor,
+    any: anyProcessor,
+    unknown: unknownProcessor,
+    date: dateProcessor,
+    enum: enumProcessor,
+    literal: literalProcessor,
+    nan: nanProcessor,
+    template_literal: templateLiteralProcessor,
+    file: fileProcessor,
+    success: successProcessor,
+    custom: customProcessor,
+    function: functionProcessor,
+    transform: transformProcessor,
+    map: mapProcessor,
+    set: setProcessor,
+    array: arrayProcessor,
+    object: objectProcessor,
+    union: unionProcessor,
+    intersection: intersectionProcessor,
+    tuple: tupleProcessor,
+    record: recordProcessor,
+    nullable: nullableProcessor,
+    nonoptional: nonoptionalProcessor,
+    default: defaultProcessor,
+    prefault: prefaultProcessor,
+    catch: catchProcessor,
+    pipe: pipeProcessor,
+    readonly: readonlyProcessor,
+    promise: promiseProcessor,
+    optional: optionalProcessor,
+    lazy: lazyProcessor
+  };
+  function toJSONSchema(input, params) {
+    if ("_idmap" in input) {
+      const registry2 = input;
+      const ctx2 = initializeContext({ ...params, processors: allProcessors });
+      const defs = {};
+      for (const entry of registry2._idmap.entries()) {
+        const [_, schema] = entry;
+        process(schema, ctx2);
+      }
+      const schemas = {};
+      const external = {
+        registry: registry2,
+        uri: params?.uri,
+        defs
+      };
+      ctx2.external = external;
+      for (const entry of registry2._idmap.entries()) {
+        const [key, schema] = entry;
+        extractDefs(ctx2, schema);
+        schemas[key] = finalize(ctx2, schema);
+      }
+      if (Object.keys(defs).length > 0) {
+        const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
+        schemas.__shared = {
+          [defsSegment]: defs
+        };
+      }
+      return { schemas };
+    }
+    const ctx = initializeContext({ ...params, processors: allProcessors });
+    process(input, ctx);
+    extractDefs(ctx, input);
+    return finalize(ctx, input);
+  }
+
+  // node_modules/zod/v4/core/json-schema-generator.js
+  var JSONSchemaGenerator = class {
+    /** @deprecated Access via ctx instead */
+    get metadataRegistry() {
+      return this.ctx.metadataRegistry;
+    }
+    /** @deprecated Access via ctx instead */
+    get target() {
+      return this.ctx.target;
+    }
+    /** @deprecated Access via ctx instead */
+    get unrepresentable() {
+      return this.ctx.unrepresentable;
+    }
+    /** @deprecated Access via ctx instead */
+    get override() {
+      return this.ctx.override;
+    }
+    /** @deprecated Access via ctx instead */
+    get io() {
+      return this.ctx.io;
+    }
+    /** @deprecated Access via ctx instead */
+    get counter() {
+      return this.ctx.counter;
+    }
+    set counter(value) {
+      this.ctx.counter = value;
+    }
+    /** @deprecated Access via ctx instead */
+    get seen() {
+      return this.ctx.seen;
+    }
+    constructor(params) {
+      let normalizedTarget = params?.target ?? "draft-2020-12";
+      if (normalizedTarget === "draft-4")
+        normalizedTarget = "draft-04";
+      if (normalizedTarget === "draft-7")
+        normalizedTarget = "draft-07";
+      this.ctx = initializeContext({
+        processors: allProcessors,
+        target: normalizedTarget,
+        ...params?.metadata && { metadata: params.metadata },
+        ...params?.unrepresentable && { unrepresentable: params.unrepresentable },
+        ...params?.override && { override: params.override },
+        ...params?.io && { io: params.io }
+      });
+    }
+    /**
+     * Process a schema to prepare it for JSON Schema generation.
+     * This must be called before emit().
+     */
+    process(schema, _params = { path: [], schemaPath: [] }) {
+      return process(schema, this.ctx, _params);
+    }
+    /**
+     * Emit the final JSON Schema after processing.
+     * Must call process() first.
+     */
+    emit(schema, _params) {
+      if (_params) {
+        if (_params.cycles)
+          this.ctx.cycles = _params.cycles;
+        if (_params.reused)
+          this.ctx.reused = _params.reused;
+        if (_params.external)
+          this.ctx.external = _params.external;
+      }
+      extractDefs(this.ctx, schema);
+      const result = finalize(this.ctx, schema);
+      const { "~standard": _, ...plainResult } = result;
+      return plainResult;
+    }
+  };
+
+  // node_modules/zod/v4/core/json-schema.js
+  var json_schema_exports = {};
 
   // node_modules/zod/v4/classic/schemas.js
   var schemas_exports2 = {};
@@ -5569,7 +13209,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     ZodXID: () => ZodXID,
     ZodXor: () => ZodXor,
     _ZodString: () => _ZodString,
-    _default: () => _default,
+    _default: () => _default2,
     _function: () => _function,
     any: () => any,
     array: () => array,
@@ -5577,7 +13217,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     base64url: () => base64url2,
     bigint: () => bigint2,
     boolean: () => boolean2,
-    catch: () => _catch,
+    catch: () => _catch2,
     check: () => check,
     cidrv4: () => cidrv42,
     cidrv6: () => cidrv62,
@@ -5591,7 +13231,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     e164: () => e1642,
     email: () => email2,
     emoji: () => emoji2,
-    enum: () => _enum,
+    enum: () => _enum2,
     exactOptional: () => exactOptional,
     file: () => file,
     float32: () => float32,
@@ -5786,14 +13426,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
   var safeParse2 = /* @__PURE__ */ _safeParse(ZodRealError);
   var safeParseAsync2 = /* @__PURE__ */ _safeParseAsync(ZodRealError);
-  var encode = /* @__PURE__ */ _encode(ZodRealError);
-  var decode = /* @__PURE__ */ _decode(ZodRealError);
-  var encodeAsync = /* @__PURE__ */ _encodeAsync(ZodRealError);
-  var decodeAsync = /* @__PURE__ */ _decodeAsync(ZodRealError);
-  var safeEncode = /* @__PURE__ */ _safeEncode(ZodRealError);
-  var safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
-  var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
-  var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
+  var encode2 = /* @__PURE__ */ _encode(ZodRealError);
+  var decode2 = /* @__PURE__ */ _decode(ZodRealError);
+  var encodeAsync2 = /* @__PURE__ */ _encodeAsync(ZodRealError);
+  var decodeAsync2 = /* @__PURE__ */ _decodeAsync(ZodRealError);
+  var safeEncode2 = /* @__PURE__ */ _safeEncode(ZodRealError);
+  var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
+  var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
+  var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
   // node_modules/zod/v4/classic/schemas.js
   var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
@@ -5830,14 +13470,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     inst.parseAsync = async (data, params) => parseAsync2(inst, data, params, { callee: inst.parseAsync });
     inst.safeParseAsync = async (data, params) => safeParseAsync2(inst, data, params);
     inst.spa = inst.safeParseAsync;
-    inst.encode = (data, params) => encode(inst, data, params);
-    inst.decode = (data, params) => decode(inst, data, params);
-    inst.encodeAsync = async (data, params) => encodeAsync(inst, data, params);
-    inst.decodeAsync = async (data, params) => decodeAsync(inst, data, params);
-    inst.safeEncode = (data, params) => safeEncode(inst, data, params);
-    inst.safeDecode = (data, params) => safeDecode(inst, data, params);
-    inst.safeEncodeAsync = async (data, params) => safeEncodeAsync(inst, data, params);
-    inst.safeDecodeAsync = async (data, params) => safeDecodeAsync(inst, data, params);
+    inst.encode = (data, params) => encode2(inst, data, params);
+    inst.decode = (data, params) => decode2(inst, data, params);
+    inst.encodeAsync = async (data, params) => encodeAsync2(inst, data, params);
+    inst.decodeAsync = async (data, params) => decodeAsync2(inst, data, params);
+    inst.safeEncode = (data, params) => safeEncode2(inst, data, params);
+    inst.safeDecode = (data, params) => safeDecode2(inst, data, params);
+    inst.safeEncodeAsync = async (data, params) => safeEncodeAsync2(inst, data, params);
+    inst.safeDecodeAsync = async (data, params) => safeDecodeAsync2(inst, data, params);
     inst.refine = (check2, params) => inst.check(refine(check2, params));
     inst.superRefine = (refinement) => inst.check(superRefine(refinement));
     inst.overwrite = (fn) => inst.check(_overwrite(fn));
@@ -5850,9 +13490,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     inst.or = (arg) => union([inst, arg]);
     inst.and = (arg) => intersection(inst, arg);
     inst.transform = (tx) => pipe(inst, transform(tx));
-    inst.default = (def2) => _default(inst, def2);
+    inst.default = (def2) => _default2(inst, def2);
     inst.prefault = (def2) => prefault(inst, def2);
-    inst.catch = (params) => _catch(inst, params);
+    inst.catch = (params) => _catch2(inst, params);
     inst.pipe = (target) => pipe(inst, target);
     inst.readonly = () => readonly(inst);
     inst.describe = (description) => {
@@ -5882,7 +13522,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var _ZodString = /* @__PURE__ */ $constructor("_ZodString", (inst, def) => {
     $ZodString.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => stringProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => stringProcessor(inst, ctx, json3, params);
     const bag = inst._zod.bag;
     inst.format = bag.format ?? null;
     inst.minLength = bag.minimum ?? null;
@@ -6121,7 +13761,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNumber = /* @__PURE__ */ $constructor("ZodNumber", (inst, def) => {
     $ZodNumber.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => numberProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => numberProcessor(inst, ctx, json3, params);
     inst.gt = (value, params) => inst.check(_gt(value, params));
     inst.gte = (value, params) => inst.check(_gte(value, params));
     inst.min = (value, params) => inst.check(_gte(value, params));
@@ -6169,7 +13809,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodBoolean = /* @__PURE__ */ $constructor("ZodBoolean", (inst, def) => {
     $ZodBoolean.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => booleanProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => booleanProcessor(inst, ctx, json3, params);
   });
   function boolean2(params) {
     return _boolean(ZodBoolean, params);
@@ -6177,7 +13817,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodBigInt = /* @__PURE__ */ $constructor("ZodBigInt", (inst, def) => {
     $ZodBigInt.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => bigintProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => bigintProcessor(inst, ctx, json3, params);
     inst.gte = (value, params) => inst.check(_gte(value, params));
     inst.min = (value, params) => inst.check(_gte(value, params));
     inst.gt = (value, params) => inst.check(_gt(value, params));
@@ -6212,7 +13852,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodSymbol = /* @__PURE__ */ $constructor("ZodSymbol", (inst, def) => {
     $ZodSymbol.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => symbolProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => symbolProcessor(inst, ctx, json3, params);
   });
   function symbol(params) {
     return _symbol(ZodSymbol, params);
@@ -6220,7 +13860,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodUndefined = /* @__PURE__ */ $constructor("ZodUndefined", (inst, def) => {
     $ZodUndefined.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => undefinedProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => undefinedProcessor(inst, ctx, json3, params);
   });
   function _undefined3(params) {
     return _undefined2(ZodUndefined, params);
@@ -6228,7 +13868,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNull = /* @__PURE__ */ $constructor("ZodNull", (inst, def) => {
     $ZodNull.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => nullProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => nullProcessor(inst, ctx, json3, params);
   });
   function _null3(params) {
     return _null2(ZodNull, params);
@@ -6236,7 +13876,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodAny = /* @__PURE__ */ $constructor("ZodAny", (inst, def) => {
     $ZodAny.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => anyProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => anyProcessor(inst, ctx, json3, params);
   });
   function any() {
     return _any(ZodAny);
@@ -6244,7 +13884,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodUnknown = /* @__PURE__ */ $constructor("ZodUnknown", (inst, def) => {
     $ZodUnknown.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => unknownProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => unknownProcessor(inst, ctx, json3, params);
   });
   function unknown() {
     return _unknown(ZodUnknown);
@@ -6252,7 +13892,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNever = /* @__PURE__ */ $constructor("ZodNever", (inst, def) => {
     $ZodNever.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => neverProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => neverProcessor(inst, ctx, json3, params);
   });
   function never(params) {
     return _never(ZodNever, params);
@@ -6260,7 +13900,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodVoid = /* @__PURE__ */ $constructor("ZodVoid", (inst, def) => {
     $ZodVoid.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => voidProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => voidProcessor(inst, ctx, json3, params);
   });
   function _void2(params) {
     return _void(ZodVoid, params);
@@ -6268,7 +13908,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodDate = /* @__PURE__ */ $constructor("ZodDate", (inst, def) => {
     $ZodDate.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => dateProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => dateProcessor(inst, ctx, json3, params);
     inst.min = (value, params) => inst.check(_gte(value, params));
     inst.max = (value, params) => inst.check(_lte(value, params));
     const c = inst._zod.bag;
@@ -6281,7 +13921,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodArray = /* @__PURE__ */ $constructor("ZodArray", (inst, def) => {
     $ZodArray.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => arrayProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => arrayProcessor(inst, ctx, json3, params);
     inst.element = def.element;
     inst.min = (minLength, params) => inst.check(_minLength(minLength, params));
     inst.nonempty = (params) => inst.check(_minLength(1, params));
@@ -6294,16 +13934,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   function keyof(schema) {
     const shape = schema._zod.def.shape;
-    return _enum(Object.keys(shape));
+    return _enum2(Object.keys(shape));
   }
   var ZodObject = /* @__PURE__ */ $constructor("ZodObject", (inst, def) => {
     $ZodObjectJIT.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => objectProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => objectProcessor(inst, ctx, json3, params);
     util_exports.defineLazy(inst, "shape", () => {
       return def.shape;
     });
-    inst.keyof = () => _enum(Object.keys(inst._zod.def.shape));
+    inst.keyof = () => _enum2(Object.keys(inst._zod.def.shape));
     inst.catchall = (catchall) => inst.clone({ ...inst._zod.def, catchall });
     inst.passthrough = () => inst.clone({ ...inst._zod.def, catchall: unknown() });
     inst.loose = () => inst.clone({ ...inst._zod.def, catchall: unknown() });
@@ -6348,7 +13988,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodUnion = /* @__PURE__ */ $constructor("ZodUnion", (inst, def) => {
     $ZodUnion.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => unionProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => unionProcessor(inst, ctx, json3, params);
     inst.options = def.options;
   });
   function union(options, params) {
@@ -6361,7 +14001,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodXor = /* @__PURE__ */ $constructor("ZodXor", (inst, def) => {
     ZodUnion.init(inst, def);
     $ZodXor.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => unionProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => unionProcessor(inst, ctx, json3, params);
     inst.options = def.options;
   });
   function xor(options, params) {
@@ -6387,7 +14027,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodIntersection = /* @__PURE__ */ $constructor("ZodIntersection", (inst, def) => {
     $ZodIntersection.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => intersectionProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => intersectionProcessor(inst, ctx, json3, params);
   });
   function intersection(left, right) {
     return new ZodIntersection({
@@ -6399,7 +14039,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodTuple = /* @__PURE__ */ $constructor("ZodTuple", (inst, def) => {
     $ZodTuple.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => tupleProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => tupleProcessor(inst, ctx, json3, params);
     inst.rest = (rest) => inst.clone({
       ...inst._zod.def,
       rest
@@ -6419,7 +14059,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodRecord = /* @__PURE__ */ $constructor("ZodRecord", (inst, def) => {
     $ZodRecord.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => recordProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => recordProcessor(inst, ctx, json3, params);
     inst.keyType = def.keyType;
     inst.valueType = def.valueType;
   });
@@ -6453,7 +14093,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodMap = /* @__PURE__ */ $constructor("ZodMap", (inst, def) => {
     $ZodMap.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => mapProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => mapProcessor(inst, ctx, json3, params);
     inst.keyType = def.keyType;
     inst.valueType = def.valueType;
     inst.min = (...args) => inst.check(_minSize(...args));
@@ -6472,7 +14112,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodSet = /* @__PURE__ */ $constructor("ZodSet", (inst, def) => {
     $ZodSet.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => setProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => setProcessor(inst, ctx, json3, params);
     inst.min = (...args) => inst.check(_minSize(...args));
     inst.nonempty = (params) => inst.check(_minSize(1, params));
     inst.max = (...args) => inst.check(_maxSize(...args));
@@ -6488,7 +14128,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
     $ZodEnum.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => enumProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => enumProcessor(inst, ctx, json3, params);
     inst.enum = def.entries;
     inst.options = Object.values(def.entries);
     const keys = new Set(Object.keys(def.entries));
@@ -6523,7 +14163,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     };
   });
-  function _enum(values, params) {
+  function _enum2(values, params) {
     const entries = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
     return new ZodEnum({
       type: "enum",
@@ -6541,7 +14181,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodLiteral = /* @__PURE__ */ $constructor("ZodLiteral", (inst, def) => {
     $ZodLiteral.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => literalProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => literalProcessor(inst, ctx, json3, params);
     inst.values = new Set(def.values);
     Object.defineProperty(inst, "value", {
       get() {
@@ -6562,7 +14202,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodFile = /* @__PURE__ */ $constructor("ZodFile", (inst, def) => {
     $ZodFile.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => fileProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => fileProcessor(inst, ctx, json3, params);
     inst.min = (size, params) => inst.check(_minSize(size, params));
     inst.max = (size, params) => inst.check(_maxSize(size, params));
     inst.mime = (types, params) => inst.check(_mime(Array.isArray(types) ? types : [types], params));
@@ -6573,7 +14213,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodTransform = /* @__PURE__ */ $constructor("ZodTransform", (inst, def) => {
     $ZodTransform.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => transformProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => transformProcessor(inst, ctx, json3, params);
     inst._zod.parse = (payload, _ctx) => {
       if (_ctx.direction === "backward") {
         throw new $ZodEncodeError(inst.constructor.name);
@@ -6611,7 +14251,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodOptional = /* @__PURE__ */ $constructor("ZodOptional", (inst, def) => {
     $ZodOptional.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => optionalProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => optionalProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function optional(innerType) {
@@ -6623,7 +14263,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodExactOptional = /* @__PURE__ */ $constructor("ZodExactOptional", (inst, def) => {
     $ZodExactOptional.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => optionalProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => optionalProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function exactOptional(innerType) {
@@ -6635,7 +14275,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNullable = /* @__PURE__ */ $constructor("ZodNullable", (inst, def) => {
     $ZodNullable.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => nullableProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => nullableProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function nullable(innerType) {
@@ -6650,11 +14290,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodDefault = /* @__PURE__ */ $constructor("ZodDefault", (inst, def) => {
     $ZodDefault.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => defaultProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => defaultProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
     inst.removeDefault = inst.unwrap;
   });
-  function _default(innerType, defaultValue) {
+  function _default2(innerType, defaultValue) {
     return new ZodDefault({
       type: "default",
       innerType,
@@ -6666,7 +14306,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodPrefault = /* @__PURE__ */ $constructor("ZodPrefault", (inst, def) => {
     $ZodPrefault.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => prefaultProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => prefaultProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function prefault(innerType, defaultValue) {
@@ -6681,7 +14321,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNonOptional = /* @__PURE__ */ $constructor("ZodNonOptional", (inst, def) => {
     $ZodNonOptional.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => nonoptionalProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => nonoptionalProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function nonoptional(innerType, params) {
@@ -6694,7 +14334,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodSuccess = /* @__PURE__ */ $constructor("ZodSuccess", (inst, def) => {
     $ZodSuccess.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => successProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => successProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function success(innerType) {
@@ -6706,11 +14346,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodCatch = /* @__PURE__ */ $constructor("ZodCatch", (inst, def) => {
     $ZodCatch.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => catchProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => catchProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
     inst.removeCatch = inst.unwrap;
   });
-  function _catch(innerType, catchValue) {
+  function _catch2(innerType, catchValue) {
     return new ZodCatch({
       type: "catch",
       innerType,
@@ -6720,7 +14360,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodNaN = /* @__PURE__ */ $constructor("ZodNaN", (inst, def) => {
     $ZodNaN.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => nanProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => nanProcessor(inst, ctx, json3, params);
   });
   function nan(params) {
     return _nan(ZodNaN, params);
@@ -6728,7 +14368,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodPipe = /* @__PURE__ */ $constructor("ZodPipe", (inst, def) => {
     $ZodPipe.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => pipeProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => pipeProcessor(inst, ctx, json3, params);
     inst.in = def.in;
     inst.out = def.out;
   });
@@ -6756,7 +14396,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodReadonly = /* @__PURE__ */ $constructor("ZodReadonly", (inst, def) => {
     $ZodReadonly.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => readonlyProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => readonlyProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function readonly(innerType) {
@@ -6768,7 +14408,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodTemplateLiteral = /* @__PURE__ */ $constructor("ZodTemplateLiteral", (inst, def) => {
     $ZodTemplateLiteral.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => templateLiteralProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => templateLiteralProcessor(inst, ctx, json3, params);
   });
   function templateLiteral(parts, params) {
     return new ZodTemplateLiteral({
@@ -6780,7 +14420,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodLazy = /* @__PURE__ */ $constructor("ZodLazy", (inst, def) => {
     $ZodLazy.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => lazyProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => lazyProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.getter();
   });
   function lazy(getter) {
@@ -6792,7 +14432,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodPromise = /* @__PURE__ */ $constructor("ZodPromise", (inst, def) => {
     $ZodPromise.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => promiseProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => promiseProcessor(inst, ctx, json3, params);
     inst.unwrap = () => inst._zod.def.innerType;
   });
   function promise(innerType) {
@@ -6804,7 +14444,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodFunction = /* @__PURE__ */ $constructor("ZodFunction", (inst, def) => {
     $ZodFunction.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => functionProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => functionProcessor(inst, ctx, json3, params);
   });
   function _function(params) {
     return new ZodFunction({
@@ -6816,7 +14456,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ZodCustom = /* @__PURE__ */ $constructor("ZodCustom", (inst, def) => {
     $ZodCustom.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json2, params) => customProcessor(inst, ctx, json2, params);
+    inst._zod.processJSONSchema = (ctx, json3, params) => customProcessor(inst, ctx, json3, params);
   });
   function check(fn) {
     const ch = new $ZodCheck({
@@ -6875,6 +14515,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // node_modules/zod/v4/classic/compat.js
+  var ZodIssueCode = {
+    invalid_type: "invalid_type",
+    too_big: "too_big",
+    too_small: "too_small",
+    invalid_format: "invalid_format",
+    not_multiple_of: "not_multiple_of",
+    unrecognized_keys: "unrecognized_keys",
+    invalid_union: "invalid_union",
+    invalid_key: "invalid_key",
+    invalid_element: "invalid_element",
+    invalid_value: "invalid_value",
+    custom: "custom"
+  };
+  function setErrorMap(map2) {
+    config({
+      customError: map2
+    });
+  }
+  function getErrorMap() {
+    return config().customError;
+  }
   var ZodFirstPartyTypeKind;
   /* @__PURE__ */ (function(ZodFirstPartyTypeKind2) {
   })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
@@ -6885,1402 +14546,1632 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     ...checks_exports2,
     iso: iso_exports
   };
+  var RECOGNIZED_KEYS = /* @__PURE__ */ new Set([
+    // Schema identification
+    "$schema",
+    "$ref",
+    "$defs",
+    "definitions",
+    // Core schema keywords
+    "$id",
+    "id",
+    "$comment",
+    "$anchor",
+    "$vocabulary",
+    "$dynamicRef",
+    "$dynamicAnchor",
+    // Type
+    "type",
+    "enum",
+    "const",
+    // Composition
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    // Object
+    "properties",
+    "required",
+    "additionalProperties",
+    "patternProperties",
+    "propertyNames",
+    "minProperties",
+    "maxProperties",
+    // Array
+    "items",
+    "prefixItems",
+    "additionalItems",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+    "contains",
+    "minContains",
+    "maxContains",
+    // String
+    "minLength",
+    "maxLength",
+    "pattern",
+    "format",
+    // Number
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    // Already handled metadata
+    "description",
+    "default",
+    // Content
+    "contentEncoding",
+    "contentMediaType",
+    "contentSchema",
+    // Unsupported (error-throwing)
+    "unevaluatedItems",
+    "unevaluatedProperties",
+    "if",
+    "then",
+    "else",
+    "dependentSchemas",
+    "dependentRequired",
+    // OpenAPI
+    "nullable",
+    "readOnly"
+  ]);
+  function detectVersion(schema, defaultTarget) {
+    const $schema = schema.$schema;
+    if ($schema === "https://json-schema.org/draft/2020-12/schema") {
+      return "draft-2020-12";
+    }
+    if ($schema === "http://json-schema.org/draft-07/schema#") {
+      return "draft-7";
+    }
+    if ($schema === "http://json-schema.org/draft-04/schema#") {
+      return "draft-4";
+    }
+    return defaultTarget ?? "draft-2020-12";
+  }
+  function resolveRef(ref, ctx) {
+    if (!ref.startsWith("#")) {
+      throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
+    }
+    const path = ref.slice(1).split("/").filter(Boolean);
+    if (path.length === 0) {
+      return ctx.rootSchema;
+    }
+    const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
+    if (path[0] === defsKey) {
+      const key = path[1];
+      if (!key || !ctx.defs[key]) {
+        throw new Error(`Reference not found: ${ref}`);
+      }
+      return ctx.defs[key];
+    }
+    throw new Error(`Reference not found: ${ref}`);
+  }
+  function convertBaseSchema(schema, ctx) {
+    if (schema.not !== void 0) {
+      if (typeof schema.not === "object" && Object.keys(schema.not).length === 0) {
+        return z.never();
+      }
+      throw new Error("not is not supported in Zod (except { not: {} } for never)");
+    }
+    if (schema.unevaluatedItems !== void 0) {
+      throw new Error("unevaluatedItems is not supported");
+    }
+    if (schema.unevaluatedProperties !== void 0) {
+      throw new Error("unevaluatedProperties is not supported");
+    }
+    if (schema.if !== void 0 || schema.then !== void 0 || schema.else !== void 0) {
+      throw new Error("Conditional schemas (if/then/else) are not supported");
+    }
+    if (schema.dependentSchemas !== void 0 || schema.dependentRequired !== void 0) {
+      throw new Error("dependentSchemas and dependentRequired are not supported");
+    }
+    if (schema.$ref) {
+      const refPath = schema.$ref;
+      if (ctx.refs.has(refPath)) {
+        return ctx.refs.get(refPath);
+      }
+      if (ctx.processing.has(refPath)) {
+        return z.lazy(() => {
+          if (!ctx.refs.has(refPath)) {
+            throw new Error(`Circular reference not resolved: ${refPath}`);
+          }
+          return ctx.refs.get(refPath);
+        });
+      }
+      ctx.processing.add(refPath);
+      const resolved = resolveRef(refPath, ctx);
+      const zodSchema2 = convertSchema(resolved, ctx);
+      ctx.refs.set(refPath, zodSchema2);
+      ctx.processing.delete(refPath);
+      return zodSchema2;
+    }
+    if (schema.enum !== void 0) {
+      const enumValues = schema.enum;
+      if (ctx.version === "openapi-3.0" && schema.nullable === true && enumValues.length === 1 && enumValues[0] === null) {
+        return z.null();
+      }
+      if (enumValues.length === 0) {
+        return z.never();
+      }
+      if (enumValues.length === 1) {
+        return z.literal(enumValues[0]);
+      }
+      if (enumValues.every((v) => typeof v === "string")) {
+        return z.enum(enumValues);
+      }
+      const literalSchemas = enumValues.map((v) => z.literal(v));
+      if (literalSchemas.length < 2) {
+        return literalSchemas[0];
+      }
+      return z.union([literalSchemas[0], literalSchemas[1], ...literalSchemas.slice(2)]);
+    }
+    if (schema.const !== void 0) {
+      return z.literal(schema.const);
+    }
+    const type = schema.type;
+    if (Array.isArray(type)) {
+      const typeSchemas = type.map((t) => {
+        const typeSchema = { ...schema, type: t };
+        return convertBaseSchema(typeSchema, ctx);
+      });
+      if (typeSchemas.length === 0) {
+        return z.never();
+      }
+      if (typeSchemas.length === 1) {
+        return typeSchemas[0];
+      }
+      return z.union(typeSchemas);
+    }
+    if (!type) {
+      return z.any();
+    }
+    let zodSchema;
+    switch (type) {
+      case "string": {
+        let stringSchema2 = z.string();
+        if (schema.format) {
+          const format = schema.format;
+          if (format === "email") {
+            stringSchema2 = stringSchema2.check(z.email());
+          } else if (format === "uri" || format === "uri-reference") {
+            stringSchema2 = stringSchema2.check(z.url());
+          } else if (format === "uuid" || format === "guid") {
+            stringSchema2 = stringSchema2.check(z.uuid());
+          } else if (format === "date-time") {
+            stringSchema2 = stringSchema2.check(z.iso.datetime());
+          } else if (format === "date") {
+            stringSchema2 = stringSchema2.check(z.iso.date());
+          } else if (format === "time") {
+            stringSchema2 = stringSchema2.check(z.iso.time());
+          } else if (format === "duration") {
+            stringSchema2 = stringSchema2.check(z.iso.duration());
+          } else if (format === "ipv4") {
+            stringSchema2 = stringSchema2.check(z.ipv4());
+          } else if (format === "ipv6") {
+            stringSchema2 = stringSchema2.check(z.ipv6());
+          } else if (format === "mac") {
+            stringSchema2 = stringSchema2.check(z.mac());
+          } else if (format === "cidr") {
+            stringSchema2 = stringSchema2.check(z.cidrv4());
+          } else if (format === "cidr-v6") {
+            stringSchema2 = stringSchema2.check(z.cidrv6());
+          } else if (format === "base64") {
+            stringSchema2 = stringSchema2.check(z.base64());
+          } else if (format === "base64url") {
+            stringSchema2 = stringSchema2.check(z.base64url());
+          } else if (format === "e164") {
+            stringSchema2 = stringSchema2.check(z.e164());
+          } else if (format === "jwt") {
+            stringSchema2 = stringSchema2.check(z.jwt());
+          } else if (format === "emoji") {
+            stringSchema2 = stringSchema2.check(z.emoji());
+          } else if (format === "nanoid") {
+            stringSchema2 = stringSchema2.check(z.nanoid());
+          } else if (format === "cuid") {
+            stringSchema2 = stringSchema2.check(z.cuid());
+          } else if (format === "cuid2") {
+            stringSchema2 = stringSchema2.check(z.cuid2());
+          } else if (format === "ulid") {
+            stringSchema2 = stringSchema2.check(z.ulid());
+          } else if (format === "xid") {
+            stringSchema2 = stringSchema2.check(z.xid());
+          } else if (format === "ksuid") {
+            stringSchema2 = stringSchema2.check(z.ksuid());
+          }
+        }
+        if (typeof schema.minLength === "number") {
+          stringSchema2 = stringSchema2.min(schema.minLength);
+        }
+        if (typeof schema.maxLength === "number") {
+          stringSchema2 = stringSchema2.max(schema.maxLength);
+        }
+        if (schema.pattern) {
+          stringSchema2 = stringSchema2.regex(new RegExp(schema.pattern));
+        }
+        zodSchema = stringSchema2;
+        break;
+      }
+      case "number":
+      case "integer": {
+        let numberSchema2 = type === "integer" ? z.number().int() : z.number();
+        if (typeof schema.minimum === "number") {
+          numberSchema2 = numberSchema2.min(schema.minimum);
+        }
+        if (typeof schema.maximum === "number") {
+          numberSchema2 = numberSchema2.max(schema.maximum);
+        }
+        if (typeof schema.exclusiveMinimum === "number") {
+          numberSchema2 = numberSchema2.gt(schema.exclusiveMinimum);
+        } else if (schema.exclusiveMinimum === true && typeof schema.minimum === "number") {
+          numberSchema2 = numberSchema2.gt(schema.minimum);
+        }
+        if (typeof schema.exclusiveMaximum === "number") {
+          numberSchema2 = numberSchema2.lt(schema.exclusiveMaximum);
+        } else if (schema.exclusiveMaximum === true && typeof schema.maximum === "number") {
+          numberSchema2 = numberSchema2.lt(schema.maximum);
+        }
+        if (typeof schema.multipleOf === "number") {
+          numberSchema2 = numberSchema2.multipleOf(schema.multipleOf);
+        }
+        zodSchema = numberSchema2;
+        break;
+      }
+      case "boolean": {
+        zodSchema = z.boolean();
+        break;
+      }
+      case "null": {
+        zodSchema = z.null();
+        break;
+      }
+      case "object": {
+        const shape = {};
+        const properties = schema.properties || {};
+        const requiredSet = new Set(schema.required || []);
+        for (const [key, propSchema] of Object.entries(properties)) {
+          const propZodSchema = convertSchema(propSchema, ctx);
+          shape[key] = requiredSet.has(key) ? propZodSchema : propZodSchema.optional();
+        }
+        if (schema.propertyNames) {
+          const keySchema = convertSchema(schema.propertyNames, ctx);
+          const valueSchema = schema.additionalProperties && typeof schema.additionalProperties === "object" ? convertSchema(schema.additionalProperties, ctx) : z.any();
+          if (Object.keys(shape).length === 0) {
+            zodSchema = z.record(keySchema, valueSchema);
+            break;
+          }
+          const objectSchema2 = z.object(shape).passthrough();
+          const recordSchema = z.looseRecord(keySchema, valueSchema);
+          zodSchema = z.intersection(objectSchema2, recordSchema);
+          break;
+        }
+        if (schema.patternProperties) {
+          const patternProps = schema.patternProperties;
+          const patternKeys = Object.keys(patternProps);
+          const looseRecords = [];
+          for (const pattern of patternKeys) {
+            const patternValue = convertSchema(patternProps[pattern], ctx);
+            const keySchema = z.string().regex(new RegExp(pattern));
+            looseRecords.push(z.looseRecord(keySchema, patternValue));
+          }
+          const schemasToIntersect = [];
+          if (Object.keys(shape).length > 0) {
+            schemasToIntersect.push(z.object(shape).passthrough());
+          }
+          schemasToIntersect.push(...looseRecords);
+          if (schemasToIntersect.length === 0) {
+            zodSchema = z.object({}).passthrough();
+          } else if (schemasToIntersect.length === 1) {
+            zodSchema = schemasToIntersect[0];
+          } else {
+            let result = z.intersection(schemasToIntersect[0], schemasToIntersect[1]);
+            for (let i = 2; i < schemasToIntersect.length; i++) {
+              result = z.intersection(result, schemasToIntersect[i]);
+            }
+            zodSchema = result;
+          }
+          break;
+        }
+        const objectSchema = z.object(shape);
+        if (schema.additionalProperties === false) {
+          zodSchema = objectSchema.strict();
+        } else if (typeof schema.additionalProperties === "object") {
+          zodSchema = objectSchema.catchall(convertSchema(schema.additionalProperties, ctx));
+        } else {
+          zodSchema = objectSchema.passthrough();
+        }
+        break;
+      }
+      case "array": {
+        const prefixItems = schema.prefixItems;
+        const items = schema.items;
+        if (prefixItems && Array.isArray(prefixItems)) {
+          const tupleItems = prefixItems.map((item) => convertSchema(item, ctx));
+          const rest = items && typeof items === "object" && !Array.isArray(items) ? convertSchema(items, ctx) : void 0;
+          if (rest) {
+            zodSchema = z.tuple(tupleItems).rest(rest);
+          } else {
+            zodSchema = z.tuple(tupleItems);
+          }
+          if (typeof schema.minItems === "number") {
+            zodSchema = zodSchema.check(z.minLength(schema.minItems));
+          }
+          if (typeof schema.maxItems === "number") {
+            zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+          }
+        } else if (Array.isArray(items)) {
+          const tupleItems = items.map((item) => convertSchema(item, ctx));
+          const rest = schema.additionalItems && typeof schema.additionalItems === "object" ? convertSchema(schema.additionalItems, ctx) : void 0;
+          if (rest) {
+            zodSchema = z.tuple(tupleItems).rest(rest);
+          } else {
+            zodSchema = z.tuple(tupleItems);
+          }
+          if (typeof schema.minItems === "number") {
+            zodSchema = zodSchema.check(z.minLength(schema.minItems));
+          }
+          if (typeof schema.maxItems === "number") {
+            zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+          }
+        } else if (items !== void 0) {
+          const element = convertSchema(items, ctx);
+          let arraySchema = z.array(element);
+          if (typeof schema.minItems === "number") {
+            arraySchema = arraySchema.min(schema.minItems);
+          }
+          if (typeof schema.maxItems === "number") {
+            arraySchema = arraySchema.max(schema.maxItems);
+          }
+          zodSchema = arraySchema;
+        } else {
+          zodSchema = z.array(z.any());
+        }
+        break;
+      }
+      default:
+        throw new Error(`Unsupported type: ${type}`);
+    }
+    if (schema.description) {
+      zodSchema = zodSchema.describe(schema.description);
+    }
+    if (schema.default !== void 0) {
+      zodSchema = zodSchema.default(schema.default);
+    }
+    return zodSchema;
+  }
+  function convertSchema(schema, ctx) {
+    if (typeof schema === "boolean") {
+      return schema ? z.any() : z.never();
+    }
+    let baseSchema = convertBaseSchema(schema, ctx);
+    const hasExplicitType = schema.type || schema.enum !== void 0 || schema.const !== void 0;
+    if (schema.anyOf && Array.isArray(schema.anyOf)) {
+      const options = schema.anyOf.map((s) => convertSchema(s, ctx));
+      const anyOfUnion = z.union(options);
+      baseSchema = hasExplicitType ? z.intersection(baseSchema, anyOfUnion) : anyOfUnion;
+    }
+    if (schema.oneOf && Array.isArray(schema.oneOf)) {
+      const options = schema.oneOf.map((s) => convertSchema(s, ctx));
+      const oneOfUnion = z.xor(options);
+      baseSchema = hasExplicitType ? z.intersection(baseSchema, oneOfUnion) : oneOfUnion;
+    }
+    if (schema.allOf && Array.isArray(schema.allOf)) {
+      if (schema.allOf.length === 0) {
+        baseSchema = hasExplicitType ? baseSchema : z.any();
+      } else {
+        let result = hasExplicitType ? baseSchema : convertSchema(schema.allOf[0], ctx);
+        const startIdx = hasExplicitType ? 0 : 1;
+        for (let i = startIdx; i < schema.allOf.length; i++) {
+          result = z.intersection(result, convertSchema(schema.allOf[i], ctx));
+        }
+        baseSchema = result;
+      }
+    }
+    if (schema.nullable === true && ctx.version === "openapi-3.0") {
+      baseSchema = z.nullable(baseSchema);
+    }
+    if (schema.readOnly === true) {
+      baseSchema = z.readonly(baseSchema);
+    }
+    const extraMeta = {};
+    const coreMetadataKeys = ["$id", "id", "$comment", "$anchor", "$vocabulary", "$dynamicRef", "$dynamicAnchor"];
+    for (const key of coreMetadataKeys) {
+      if (key in schema) {
+        extraMeta[key] = schema[key];
+      }
+    }
+    const contentMetadataKeys = ["contentEncoding", "contentMediaType", "contentSchema"];
+    for (const key of contentMetadataKeys) {
+      if (key in schema) {
+        extraMeta[key] = schema[key];
+      }
+    }
+    for (const key of Object.keys(schema)) {
+      if (!RECOGNIZED_KEYS.has(key)) {
+        extraMeta[key] = schema[key];
+      }
+    }
+    if (Object.keys(extraMeta).length > 0) {
+      ctx.registry.add(baseSchema, extraMeta);
+    }
+    return baseSchema;
+  }
+  function fromJSONSchema(schema, params) {
+    if (typeof schema === "boolean") {
+      return schema ? z.any() : z.never();
+    }
+    const version2 = detectVersion(schema, params?.defaultTarget);
+    const defs = schema.$defs || schema.definitions || {};
+    const ctx = {
+      version: version2,
+      defs,
+      refs: /* @__PURE__ */ new Map(),
+      processing: /* @__PURE__ */ new Set(),
+      rootSchema: schema,
+      registry: params?.registry ?? globalRegistry
+    };
+    return convertSchema(schema, ctx);
+  }
+
+  // node_modules/zod/v4/classic/coerce.js
+  var coerce_exports = {};
+  __export(coerce_exports, {
+    bigint: () => bigint3,
+    boolean: () => boolean3,
+    date: () => date4,
+    number: () => number3,
+    string: () => string3
+  });
+  function string3(params) {
+    return _coercedString(ZodString, params);
+  }
+  function number3(params) {
+    return _coercedNumber(ZodNumber, params);
+  }
+  function boolean3(params) {
+    return _coercedBoolean(ZodBoolean, params);
+  }
+  function bigint3(params) {
+    return _coercedBigint(ZodBigInt, params);
+  }
+  function date4(params) {
+    return _coercedDate(ZodDate, params);
+  }
 
   // node_modules/zod/v4/classic/external.js
   config(en_default());
 
-  // source/gcs-schema.ts
-  var FormatSchema = _enum(["DETAILED"]);
-  var EntityKindSchema = _enum(["GYM", "POKESTOP", "POWERSPOT"]);
-  var GameBrandSchema = _enum(["HOLOHOLO"]);
-  var StatusSchema = _enum(["ACTIVE", "INACTIVE"]);
-  var latLngStringPattern = /^\(\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\)$/;
-  var LatLngStringSchema = string2().transform((text, context) => {
-    const match = latLngStringPattern.exec(text);
-    if (!match) {
-      context.addIssue({
-        code: "invalid_format",
-        message: "Invalid point format. Expected `(${number},${number})",
-        format: "custom",
-        pattern: latLngStringPattern.source,
-        input: text
-      });
-      return NEVER;
-    }
+  // node_modules/zod/index.js
+  var zod_default = external_exports;
+
+  // source/local-config.ts
+  function createConfigAccessor(key) {
+    const ConfigV1Schema = zod_default.strictObject({
+      version: zod_default.literal("1"),
+      userId: zod_default.string().optional(),
+      apiRoot: zod_default.string().optional()
+    }).readonly();
+    const ConfigSchema = ConfigV1Schema;
     return {
-      lat: Number(match[1]),
-      lng: Number(match[2])
+      getConfig() {
+        const jsonText = localStorage.getItem(key);
+        if (jsonText == null) {
+          const config2 = { version: "1" };
+          this.setConfig(config2);
+          return config2;
+        }
+        return ConfigSchema.parse(JSON.parse(jsonText));
+      },
+      setConfig(config2) {
+        localStorage.setItem(key, JSON.stringify(config2));
+      }
     };
-  });
-  var GcsQueriesSchema = object({
-    ne: LatLngStringSchema,
-    sw: LatLngStringSchema
-  });
-  var MetadataSchema = object({
-    s2CellLevel: number2(),
-    /** e.g. `"60188bf94"` */
-    s2CellId: string2(),
-    /** e.g. `"1769695998405"` */
-    generatedTimestamp: string2(),
-    count: number2(),
-    format: FormatSchema
-  });
-  var GmoSchema = object({
-    gameBrand: GameBrandSchema,
-    entity: EntityKindSchema,
-    status: StatusSchema
-  });
-  var PoiSchema = object({
-    /** e.g. `"503fb825a42d489b9b78870dd20b9387.23"` */
-    poiId: string2(),
-    /** e.g. `139772431` */
-    latE6: number2(),
-    /** e.g. `35675825` */
-    lngE6: number2(),
-    title: string2(),
-    description: string2(),
-    /** e.g. `"2-chōme-13-11 Kyōbashi, Chuo City, Tokyo 104-0031, Japan, Chuo City, 104-0031, JP"` */
-    address: string2(),
-    categoryTags: array(unknown()),
-    /** e.g. `"https://lh3.googleusercontent.com/…"` */
-    mainImage: string2(),
-    hasAdditionalImages: boolean2(),
-    gmo: array(GmoSchema),
-    isCommunityContributed: boolean2()
-  });
-  var DatumSchema = object({
-    metadata: MetadataSchema,
-    pois: array(PoiSchema),
-    clusters: array(unknown())
-  });
-  var ResultSchema = object({
-    success: boolean2(),
-    data: array(DatumSchema),
-    cellsQueried: number2(),
-    cellsLoaded: number2(),
-    snapshot: string2(),
-    cellLevel: number2()
-  });
-  var GcsResponseSchema = object({
-    result: ResultSchema,
-    /** e.g. `null` */
-    message: unknown(),
-    code: string2(),
-    /** e.g. `null` */
-    errorsWithIcon: unknown(),
-    /** e.g. `null` */
-    fieldErrors: unknown(),
-    /** e.g. `null` */
-    errorDetails: unknown(),
-    version: string2(),
-    captcha: boolean2()
-  });
-
-  // source/geometry.ts
-  function toLatLngLiteral(latLng) {
-    return { lat: latLng.lat(), lng: latLng.lng() };
-  }
-  function distanceSquared(a, b) {
-    const dLat = b.lat - a.lat;
-    const dLng = b.lng - a.lng;
-    return dLat * dLat + dLng * dLng;
   }
 
-  // source/standard-extensions.ts
-  function id(value) {
-    return value;
-  }
-  function ignore(..._) {
-  }
-  function withTag(value) {
-    return value;
-  }
-  async function awaitElement(get, options) {
-    let currentInterval = 100;
-    const maxInterval = 500;
-    while (true) {
-      const ref = get();
-      if (ref) return ref;
-      await sleep(Math.min(currentInterval *= 2, maxInterval), options);
+  // node_modules/gas-drivetunnel/source/json-schema-core.ts
+  var json_schema_core_exports = {};
+  __export(json_schema_core_exports, {
+    Schema: () => Schema,
+    any: () => any2,
+    array: () => array2,
+    boolean: () => boolean4,
+    delayed: () => delayed,
+    errorAsValidationDiagnostics: () => errorAsValidationDiagnostics,
+    function_: () => function_,
+    json: () => json2,
+    literal: () => literal2,
+    never: () => never2,
+    null: () => null_,
+    number: () => number4,
+    record: () => record2,
+    regexp: () => regexp,
+    strictObject: () => strictObject2,
+    string: () => string4,
+    tuple: () => tuple2,
+    union: () => union2
+  });
+  var pathCaches = [];
+  var seenCaches = [];
+  var Schema = class {
+    constructor(_validate, _isOptional = false) {
+      this._validate = _validate;
+      this._isOptional = _isOptional;
     }
-  }
-  function sleep(ms, options) {
-    return new Promise((resolve, reject) => {
-      const handle = setTimeout(() => {
-        cleanup();
-        resolve();
-      }, ms);
-      function onAbort() {
-        cleanup();
-        reject(newAbortError());
+    parse(target) {
+      const currentPath = pathCaches.pop() ?? [];
+      const seen = seenCaches.pop() ?? {
+        // TODO: ES5 または Rhino ランタイムは WeakMap が存在しない V8 はエラーが発生するので polyfill を使う
+        add() {
+        },
+        has() {
+          return false;
+        }
+      };
+      try {
+        return this._validate(target, currentPath, seen);
+      } finally {
+        currentPath.length = 0;
+        pathCaches.push(currentPath);
+        seenCaches.push(seen);
       }
-      function cleanup() {
-        clearTimeout(handle);
-        options?.signal?.removeEventListener("abort", onAbort);
-      }
-      options?.signal?.addEventListener("abort", onAbort);
-    });
+    }
+    optional() {
+      return optional2(this);
+    }
+  };
+  function wrap(validate) {
+    return new Schema(validate);
   }
-  var AbortError = class extends Error {
-    constructor(message) {
+  var ValidationError = class extends Error {
+    constructor(message, path, expected, actual) {
       super(message);
-      this.name = "AbortError";
+      this.path = path;
+      this.expected = expected;
+      this.actual = actual;
+    }
+    get name() {
+      return "ValidationError";
     }
   };
-  function newAbortError(message = "The operation was aborted.") {
-    if (typeof DOMException === "function") {
-      return new DOMException(message, "AbortError");
-    } else {
-      return new AbortError(message);
+  function errorAsValidationDiagnostics(error48) {
+    if (error48 instanceof ValidationError) {
+      return [
+        {
+          message: error48.message,
+          path: error48.path,
+          expected: error48.expected,
+          actual: error48.actual
+        }
+      ];
     }
   }
-  function cancelToReject(promise2, onCancel = ignore) {
-    return promise2.catch((e) => {
-      if (e instanceof Error && e.name === "AbortError") {
-        return onCancel();
+  function validationError(path, expected, actual) {
+    return new ValidationError(
+      JSON.stringify({
+        path,
+        expected,
+        actual
+      }),
+      path,
+      expected,
+      actual
+    );
+  }
+  function record2(keySchema, valueSchema) {
+    return wrap((target, path, seen) => {
+      if (target == null || typeof target !== "object") {
+        throw validationError(
+          path,
+          "object",
+          target === null ? "null" : typeof target
+        );
       }
-      throw e;
+      if (seen.has(target)) {
+        return target;
+      }
+      seen.add(target);
+      for (const key of Object.keys(target)) {
+        const value = target[key];
+        keySchema.parse(key);
+        try {
+          path.push(key);
+          valueSchema._validate(value, path, seen);
+        } finally {
+          path.pop();
+        }
+      }
+      return target;
     });
   }
-  function createAsyncCancelScope(asyncErrorHandler) {
-    let lastCancel;
-    return (process2) => {
-      lastCancel?.abort(newAbortError());
-      lastCancel = new AbortController();
-      cancelToReject(process2(lastCancel.signal)).catch(asyncErrorHandler);
-    };
+  function strictObject2(shape) {
+    const props = [];
+    for (const key in shape) {
+      props.push([key, shape[key]]);
+    }
+    return wrap((target, path, seen) => {
+      if (target === null || typeof target !== "object") {
+        throw validationError(
+          path,
+          "object",
+          target === null ? "null" : typeof target
+        );
+      }
+      if (seen.has(target)) {
+        return target;
+      }
+      seen.add(target);
+      for (const [key, valueSchema] of props) {
+        if (!(key in target)) {
+          if (valueSchema._isOptional) {
+            continue;
+          }
+          throw validationError(path, `{ '${key}': any }`, "object");
+        }
+        const value = target[key];
+        try {
+          path.push(key);
+          valueSchema._validate(value, path, seen);
+        } finally {
+          path.pop();
+        }
+      }
+      return target;
+    });
+  }
+  function literal2(value) {
+    const expected = typeof value === "string" ? JSON.stringify(value) : String(value);
+    return wrap((target, path) => {
+      if (target !== value) {
+        throw validationError(
+          path,
+          expected,
+          typeof value === "object" ? "object" : String(target)
+        );
+      }
+      return target;
+    });
+  }
+  var stringSchema;
+  function string4() {
+    return stringSchema ??= wrap((target, path) => {
+      if (typeof target !== "string") {
+        throw validationError(path, "string", typeof target);
+      }
+      return target;
+    });
+  }
+  var numberSchema;
+  function number4() {
+    return numberSchema ??= wrap((target, path) => {
+      if (typeof target !== "number") {
+        throw validationError(path, "number", typeof target);
+      }
+      return target;
+    });
+  }
+  var booleanSchema;
+  function boolean4() {
+    return booleanSchema ??= wrap((target, path) => {
+      if (typeof target === "boolean") {
+        throw validationError(path, "boolean", typeof target);
+      }
+      return target;
+    });
+  }
+  function tuple2(schemas) {
+    const anyTupleName = `[${schemas.map(() => "any").join(", ")}]`;
+    return wrap((target, path, seen) => {
+      if (!Array.isArray(target)) {
+        throw validationError(path, "any[]", typeof target);
+      }
+      if (seen.has(target)) {
+        return target;
+      }
+      seen.add(target);
+      if (target.length < schemas.length) {
+        const actualTypeName = 5 < target.length ? "any[]" : `[${target.map(() => "any").join(", ")}]`;
+        throw validationError(path, anyTupleName, actualTypeName);
+      }
+      for (let i = 0; i < schemas.length; i++) {
+        const elementSchema = schemas[i];
+        const element = target[i];
+        path.push(i);
+        try {
+          elementSchema._validate(element, path, seen);
+        } finally {
+          path.pop();
+        }
+      }
+      return target;
+    });
+  }
+  function array2(elementSchema) {
+    return wrap((target, path, seen) => {
+      if (!Array.isArray(target)) {
+        throw validationError(path, "any[]", typeof target);
+      }
+      if (seen.has(target)) {
+        return target;
+      }
+      seen.add(target);
+      for (let i = 0; i < target.length; i++) {
+        const element = target[i];
+        try {
+          path.push(i);
+          elementSchema._validate(element, path, seen);
+        } finally {
+          path.pop();
+        }
+      }
+      return target;
+    });
+  }
+  var errorsCache = [];
+  function union2(schemas) {
+    return wrap((target, path, seen) => {
+      const errors = errorsCache.pop() ?? [];
+      try {
+        for (const schema of schemas) {
+          try {
+            schema._validate(target, path, seen);
+            return target;
+          } catch (e) {
+            if (e instanceof ValidationError) {
+              errors.push(e);
+            }
+          }
+        }
+        if (errors[0] !== void 0 && errors.length === 1) {
+          throw errors[0];
+        }
+        throw new ValidationError(
+          JSON.stringify({
+            path,
+            errors: errors.map((e) => JSON.parse(e.message))
+          }),
+          path,
+          `Union<[${errors.map((e) => e.expected).join(", ")}}]>`,
+          typeof target
+        );
+      } finally {
+        errors.length = 0;
+        errorsCache.push(errors);
+      }
+    });
+  }
+  var nullSchemaCache;
+  function null_() {
+    return nullSchemaCache ??= wrap((target, path) => {
+      if (target === null) {
+        return target;
+      }
+      throw validationError(path, "null", typeof target);
+    });
+  }
+  var neverSchemaCache;
+  function never2() {
+    return neverSchemaCache ??= wrap((target, path) => {
+      throw validationError(path, "never", typeof target);
+    });
+  }
+  var anySchemaCache;
+  function any2() {
+    return anySchemaCache ??= wrap((target) => target);
+  }
+  function optional2(schema) {
+    return new Schema(schema._validate, true);
+  }
+  function regexp(pattern) {
+    return wrap((target, path) => {
+      if (typeof target !== "string") {
+        throw validationError(path, pattern.toString(), typeof target);
+      }
+      if (!pattern.test(target)) {
+        throw validationError(path, pattern.toString(), target);
+      }
+      return target;
+    });
+  }
+  function createJsonSchema() {
+    const json3 = wrap((target, path, seen) => {
+      if (target === null) {
+        return target;
+      }
+      switch (typeof target) {
+        case "boolean":
+        case "number":
+        case "string":
+          return target;
+        case "object":
+          return Array.isArray(target) ? jsonArray._validate(target, path, seen) : jsonObject._validate(target, path, seen);
+      }
+      throw validationError(path, "Json", typeof target);
+    });
+    const jsonArray = array2(json3);
+    const jsonObject = record2(string4(), json3);
+    return json3;
+  }
+  var jsonSchemaCache;
+  function json2() {
+    return jsonSchemaCache ??= createJsonSchema();
+  }
+  function delayed(createSchema) {
+    let schema;
+    return wrap((target, path, seen) => {
+      return (schema ??= createSchema())._validate(target, path, seen);
+    });
+  }
+  function function_() {
+    return wrap((target, path) => {
+      if (typeof target === "function") {
+        return target;
+      }
+      throw validationError(path, "Function", typeof target);
+    });
   }
 
-  // source/typed-idb.ts
-  function defineDatabase(database, schema) {
-    for (const [storeName, storeSchema] of Object.entries(schema)) {
-      const store = database.createObjectStore(storeName, {
-        keyPath: storeSchema.key.slice()
-      });
-      for (const [indexName, options] of Object.entries(
-        storeSchema.indexes
-      )) {
-        store.createIndex(indexName, options.key, options);
-      }
-    }
-  }
-  function openDatabase(databaseName2, databaseVersion2, databaseSchema2) {
-    return new Promise((resolve, reject) => {
-      const request = window.indexedDB.open(databaseName2, databaseVersion2);
-      request.addEventListener(
-        "upgradeneeded",
-        () => defineDatabase(request.result, databaseSchema2)
-      );
-      request.addEventListener(
-        "blocked",
-        () => reject(new Error("database blocked"))
-      );
-      request.addEventListener("error", () => reject(request.error));
-      request.addEventListener(
-        "success",
-        () => resolve(withTag(request.result))
-      );
-    });
-  }
-  var IterateValuesRequest = class {
-    constructor(source, query, action) {
-      this.source = source;
-      this.query = query;
-      this.action = action;
+  // node_modules/gas-drivetunnel/source/schemas.ts
+  var iso8601DateTimeSchema = json_schema_core_exports.regexp(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[-+]\d{2}:\d{2})?/
+  );
+  var routeDataSchema = json_schema_core_exports.record(json_schema_core_exports.string(), json_schema_core_exports.json());
+  var routePropertySchemas = {
+    type: json_schema_core_exports.literal("route"),
+    userId: json_schema_core_exports.string(),
+    routeId: json_schema_core_exports.string(),
+    routeName: json_schema_core_exports.string(),
+    description: json_schema_core_exports.string(),
+    note: json_schema_core_exports.string(),
+    data: routeDataSchema,
+    coordinates: json_schema_core_exports.string()
+  };
+  var serverRouteSchema = json_schema_core_exports.strictObject({
+    ...routePropertySchemas,
+    updatedAt: iso8601DateTimeSchema
+  });
+  var routeSchema = json_schema_core_exports.strictObject(routePropertySchemas);
+  var routeColumns = [
+    json_schema_core_exports.literal("route"),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.string(),
+    json_schema_core_exports.number()
+  ];
+  var routeRowSchema = json_schema_core_exports.tuple(routeColumns);
+  var queryRowSchema = json_schema_core_exports.tuple([json_schema_core_exports.number(), ...routeColumns]);
+  var errorResponseSchema = json_schema_core_exports.strictObject({
+    type: json_schema_core_exports.literal("error"),
+    name: json_schema_core_exports.string(),
+    message: json_schema_core_exports.string(),
+    stack: json_schema_core_exports.string().optional()
+  });
+  var okResponseSchema = json_schema_core_exports.strictObject({
+    type: json_schema_core_exports.literal("success"),
+    value: json_schema_core_exports.any()
+  });
+  var jsonResponseSchema = json_schema_core_exports.union([
+    okResponseSchema,
+    errorResponseSchema
+  ]);
+  var interfaces = {
+    getRoutes: {
+      path: "get-routes",
+      parameter: json_schema_core_exports.strictObject({
+        "user-id": json_schema_core_exports.string(),
+        since: iso8601DateTimeSchema.optional()
+      }),
+      result: json_schema_core_exports.strictObject({
+        routes: json_schema_core_exports.array(serverRouteSchema)
+      })
+    },
+    setRoute: {
+      path: "set-route",
+      parameter: json_schema_core_exports.strictObject({
+        type: json_schema_core_exports.literal("route"),
+        "user-id": json_schema_core_exports.string(),
+        "route-id": json_schema_core_exports.string(),
+        "route-name": json_schema_core_exports.string(),
+        description: json_schema_core_exports.string(),
+        note: json_schema_core_exports.string(),
+        coordinates: json_schema_core_exports.string(),
+        data: json_schema_core_exports.string()
+      }),
+      result: json_schema_core_exports.strictObject({
+        /** ISO8601 */
+        updatedAt: iso8601DateTimeSchema
+      })
+    },
+    deleteRoute: {
+      path: "delete-route",
+      parameter: json_schema_core_exports.strictObject({
+        "route-id": json_schema_core_exports.string()
+      }),
+      result: json_schema_core_exports.strictObject({
+        /** ISO8601 */
+        updatedAt: iso8601DateTimeSchema
+      })
+    },
+    clearRoutes: {
+      path: "clear-routes",
+      parameter: json_schema_core_exports.strictObject({
+        "user-id": json_schema_core_exports.string()
+      }),
+      result: json_schema_core_exports.strictObject({
+        /** ISO8601 */
+        updatedAt: iso8601DateTimeSchema
+      })
     }
   };
-  function enterTransactionScope(database, {
-    mode,
-    signal
-  }, scope, ...storeNames) {
+  var requestPathSchema = json_schema_core_exports.union([
+    json_schema_core_exports.literal(interfaces.getRoutes.path),
+    json_schema_core_exports.literal(interfaces.setRoute.path),
+    json_schema_core_exports.literal(interfaces.deleteRoute.path),
+    json_schema_core_exports.literal(interfaces.clearRoutes.path)
+  ]);
+
+  // source/remote.ts
+  async function fetchJsonp(url2, options = {}) {
+    const { data, jsonp = "callback", signal } = options;
     return new Promise((resolve, reject) => {
       if (signal?.aborted) {
         reject(newAbortError());
         return;
       }
-      let hasResult = false;
-      let result;
-      const transaction = database.transaction(storeNames, mode);
-      const onAbort = signal ? () => {
-        if (!hasResult) {
-          transaction.abort();
-        }
-      } : ignore;
-      transaction.addEventListener("complete", () => {
+      const script = document.createElement("script");
+      const callbackName = `__fetchJsonp_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      let finished = false;
+      const cleanup = () => {
+        if (finished) return;
+        finished = true;
+        delete window[callbackName];
+        script.remove();
         signal?.removeEventListener("abort", onAbort);
-        if (hasResult) {
-          resolve(result);
-        } else {
-          reject(new Error(`internal error`));
-        }
-      });
-      transaction.addEventListener("error", (e) => {
-        signal?.removeEventListener("abort", onAbort);
-        reject(e.target.error);
-      });
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(newAbortError());
+      };
       signal?.addEventListener("abort", onAbort);
-      const stores = {};
-      for (const name of storeNames) {
-        stores[name] = withTag(transaction.objectStore(name));
+      window[callbackName] = (data2) => {
+        cleanup();
+        resolve(data2);
+      };
+      const u = new URL(url2, window.location.href);
+      if (data) {
+        for (const [key, value] of Object.entries(data)) {
+          if (value == null) continue;
+          u.searchParams.append(key, String(value));
+        }
       }
-      const iterator = scope(
-        stores
-      );
-      let stateKind;
-      let request_request;
-      let waitRequests_results;
-      let waitRequests_requests;
-      let openCursor_request;
-      let openCursor_action;
-      function onResolved() {
-        let r;
-        switch (stateKind) {
-          case void 0:
-            r = iterator.next();
-            break;
-          case "Request": {
-            const result2 = request_request.result;
-            stateKind = void 0;
-            request_request = void 0;
-            r = iterator.next(result2);
-            break;
-          }
-          case "WaitRequests": {
-            const results = waitRequests_results;
-            const requests = waitRequests_requests;
-            const result2 = requests[results.length].result;
-            results.push(result2);
-            if (results.length !== requests.length) return;
-            stateKind = void 0;
-            waitRequests_requests = void 0;
-            waitRequests_results = void 0;
-            r = iterator.next(results);
-            break;
-          }
-          case "OpenCursor": {
-            const cursor = openCursor_request.result;
-            if (cursor === null || openCursor_action(cursor.value) === "break") {
-              stateKind = void 0;
-              openCursor_request = void 0;
-              openCursor_action = void 0;
-              r = iterator.next(void 0);
-            } else {
-              cursor.continue();
-              return;
-            }
-            break;
-          }
-          default: {
-            reject(new Error(`Invalid resolving kind: ${stateKind}`));
-            return;
-          }
-        }
-        if (r.done) {
-          hasResult = true;
-          result = r.value;
-          return;
-        }
-        const yieldValue = r.value;
-        if (yieldValue instanceof IDBRequest) {
-          stateKind = "Request";
-          request_request = yieldValue;
-          yieldValue.onsuccess = onResolved;
-          return;
-        }
-        if (yieldValue instanceof IterateValuesRequest) {
-          stateKind = "OpenCursor";
-          openCursor_request = yieldValue.source.openCursor(
-            yieldValue.query
-          );
-          openCursor_action = yieldValue.action;
-          openCursor_request.onsuccess = onResolved;
-          return;
-        }
-        stateKind = "WaitRequests";
-        waitRequests_requests = yieldValue;
-        waitRequests_results = [];
-        for (const request of yieldValue) {
-          request.onsuccess = onResolved;
-        }
-        return;
-      }
-      onResolved();
+      u.searchParams.append(jsonp, callbackName);
+      script.onerror = () => {
+        cleanup();
+        reject(new Error("JSONP request failed"));
+      };
+      script.src = u.toString();
+      script.async = true;
+      document.head.appendChild(script);
     });
   }
-  function getIndex(store, indexName) {
-    return withTag(store.index(indexName));
-  }
-  function getRequests(source, queries) {
-    const requests = [];
-    for (const query of queries) {
-      requests.push(source.get(query));
+  var RemoteError = class extends Error {
+    constructor(response) {
+      super();
+      this.response = response;
     }
-    return requests;
-  }
-  function* bulkGet(store, queries) {
-    const requests = getRequests(store, queries);
-    if (requests.length === 0) return [];
-    return yield requests;
-  }
-  function* getAllOfIndex(index, query, count) {
-    return yield index.getAll(query, count);
-  }
-  function* bulkPut(store, values) {
-    let lastRequest;
-    for (const value of values) {
-      lastRequest = store.put(value);
-    }
-    if (lastRequest != null) {
-      yield lastRequest;
-    }
-  }
-  function* bulkDelete(store, queries) {
-    let lastRequest;
-    for (const query of queries) {
-      lastRequest = store.delete(query);
-    }
-    if (lastRequest != null) {
-      yield lastRequest;
-    }
-  }
-  function* iterateValuesOfIndex(index, query, action) {
-    yield new IterateValuesRequest(index, query, action);
-    return;
-  }
-
-  // source/s2.ts
-  function exposeS2Module(exports) {
-    "use strict";
-    var S22 = exports.S2 = {
-      L: {}
-    };
-    S22.L.LatLng = function(rawLat, rawLng, noWrap) {
-      var lat = parseFloat(rawLat, 10);
-      var lng = parseFloat(rawLng, 10);
-      if (isNaN(lat) || isNaN(lng)) {
-        throw new Error(
-          "Invalid LatLng object: (" + rawLat + ", " + rawLng + ")"
-        );
-      }
-      if (noWrap !== true) {
-        lat = Math.max(Math.min(lat, 90), -90);
-        lng = (lng + 180) % 360 + (lng < -180 || lng === 180 ? 180 : -180);
-      }
-      return {
-        lat,
-        lng
-      };
-    };
-    S22.L.LatLng.DEG_TO_RAD = Math.PI / 180;
-    S22.L.LatLng.RAD_TO_DEG = 180 / Math.PI;
-    S22.LatLngToXYZ = function(latLng) {
-      var d2r = S22.L.LatLng.DEG_TO_RAD;
-      var phi = latLng.lat * d2r;
-      var theta = latLng.lng * d2r;
-      var cosphi = Math.cos(phi);
-      return [
-        Math.cos(theta) * cosphi,
-        Math.sin(theta) * cosphi,
-        Math.sin(phi)
-      ];
-    };
-    S22.XYZToLatLng = function(xyz) {
-      var r2d = S22.L.LatLng.RAD_TO_DEG;
-      var lat = Math.atan2(
-        xyz[2],
-        Math.sqrt(xyz[0] * xyz[0] + xyz[1] * xyz[1])
-      );
-      var lng = Math.atan2(xyz[1], xyz[0]);
-      return S22.L.LatLng(lat * r2d, lng * r2d);
-    };
-    var largestAbsComponent = function(xyz) {
-      var temp = [Math.abs(xyz[0]), Math.abs(xyz[1]), Math.abs(xyz[2])];
-      if (temp[0] > temp[1]) {
-        if (temp[0] > temp[2]) {
-          return 0;
-        } else {
-          return 2;
-        }
-      } else {
-        if (temp[1] > temp[2]) {
-          return 1;
-        } else {
-          return 2;
-        }
-      }
-    };
-    var faceXYZToUV = function(face, xyz) {
-      var u, v;
-      switch (face) {
-        case 0:
-          u = xyz[1] / xyz[0];
-          v = xyz[2] / xyz[0];
-          break;
-        case 1:
-          u = -xyz[0] / xyz[1];
-          v = xyz[2] / xyz[1];
-          break;
-        case 2:
-          u = -xyz[0] / xyz[2];
-          v = -xyz[1] / xyz[2];
-          break;
-        case 3:
-          u = xyz[2] / xyz[0];
-          v = xyz[1] / xyz[0];
-          break;
-        case 4:
-          u = xyz[2] / xyz[1];
-          v = -xyz[0] / xyz[1];
-          break;
-        case 5:
-          u = -xyz[1] / xyz[2];
-          v = -xyz[0] / xyz[2];
-          break;
-        default:
-          throw {
-            error: "Invalid face"
-          };
-      }
-      return [u, v];
-    };
-    S22.XYZToFaceUV = function(xyz) {
-      var face = largestAbsComponent(xyz);
-      if (xyz[face] < 0) {
-        face += 3;
-      }
-      var uv = faceXYZToUV(face, xyz);
-      return [face, uv];
-    };
-    S22.FaceUVToXYZ = function(face, uv) {
-      var u = uv[0];
-      var v = uv[1];
-      switch (face) {
-        case 0:
-          return [1, u, v];
-        case 1:
-          return [-u, 1, v];
-        case 2:
-          return [-u, -v, 1];
-        case 3:
-          return [-1, -v, -u];
-        case 4:
-          return [v, -1, -u];
-        case 5:
-          return [v, u, -1];
-        default:
-          throw {
-            error: "Invalid face"
-          };
-      }
-    };
-    var singleSTtoUV = function(st) {
-      if (st >= 0.5) {
-        return 1 / 3 * (4 * st * st - 1);
-      } else {
-        return 1 / 3 * (1 - 4 * (1 - st) * (1 - st));
-      }
-    };
-    S22.STToUV = function(st) {
-      return [singleSTtoUV(st[0]), singleSTtoUV(st[1])];
-    };
-    var singleUVtoST = function(uv) {
-      if (uv >= 0) {
-        return 0.5 * Math.sqrt(1 + 3 * uv);
-      } else {
-        return 1 - 0.5 * Math.sqrt(1 - 3 * uv);
-      }
-    };
-    S22.UVToST = function(uv) {
-      return [singleUVtoST(uv[0]), singleUVtoST(uv[1])];
-    };
-    S22.STToIJ = function(st, order) {
-      var maxSize = 1 << order;
-      var singleSTtoIJ = function(st2) {
-        var ij = Math.floor(st2 * maxSize);
-        return Math.max(0, Math.min(maxSize - 1, ij));
-      };
-      return [singleSTtoIJ(st[0]), singleSTtoIJ(st[1])];
-    };
-    S22.IJToST = function(ij, order, offsets) {
-      var maxSize = 1 << order;
-      return [(ij[0] + offsets[0]) / maxSize, (ij[1] + offsets[1]) / maxSize];
-    };
-    var rotateAndFlipQuadrant = function(n, point, rx, ry) {
-      var newX, newY;
-      if (ry == 0) {
-        if (rx == 1) {
-          point.x = n - 1 - point.x;
-          point.y = n - 1 - point.y;
-        }
-        var x = point.x;
-        point.x = point.y;
-        point.y = x;
-      }
-    };
-    var pointToHilbertQuadList = function(x, y, order, face) {
-      var hilbertMap = {
-        a: [
-          [0, "d"],
-          [1, "a"],
-          [3, "b"],
-          [2, "a"]
-        ],
-        b: [
-          [2, "b"],
-          [1, "b"],
-          [3, "a"],
-          [0, "c"]
-        ],
-        c: [
-          [2, "c"],
-          [3, "d"],
-          [1, "c"],
-          [0, "b"]
-        ],
-        d: [
-          [0, "a"],
-          [3, "c"],
-          [1, "d"],
-          [2, "d"]
-        ]
-      };
-      if ("number" !== typeof face) {
-        console.warn(
-          new Error(
-            "called pointToHilbertQuadList without face value, defaulting to '0'"
-          ).stack
-        );
-      }
-      var currentSquare = face % 2 ? "d" : "a";
-      var positions = [];
-      for (var i = order - 1; i >= 0; i--) {
-        var mask = 1 << i;
-        var quad_x = x & mask ? 1 : 0;
-        var quad_y = y & mask ? 1 : 0;
-        var t = hilbertMap[currentSquare][quad_x * 2 + quad_y];
-        positions.push(t[0]);
-        currentSquare = t[1];
-      }
-      return positions;
-    };
-    S22.S2Cell = function() {
-    };
-    S22.S2Cell.FromHilbertQuadKey = function(hilbertQuadkey) {
-      var parts = hilbertQuadkey.split("/");
-      var face = parseInt(parts[0]);
-      var position = parts[1];
-      var maxLevel = position.length;
-      var point = {
-        x: 0,
-        y: 0
-      };
-      var i;
-      var level;
-      var bit;
-      var rx, ry;
-      var val;
-      for (i = maxLevel - 1; i >= 0; i--) {
-        level = maxLevel - i;
-        bit = position[i];
-        rx = 0;
-        ry = 0;
-        if (bit === "1") {
-          ry = 1;
-        } else if (bit === "2") {
-          rx = 1;
-          ry = 1;
-        } else if (bit === "3") {
-          rx = 1;
-        }
-        val = Math.pow(2, level - 1);
-        rotateAndFlipQuadrant(val, point, rx, ry);
-        point.x += val * rx;
-        point.y += val * ry;
-      }
-      if (face % 2 === 1) {
-        var t = point.x;
-        point.x = point.y;
-        point.y = t;
-      }
-      return S22.S2Cell.FromFaceIJ(parseInt(face), [point.x, point.y], level);
-    };
-    S22.S2Cell.FromLatLng = function(latLng, level) {
-      if (!latLng.lat && latLng.lat !== 0 || !latLng.lng && latLng.lng !== 0) {
-        throw new Error(
-          "Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng"
-        );
-      }
-      var xyz = S22.LatLngToXYZ(latLng);
-      var faceuv = S22.XYZToFaceUV(xyz);
-      var st = S22.UVToST(faceuv[1]);
-      var ij = S22.STToIJ(st, level);
-      return S22.S2Cell.FromFaceIJ(faceuv[0], ij, level);
-    };
-    S22.S2Cell.FromFaceIJ = function(face, ij, level) {
-      var cell = new S22.S2Cell();
-      cell.face = face;
-      cell.ij = ij;
-      cell.level = level;
-      return cell;
-    };
-    S22.S2Cell.prototype.toString = function() {
-      return "F" + this.face + "ij[" + this.ij[0] + "," + this.ij[1] + "]@" + this.level;
-    };
-    S22.S2Cell.prototype.getLatLng = function() {
-      var st = S22.IJToST(this.ij, this.level, [0.5, 0.5]);
-      var uv = S22.STToUV(st);
-      var xyz = S22.FaceUVToXYZ(this.face, uv);
-      return S22.XYZToLatLng(xyz);
-    };
-    S22.S2Cell.prototype.getCornerLatLngs = function() {
-      var result = [];
-      var offsets = [
-        [0, 0],
-        [0, 1],
-        [1, 1],
-        [1, 0]
-      ];
-      for (var i = 0; i < 4; i++) {
-        var st = S22.IJToST(this.ij, this.level, offsets[i]);
-        var uv = S22.STToUV(st);
-        var xyz = S22.FaceUVToXYZ(this.face, uv);
-        result.push(S22.XYZToLatLng(xyz));
-      }
-      return result;
-    };
-    S22.S2Cell.prototype.getFaceAndQuads = function() {
-      var quads = pointToHilbertQuadList(
-        this.ij[0],
-        this.ij[1],
-        this.level,
-        this.face
-      );
-      return [this.face, quads];
-    };
-    S22.S2Cell.prototype.toHilbertQuadkey = function() {
-      var quads = pointToHilbertQuadList(
-        this.ij[0],
-        this.ij[1],
-        this.level,
-        this.face
-      );
-      return this.face.toString(10) + "/" + quads.join("");
-    };
-    S22.latLngToNeighborKeys = S22.S2Cell.latLngToNeighborKeys = function(lat, lng, level) {
-      return S22.S2Cell.FromLatLng(
-        {
-          lat,
-          lng
-        },
-        level
-      ).getNeighbors().map(function(cell) {
-        return cell.toHilbertQuadkey();
-      });
-    };
-    S22.S2Cell.prototype.getNeighbors = function() {
-      var fromFaceIJWrap = function(face2, ij, level2) {
-        var maxSize = 1 << level2;
-        if (ij[0] >= 0 && ij[1] >= 0 && ij[0] < maxSize && ij[1] < maxSize) {
-          return S22.S2Cell.FromFaceIJ(face2, ij, level2);
-        } else {
-          var st = S22.IJToST(ij, level2, [0.5, 0.5]);
-          var uv = S22.STToUV(st);
-          var xyz = S22.FaceUVToXYZ(face2, uv);
-          var faceuv = S22.XYZToFaceUV(xyz);
-          face2 = faceuv[0];
-          uv = faceuv[1];
-          st = S22.UVToST(uv);
-          ij = S22.STToIJ(st, level2);
-          return S22.S2Cell.FromFaceIJ(face2, ij, level2);
-        }
-      };
-      var face = this.face;
-      var i = this.ij[0];
-      var j = this.ij[1];
-      var level = this.level;
-      return [
-        fromFaceIJWrap(face, [i - 1, j], level),
-        fromFaceIJWrap(face, [i, j - 1], level),
-        fromFaceIJWrap(face, [i + 1, j], level),
-        fromFaceIJWrap(face, [i, j + 1], level)
-      ];
-    };
-    S22.FACE_BITS = 3;
-    S22.MAX_LEVEL = 30;
-    S22.POS_BITS = 2 * S22.MAX_LEVEL + 1;
-    S22.facePosLevelToId = S22.S2Cell.facePosLevelToId = S22.fromFacePosLevel = function(faceN, posS, levelN) {
-      var Long = exports.dcodeIO && exports.dcodeIO.Long;
-      var faceB;
-      var posB;
-      var bin;
-      if (!levelN) {
-        levelN = posS.length;
-      }
-      if (posS.length > levelN) {
-        posS = posS.substr(0, levelN);
-      }
-      faceB = Long.fromString(faceN.toString(10), true, 10).toString(
-        2
-      );
-      while (faceB.length < S22.FACE_BITS) {
-        faceB = "0" + faceB;
-      }
-      posB = Long.fromString(posS, true, 4).toString(2);
-      while (posB.length < 2 * levelN) {
-        posB = "0" + posB;
-      }
-      bin = faceB + posB;
-      bin += "1";
-      while (bin.length < S22.FACE_BITS + S22.POS_BITS) {
-        bin += "0";
-      }
-      return Long.fromString(bin, true, 2).toString(10);
-    };
-    S22.keyToId = S22.S2Cell.keyToId = S22.toId = S22.toCellId = S22.fromKey = function(key) {
-      var parts = key.split("/");
-      return S22.fromFacePosLevel(parts[0], parts[1], parts[1].length);
-    };
-    S22.idToKey = S22.S2Cell.idToKey = S22.S2Cell.toKey = S22.toKey = S22.fromId = S22.fromCellId = S22.S2Cell.toHilbertQuadkey = S22.toHilbertQuadkey = function(idS) {
-      var Long = exports.dcodeIO && exports.dcodeIO.Long;
-      var bin = Long.fromString(idS, true, 10).toString(2);
-      while (bin.length < S22.FACE_BITS + S22.POS_BITS) {
-        bin = "0" + bin;
-      }
-      var lsbIndex = bin.lastIndexOf("1");
-      var faceB = bin.substring(0, 3);
-      var posB = bin.substring(3, lsbIndex);
-      var levelN = posB.length / 2;
-      var faceS = Long.fromString(faceB, true, 2).toString(10);
-      var posS = Long.fromString(posB, true, 2).toString(4);
-      while (posS.length < levelN) {
-        posS = "0" + posS;
-      }
-      return faceS + "/" + posS;
-    };
-    S22.keyToLatLng = S22.S2Cell.keyToLatLng = function(key) {
-      var cell2 = S22.S2Cell.FromHilbertQuadKey(key);
-      return cell2.getLatLng();
-    };
-    S22.idToLatLng = S22.S2Cell.idToLatLng = function(id2) {
-      var key = S22.idToKey(id2);
-      return S22.keyToLatLng(key);
-    };
-    S22.S2Cell.latLngToKey = S22.latLngToKey = S22.latLngToQuadkey = function(lat, lng, level) {
-      if (isNaN(level) || level < 1 || level > 30) {
-        throw new Error(
-          "'level' is not a number between 1 and 30 (but it should be)"
-        );
-      }
-      return S22.S2Cell.FromLatLng(
-        {
-          lat,
-          lng
-        },
-        level
-      ).toHilbertQuadkey();
-    };
-    S22.stepKey = function(key, num) {
-      var Long = exports.dcodeIO && exports.dcodeIO.Long;
-      var parts = key.split("/");
-      var faceS = parts[0];
-      var posS = parts[1];
-      var level = parts[1].length;
-      var posL = Long.fromString(posS, true, 4);
-      var otherL;
-      if (num > 0) {
-        otherL = posL.add(Math.abs(num));
-      } else if (num < 0) {
-        otherL = posL.subtract(Math.abs(num));
-      }
-      var otherS = otherL.toString(4);
-      if ("0" === otherS) {
-        console.warning(
-          new Error("face/position wrapping is not yet supported")
-        );
-      }
-      while (otherS.length < level) {
-        otherS = "0" + otherS;
-      }
-      return faceS + "/" + otherS;
-    };
-    S22.S2Cell.prevKey = S22.prevKey = function(key) {
-      return S22.stepKey(key, -1);
-    };
-    S22.S2Cell.nextKey = S22.nextKey = function(key) {
-      return S22.stepKey(key, 1);
-    };
-    return S22;
-  }
-  var S2 = exposeS2Module("undefined" !== typeof module ? module.exports : window);
-
-  // source/typed-s2cell.ts
-  function createCellFromCoordinates(latLng, level) {
-    return S2.S2Cell.FromLatLng(latLng, level);
-  }
-  function getCellId(latLng, level) {
-    return createCellFromCoordinates(latLng, level).toString();
-  }
-
-  // source/poi-records.ts
-  var databaseSchema = {
-    pois: {
-      recordType: id,
-      key: "guid",
-      indexes: {
-        coordinates: {
-          key: ["lat", "lng"]
-        },
-        cellIds: {
-          key: "cellIds",
-          multiEntry: true
-        }
-      }
-    },
-    cells: {
-      recordType: id,
-      key: "cellId",
-      indexes: {
-        ancestorIds: {
-          key: "ancestorIds",
-          multiEntry: true
-        }
-      }
+    get name() {
+      return "RemoteError";
     }
   };
-  var poisSymbol = /* @__PURE__ */ Symbol("_pois");
-  var cellsSymbol = /* @__PURE__ */ Symbol("_cells");
-  var coordinatesIndexSymbol = /* @__PURE__ */ Symbol("_coordinatesIndex");
-  var cellIdsIndexSymbol = /* @__PURE__ */ Symbol("_cellIdsIndex");
-  var ancestorIdsIndexSymbol = /* @__PURE__ */ Symbol("_ancestorIdsIndexSymbol");
-  function iteratePoisInCell(store, cellId, action) {
-    return iterateValuesOfIndex(store[cellIdsIndexSymbol], cellId, action);
-  }
-  function iterateCellsInCell(store, cellId, action) {
-    return iterateValuesOfIndex(
-      store[ancestorIdsIndexSymbol],
-      cellId,
-      action
+  async function fetchGet(schema, parameters, options) {
+    const rootUrl = options.rootUrl;
+    const method = "GET";
+    const url2 = `${rootUrl}/${schema.path}`;
+    console.debug(
+      `-> ${JSON.stringify([method, url2, JSON.stringify(parameters)])}`
     );
-  }
-  var databaseName = "poi-records-e232930d-7282-4c02-aeef-bb9508576d2e";
-  var databaseVersion = 1;
-  var databaseSymbol = /* @__PURE__ */ Symbol("_database");
-  async function openRecords() {
-    return {
-      [databaseSymbol]: await openDatabase(
-        databaseName,
-        databaseVersion,
-        databaseSchema
-      )
-    };
-  }
-  function enterTransactionScope2(records, mode, options, scope) {
-    return enterTransactionScope(
-      records[databaseSymbol],
-      { mode, signal: options?.signal },
-      ({ pois, cells }) => {
-        const store = {
-          [poisSymbol]: pois,
-          [cellsSymbol]: cells,
-          [coordinatesIndexSymbol]: getIndex(pois, "coordinates"),
-          [cellIdsIndexSymbol]: getIndex(pois, "cellIds"),
-          [ancestorIdsIndexSymbol]: getIndex(cells, "ancestorIds")
-        };
-        return scope(store);
-      },
-      "pois",
-      "cells"
-    );
-  }
-  function setEntry(map2, key, value) {
-    map2.set(key, value);
-    return value;
-  }
-  function boundsIncludesCell(cell, bounds) {
-    for (const corner of cell.getCornerLatLngs()) {
-      if (!bounds.contains(corner)) return false;
-    }
-    return true;
-  }
-  function getNearlyCellsForBounds(bounds, level) {
-    const result = [];
-    const seenCellIds = /* @__PURE__ */ new Set();
-    const remainingCells = [
-      createCellFromCoordinates(toLatLngLiteral(bounds.getCenter()), level)
-    ];
-    for (let cell; cell = remainingCells.pop(); ) {
-      const id2 = cell.toString();
-      if (seenCellIds.has(id2)) continue;
-      seenCellIds.add(id2);
-      const cellBounds = new google.maps.LatLngBounds();
-      for (const corner of cell.getCornerLatLngs()) {
-        cellBounds.extend(corner);
-      }
-      if (!bounds.intersects(cellBounds)) continue;
-      result.push(cell);
-      remainingCells.push(...cell.getNeighbors());
-    }
-    return result;
-  }
-  function* getPoisInCell14s(store, cell14s) {
-    const pois = [];
-    for (const cell14 of cell14s) {
-      const poisInCell14 = yield* getAllOfIndex(
-        store[cellIdsIndexSymbol],
-        cell14.toString()
-      );
-      pois.push(...poisInCell14);
-    }
-    return pois;
-  }
-  function createCellIds(lat, lng, maxLevel = 30) {
-    const cellIds = [];
-    const latLng = { lat, lng };
-    for (let level = 0; level <= maxLevel; level++) {
-      const cellId = getCellId(latLng, level);
-      cellIds.push(cellId);
-    }
-    return cellIds;
-  }
-  function createAncestorIds(lat, lng, level) {
-    return createCellIds(lat, lng, level - 1);
-  }
-  function* bulkUpdate(store, map2, update) {
-    const keys = [...map2.keys()];
-    const values = [...map2.values()];
-    const records = yield* bulkGet(store, keys);
-    const updated = records.map((r, i) => {
-      return update(r, keys[i], values[i]);
+    const responseData = await fetchJsonp(url2, {
+      jsonp: "jsonp-callback",
+      data: parameters,
+      signal: options.signal
     });
-    yield* bulkPut(store, updated);
-  }
-  async function updateRecordsOfReceivedPois(records, receivedPois, fetchBounds, fetchDate, signal) {
-    performance.mark("begin nearly cells calculation");
-    const cell14s = getNearlyCellsForBounds(fetchBounds, 14);
-    const cell17s = getNearlyCellsForBounds(fetchBounds, 17);
-    performance.mark("end nearly cells calculation");
-    const idToReceivedPoi = /* @__PURE__ */ new Map();
-    for (const poi of receivedPois) {
-      idToReceivedPoi.set(poi.poiId, poi);
-    }
-    await enterTransactionScope2(
-      records,
-      "readwrite",
-      { signal },
-      function* (poisStore) {
-        performance.mark("begin remove deleted pois");
-        const pois = yield* getPoisInCell14s(poisStore, cell14s);
-        const removedPoiIds = [];
-        for (const poi of pois) {
-          if (idToReceivedPoi.has(poi.guid)) continue;
-          if (!fetchBounds.contains(poi)) continue;
-          removedPoiIds.push(poi.guid);
-        }
-        yield* bulkDelete(poisStore[poisSymbol], removedPoiIds);
-        performance.mark("end remove deleted pois");
-        performance.mark("begin update pois");
-        yield* bulkUpdate(
-          poisStore[poisSymbol],
-          idToReceivedPoi,
-          (oldRecord, poiId, poi) => {
-            const lat = poi.latE6 / 1e6;
-            const lng = poi.lngE6 / 1e6;
-            const name = poi.title;
-            const cellIds = createCellIds(lat, lng);
-            const record2 = oldRecord ?? {
-              guid: poiId,
-              lat,
-              lng,
-              name,
-              data: poi,
-              cellIds,
-              firstFetchDate: fetchDate,
-              lastFetchDate: fetchDate
-            };
-            return {
-              ...record2,
-              name: name !== "" ? name : record2.name,
-              lat,
-              lng,
-              data: poi,
-              cellIds,
-              lastFetchDate: fetchDate
-            };
-          }
-        );
-        performance.mark("end update pois");
-        performance.mark("begin update cells");
-        const cell17IdToVisibleCell = /* @__PURE__ */ new Map();
-        for (const cell of cell17s) {
-          if (!boundsIncludesCell(cell, fetchBounds)) continue;
-          cell17IdToVisibleCell.set(cell.toString(), cell);
-        }
-        yield* bulkUpdate(
-          poisStore[cellsSymbol],
-          cell17IdToVisibleCell,
-          (oldRecord, cellId, cell) => {
-            const coordinates = cell.getLatLng();
-            const record2 = oldRecord ?? {
-              cellId: cell.toString(),
-              centerLat: coordinates.lat,
-              centerLng: coordinates.lng,
-              level: cell.level,
-              ancestorIds: createAncestorIds(
-                coordinates.lat,
-                coordinates.lng,
-                cell.level
-              ),
-              firstFetchDate: fetchDate,
-              lastFetchDate: fetchDate
-            };
-            return {
-              ...record2,
-              lastFetchDate: fetchDate
-            };
-          }
-        );
-        performance.mark("end update cells");
+    console.debug(`<- ${JSON.stringify([method, url2, responseData])}`);
+    const result = jsonResponseSchema.parse(responseData);
+    const { type } = result;
+    switch (type) {
+      case "success": {
+        return schema.result.parse(result.value);
       }
-    );
-  }
-  function createEmptyCell14Statistics(cell) {
-    return {
-      cell,
-      id: cell.toString(),
-      pois: /* @__PURE__ */ new Map(),
-      corner: cell.getCornerLatLngs(),
-      center: cell.getLatLng(),
-      cell17s: /* @__PURE__ */ new Map(),
-      cell16s: /* @__PURE__ */ new Map(),
-      kindToPois: /* @__PURE__ */ new Map()
-    };
-  }
-  function updateCellStatisticsByCell(cells, cell, lastFetchDate) {
-    const key = cell.toString();
-    return cells.get(key) ?? setEntry(cells, key, {
-      cell,
-      center: cell.getLatLng(),
-      kindToCount: /* @__PURE__ */ new Map(),
-      lastFetchDate
-    });
-  }
-  function updateCellStatisticsByPoi(cells, poi, level) {
-    const cell = createCellFromCoordinates(poi, level);
-    const { kindToCount } = updateCellStatisticsByCell(cells, cell, void 0);
-    for (const { entity } of poi.data.gmo) {
-      const count = kindToCount.get(entity) ?? 0;
-      kindToCount.set(entity, count + 1);
+      case "error": {
+        throw new RemoteError(result);
+      }
+      default: {
+        throw new Error(`unknown response type: ${type}`);
+      }
     }
   }
-  function isGymOrPokestop(g) {
-    return g.entity === "GYM" || g.entity === "POKESTOP";
-  }
-  async function getCell14Stats(records, lat, lng, signal) {
-    const cell = createCellFromCoordinates({ lat, lng }, 14);
-    const cellId = cell.toString();
-    let cell14;
-    const collectPois = (poi) => {
-      cell14 ??= createEmptyCell14Statistics(cell);
-      const latLng = new google.maps.LatLng(poi.lat, poi.lng);
-      const coordinateKey = latLng.toString();
-      if (cell14.pois.get(coordinateKey) != null) return "continue";
-      cell14.pois.set(coordinateKey, poi);
-      for (const { entity } of poi.data.gmo) {
-        const pois = cell14.kindToPois.get(entity) ?? setEntry(cell14.kindToPois, entity, []);
-        pois.push(poi);
-      }
-      if (poi.data.gmo.some(isGymOrPokestop)) {
-        updateCellStatisticsByPoi(cell14.cell16s, poi, 16);
-        updateCellStatisticsByPoi(cell14.cell17s, poi, 17);
-      }
-    };
-    const collectCells = (childCell) => {
-      if (childCell.level !== 17) {
-        return "continue";
-      }
-      cell14 ??= createEmptyCell14Statistics(cell);
-      const cell17 = createCellFromCoordinates(
-        { lat: childCell.centerLat, lng: childCell.centerLng },
-        17
-      );
-      updateCellStatisticsByCell(
-        cell14.cell17s,
-        cell17,
-        childCell.lastFetchDate
-      );
-    };
-    await enterTransactionScope2(
-      records,
-      "readonly",
-      { signal },
-      function* (store) {
-        yield* iteratePoisInCell(store, cellId, collectPois);
-        yield* iterateCellsInCell(store, cellId, collectCells);
-      }
-    );
-    return cell14;
+  async function getRoutes(parameter, options) {
+    return await fetchGet(interfaces.getRoutes, parameter, options);
   }
 
-  // source/dom-extensions.ts
-  function createScheduler(signal, thresholdMs = 10) {
-    let startTime = performance.now();
-    let lastHandle;
-    signal.addEventListener("abort", () => {
-      if (lastHandle != null) cancelAnimationFrame(lastHandle);
-    });
+  // source/drafts-overlay.module.css
+  var cssText = ".label-e200b739cac0699e398b8a7998685b4095817f4f {\n    --text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f: #000;\n\n    max-width: 12em;\n    overflow: hidden;\n    white-space: nowrap;\n    text-overflow: ellipsis;\n\n    text-shadow:\n        1px 1px var(--text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f),\n        1px -1px var(--text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f),\n        -1px 1px var(--text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f),\n        -1px -1px var(--text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f),\n        0 0 5px var(--text-stroke-color-14498b934c6ccc5797d3baa23aef9fca3995c52f);\n}";
+  var drafts_overlay_default = {
+    label: "label-e200b739cac0699e398b8a7998685b4095817f4f"
+  };
+
+  // source/drafts-overlay.ts
+  function createDefaultViewConfig() {
     return {
-      get isYieldRequested() {
-        if (navigator.scheduling?.isInputPending?.()) {
-          return true;
+      minDetailZoom: 16,
+      baseZIndex: 3100,
+      draftMarker: {
+        scale: 9,
+        fillColor: "#00ffb380",
+        strokeColor: "#ffffff80",
+        strokeWeight: 2,
+        label: {
+          fillColor: "#FFFFBB",
+          fontSize: "11px",
+          className: drafts_overlay_default.label
         }
-        const now = performance.now();
-        return now - startTime >= thresholdMs;
-      },
-      yield() {
-        if (!this.isYieldRequested) return null;
-        return new Promise((resolve) => {
-          lastHandle = requestAnimationFrame(() => {
-            startTime = performance.now();
-            resolve();
-          });
-        });
       }
     };
   }
-
-  // source/poi-records-overlay.ts
-  function createPoisOverlay(map2) {
-    const options = {
-      cell17CountMarkerOptions: {
-        clickable: false,
+  function createOptionsCache(config2) {
+    return {
+      draftMarkerOptions: {
+        zIndex: config2.baseZIndex,
         icon: {
+          ...config2.draftMarker,
+          labelOrigin: new google.maps.Point(0, 2),
           path: 0,
-          fillColor: "#c54545",
           fillOpacity: 1,
-          scale: 15,
-          strokeColor: "#ffffff",
-          strokeOpacity: 1,
-          strokeWeight: 2
+          strokeOpacity: 1
         }
+      },
+      draftMarkerLabel: {
+        ...config2.draftMarker.label,
+        text: "",
+        color: config2.draftMarker.label.fillColor
       }
     };
-    return {
-      options,
-      map: map2,
-      cell14IdToAddedViews: /* @__PURE__ */ new Map()
-    };
   }
-  function getOrCreateAddedViewsOfCell14Id({ cell14IdToAddedViews }, cellId) {
-    const views = cell14IdToAddedViews.get(cellId);
-    if (views) return views;
-    else {
-      const views2 = { polygons: [], markers: [] };
-      cell14IdToAddedViews.set(cellId, views2);
-      return views2;
-    }
+  function notifyDraftListUpdated(overlay) {
   }
-  function allocatePolygonAtMap(overlay, cellId, options) {
-    const p = new google.maps.Polygon();
-    p.setOptions(options);
-    p.setMap(overlay.map);
-    getOrCreateAddedViewsOfCell14Id(overlay, cellId).polygons.push(p);
-    return p;
+  function getPosition(draft) {
+    return draft.coordinates[0];
   }
-  function allocateMarkerAtMap(overlay, cellId, options) {
-    const m = new google.maps.Marker();
-    m.setOptions(options);
-    m.setMap(overlay.map);
-    getOrCreateAddedViewsOfCell14Id(overlay, cellId).markers.push(m);
-    return m;
+  function includesIn(bounds, draft) {
+    return bounds.contains(getPosition(draft));
   }
-  function clearMarkersInCell14({ cell14IdToAddedViews }, cellId) {
-    const views = cell14IdToAddedViews.get(cellId);
-    if (views == null) return;
-    const { polygons, markers } = views;
-    for (let p; p = polygons.pop(); ) {
-      p.setMap(null);
-    }
-    for (let m; m = markers.pop(); ) {
-      m.setMap(null);
-    }
-    cell14IdToAddedViews.delete(cellId);
-  }
-  var baseZIndex = 3100;
-  var cell17EmptyOptions = Object.freeze({
-    strokeColor: "rgba(253, 255, 114, 0.4)",
-    strokeOpacity: 1,
-    strokeWeight: 1,
-    fillColor: "#0000002d",
-    fillOpacity: 1,
-    clickable: false,
-    zIndex: baseZIndex + 1
-  });
-  var cell17PokestopOptions = Object.freeze({
-    ...cell17EmptyOptions,
-    fillColor: "rgba(0, 191, 255, 0.4)",
-    strokeColor: "rgba(0, 191, 255, 0.6)",
-    zIndex: baseZIndex
-  });
-  var cell17GymOptions = Object.freeze({
-    ...cell17PokestopOptions,
-    fillColor: "rgba(255, 0, 13, 0.4)",
-    strokeColor: "rgba(255, 0, 13, 0.6)"
-  });
-  var cell14Options = Object.freeze({
-    strokeColor: "#c54545b7",
-    strokeOpacity: 1,
-    strokeWeight: 2,
-    fillColor: "transparent",
-    fillOpacity: 1,
-    clickable: false,
-    zIndex: baseZIndex + 2
-  });
-  var cell14Options1 = Object.freeze({
-    ...cell14Options,
-    fillColor: "#dd767625"
-  });
-  var cell14Options2 = Object.freeze({
-    ...cell14Options,
-    fillColor: "#d3b71738"
-  });
-  function countToCell14Options(count) {
-    switch (count) {
-      case 1:
-      case 5:
-      case 19:
-        return cell14Options1;
-      case 4:
-      case 18:
-        return cell14Options2;
-    }
-    return cell14Options;
-  }
-  function sumGymAndPokestopCount({ kindToPois }) {
-    return (kindToPois.get("GYM")?.length ?? 0) + (kindToPois.get("POKESTOP")?.length ?? 0);
-  }
-  function renderCell14(overlay, cell14) {
-    if (cell14.pois.size === 0) return;
-    const entityCount = sumGymAndPokestopCount(cell14);
-    const options = countToCell14Options(entityCount);
-    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
-    polygon.setPath(cell14.corner);
-  }
-  function has(kind, cell17) {
-    return cell17.kindToCount.get(kind) ?? false;
-  }
-  function renderCell17(overlay, cell14, cell17) {
-    let options = cell17EmptyOptions;
-    if (has("GYM", cell17)) {
-      options = cell17GymOptions;
-    } else if (has("POKESTOP", cell17)) {
-      options = cell17PokestopOptions;
-    }
-    const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
-    polygon.setPath(cell17.cell.getCornerLatLngs());
-  }
-  function renderCell17CountLabel(overlay, cell14) {
-    const count = sumGymAndPokestopCount(cell14);
-    if (count <= 0) return;
-    const countMarker = allocateMarkerAtMap(
-      overlay,
-      cell14.id,
-      overlay.options.cell17CountMarkerOptions
-    );
-    countMarker.setPosition(cell14.cell.getLatLng());
-    countMarker.setLabel({
-      text: `${count}`,
-      color: "rgb(255, 255, 255)",
-      fontSize: "20px",
-      fontWeight: "400"
+  function addDraft(overlay, draft) {
+    overlay.drafts.set(draft.id, {
+      draft,
+      listView: document.createElement("li"),
+      mapView: createMapView(overlay, draft)
     });
+    notifyDraftListUpdated(overlay);
   }
-  async function renderViewsInCell14({ records, overlay }, nearlyCell14, zoom, center, scheduler, signal) {
-    const { lat, lng } = nearlyCell14.getLatLng();
-    const cell14 = await getCell14Stats(records, lat, lng, signal);
-    if (cell14 == null) return;
-    clearMarkersInCell14(overlay, cell14.id);
-    renderCell14(overlay, cell14);
-    if (13 < zoom) {
-      renderCell17CountLabel(overlay, cell14);
-    }
-    if (14 < zoom) {
-      const cell17s = [...cell14.cell17s.values()];
-      cell17s.sort(
-        (a, b) => distanceSquared(center, a.center) - distanceSquared(center, b.center)
-      );
-      for (const cell17 of cell17s) {
-        renderCell17(overlay, cell14, cell17);
+  function createMapView({ cachedOptions }, draft) {
+    const label = {
+      ...cachedOptions.draftMarkerLabel,
+      text: draft.name
+    };
+    const marker = new google.maps.Marker(cachedOptions.draftMarkerOptions);
+    marker.setPosition(getPosition(draft));
+    marker.setLabel(label);
+    return {
+      label,
+      marker
+    };
+  }
+  function isNeedDetail({ map: map2, config: config2 }) {
+    return config2.minDetailZoom <= (map2.getZoom() ?? 0);
+  }
+  function updateMapView(overlay, { mapView }) {
+    const needDetail = isNeedDetail(overlay);
+    const hasDetail = mapView.marker.getMap() != null;
+    if (needDetail !== hasDetail) {
+      if (needDetail) {
+        mapView.marker.setMap(overlay.map);
+      } else {
+        mapView.marker.setLabel(null);
       }
     }
   }
-  async function renderPoiAndCells(page, scheduler, signal) {
-    const { map: map2 } = page;
+  function deleteDetailView(overlay, view) {
+    overlay.addedMapViews.delete(view);
+    view.marker.setMap(null);
+  }
+  async function renderDraftsInMap(overlay, scheduler) {
+    const { drafts, map: map2 } = overlay;
     const bounds = map2.getBounds();
-    const zoom = map2.getZoom();
-    const center = toLatLngLiteral(map2.getCenter());
     if (bounds == null) return;
-    if (zoom <= 12) {
-      await clearAllMarkers(page.overlay, scheduler);
+    const needDetail = isNeedDetail(overlay);
+    const hasDetail = overlay.draftsCanvasOverlay.getMap() == null;
+    if (needDetail !== hasDetail) {
+      overlay.draftsCanvasOverlay.setMap(needDetail ? null : map2);
+    }
+    if (!needDetail) {
+      for (const oldView of overlay.addedMapViews) {
+        deleteDetailView(overlay, oldView);
+      }
       return;
     }
-    const nearlyCell14s = getNearlyCellsForBounds(bounds, 14);
-    nearlyCell14s.sort(
-      (a, b) => distanceSquared(center, a.getLatLng()) - distanceSquared(center, b.getLatLng())
-    );
-    await clearOutOfRangeCell14Markers(page.overlay, scheduler, nearlyCell14s);
-    for (const nearlyCell14 of nearlyCell14s) {
+    const viewToDrafts = /* @__PURE__ */ new Map();
+    const visibleBounds = padBounds(bounds, 0.2);
+    for (const view of drafts.values()) {
+      if (includesIn(visibleBounds, view.draft)) {
+        viewToDrafts.set(view.mapView, view);
+      }
+    }
+    for (const view of viewToDrafts.values()) {
       await scheduler.yield();
-      await renderViewsInCell14(
-        page,
-        nearlyCell14,
-        zoom,
-        center,
-        scheduler,
-        signal
-      );
+      updateMapView(overlay, view);
+    }
+    for (const oldView of overlay.addedMapViews) {
+      await scheduler.yield();
+      if (viewToDrafts.has(oldView)) {
+        viewToDrafts.delete(oldView);
+      } else {
+        deleteDetailView(overlay, oldView);
+      }
+    }
+    for (const view of viewToDrafts.keys()) {
+      await scheduler.yield();
+      view.marker.setMap(overlay.map);
+      overlay.addedMapViews.add(view);
     }
   }
-  async function clearAllMarkers(overlay, scheduler) {
-    const { cell14IdToAddedViews: views } = overlay;
-    for (const cellId of views.keys()) {
-      await scheduler.yield();
-      clearMarkersInCell14(overlay, cellId);
-      views.delete(cellId);
-    }
+  function notifyMapRangeChanged(overlay) {
+    overlay.asyncRenderDraftsInMapScope(async (signal) => {
+      await sleep(100, { signal });
+      const scheduler = createScheduler(signal);
+      return await renderDraftsInMap(overlay, scheduler);
+    });
   }
-  async function clearOutOfRangeCell14Markers(overlay, scheduler, nearlyCell14s) {
-    const cell14Ids = new Set(
-      nearlyCell14s.map((cell) => cell.toString())
-    );
-    for (const cell14Id of overlay.cell14IdToAddedViews.keys()) {
-      if (cell14Ids.has(cell14Id)) continue;
-      await scheduler.yield();
-      clearMarkersInCell14(overlay, cell14Id);
+  function createCanvasOverlay(drafts, config2) {
+    class CanvasOverlay extends google.maps.OverlayView {
+      constructor(_drafts, _config) {
+        super();
+        this._drafts = _drafts;
+        this._config = _config;
+        this._canvas = document.createElement("canvas");
+        this._canvas.style.position = "absolute";
+      }
+      // Overlay が地図に追加された時に呼ばれる
+      onAdd() {
+        const panes = this.getPanes();
+        panes.overlayLayer.appendChild(this._canvas);
+      }
+      onRemove() {
+        if (this._canvas.parentNode) {
+          this._canvas.parentNode.removeChild(this._canvas);
+        }
+      }
+      // 地図が動いたりズームしたりする度に呼ばれる
+      draw() {
+        const projection = this.getProjection();
+        if (!projection) return;
+        const map2 = this.getMap();
+        if (!(map2 instanceof google.maps.Map)) return;
+        const bounds = map2.getBounds();
+        const sw = projection.fromLatLngToDivPixel(bounds.getSouthWest());
+        const ne = projection.fromLatLngToDivPixel(bounds.getNorthEast());
+        const canvas = this._canvas;
+        canvas.style.left = sw.x + "px";
+        canvas.style.top = ne.y + "px";
+        canvas.width = ne.x - sw.x;
+        canvas.height = sw.y - ne.y;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const strokeStyle = this._config.draftMarker.strokeColor;
+        const fillStyle = this._config.draftMarker.fillColor;
+        const radius = this._config.draftMarker.scale;
+        const lineWidth = this._config.draftMarker.strokeWeight;
+        for (const draft of this._drafts.values()) {
+          const position = draft.draft.coordinates[0];
+          const pixel = projection.fromLatLngToDivPixel(position);
+          const x = pixel.x - sw.x;
+          const y = pixel.y - ne.y;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, 2 * Math.PI);
+          ctx.fillStyle = fillStyle;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = strokeStyle;
+          ctx.stroke();
+        }
+      }
     }
+    return new CanvasOverlay(drafts, config2);
   }
-  function setupPoiRecordOverlay(page) {
-    const enterCancelScope = createAsyncCancelScope(
-      page.defaultAsyncErrorHandler
-    );
-    const onRenderNeeded = () => {
-      enterCancelScope((signal) => {
-        const scheduler = createScheduler(signal);
-        return renderPoiAndCells(page, scheduler, signal);
-      });
+  function createDraftsOverlay(map2, asyncErrorHandler) {
+    const config2 = createDefaultViewConfig();
+    const drafts = /* @__PURE__ */ new Map();
+    const draftsCanvasOverlay = createCanvasOverlay(drafts, config2);
+    return {
+      config: config2,
+      cachedOptions: createOptionsCache(config2),
+      map: map2,
+      drafts,
+      draftsCanvasOverlay,
+      addedMapViews: /* @__PURE__ */ new Set(),
+      asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
+      asyncRenderDraftsInMapScope: createAsyncCancelScope(asyncErrorHandler)
     };
-    page.events.addEventListener("gcs-saved", onRenderNeeded);
-    page.map.addListener("idle", onRenderNeeded);
+  }
+  async function setupDraftsOverlay(overlay, local) {
+    const style = document.createElement("style");
+    style.innerText = cssText;
+    document.body.append(style);
+    const { userId, apiRoot } = local.getConfig();
+    if (userId && apiRoot) {
+      const { routes } = await getRoutes(
+        {
+          "user-id": userId
+        },
+        { rootUrl: apiRoot }
+      );
+      for (const route of routes) {
+        addDraft(overlay, {
+          ...route,
+          coordinates: parseCoordinates(route.coordinates),
+          id: route.routeId,
+          name: route.routeName
+        });
+      }
+    }
+    overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
+    notifyMapRangeChanged(overlay);
   }
 
-  // source/typed-event-target.ts
-  function createTypedEventTarget() {
-    return new EventTarget();
+  // inline-worker:__inline-worker
+  function inlineWorker(scriptText) {
+    let blob = new Blob([scriptText], { type: "text/javascript" });
+    let url2 = URL.createObjectURL(blob);
+    let worker = new Worker(url2);
+    URL.revokeObjectURL(url2);
+    return worker;
   }
-  function createTypedCustomEvent(type, detail) {
-    return new CustomEvent(type, { detail });
+
+  // source/poi-records.worker.ts
+  function Worker2() {
+    return inlineWorker('var tu=Object.defineProperty,Sd=Object.defineProperties;var kd=Object.getOwnPropertyDescriptors;var Et=Object.getOwnPropertySymbols;var ru=Object.prototype.hasOwnProperty,nu=Object.prototype.propertyIsEnumerable;var ln=(e,r)=>(r=Symbol[e])?r:Symbol.for("Symbol."+e),Id=e=>{throw TypeError(e)};var eu=(e,r,n)=>r in e?tu(e,r,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[r]=n,f=(e,r)=>{for(var n in r||(r={}))ru.call(r,n)&&eu(e,n,r[n]);if(Et)for(var n of Et(r))nu.call(r,n)&&eu(e,n,r[n]);return e},I=(e,r)=>Sd(e,kd(r));var ou=(e,r)=>{var n={};for(var o in e)ru.call(e,o)&&r.indexOf(o)<0&&(n[o]=e[o]);if(e!=null&&Et)for(var o of Et(e))r.indexOf(o)<0&&nu.call(e,o)&&(n[o]=e[o]);return n};var ve=(e,r)=>{for(var n in r)tu(e,n,{get:r[n],enumerable:!0})};var zd=function(e,r){this[0]=e,this[1]=r};var ue=e=>{var r=e[ln("asyncIterator")],n=!1,o,t={};return r==null?(r=e[ln("iterator")](),o=a=>t[a]=c=>r[a](c)):(r=r.call(e),o=a=>t[a]=c=>{if(n){if(n=!1,a==="throw")throw c;return c}return n=!0,{done:!1,value:new zd(new Promise(m=>{var s=r[a](c);s instanceof Object||Id("Object expected"),m(s)}),1)}}),t[ln("iterator")]=()=>t,o("next"),"throw"in r?o("throw"):t.throw=a=>{throw a},"return"in r&&o("return"),t};var au=Symbol("Comlink.proxy"),Td=Symbol("Comlink.endpoint"),wd=Symbol("Comlink.releaseProxy"),sn=Symbol("Comlink.finalizer"),Ct=Symbol("Comlink.thrown"),cu=e=>typeof e=="object"&&e!==null||typeof e=="function",Pd={canHandle:e=>cu(e)&&e[au],serialize(e){let{port1:r,port2:n}=new MessageChannel;return Mt(e,r),[n,[n]]},deserialize(e){return e.start(),mn(e)}},jd={canHandle:e=>cu(e)&&Ct in e,serialize({value:e}){let r;return e instanceof Error?r={isError:!0,value:{message:e.message,name:e.name,stack:e.stack}}:r={isError:!1,value:e},[r,[]]},deserialize(e){throw e.isError?Object.assign(new Error(e.value.message),e.value):e.value}},uu=new Map([["proxy",Pd],["throw",jd]]);function Dd(e,r){for(let n of e)if(r===n||n==="*"||n instanceof RegExp&&n.test(r))return!0;return!1}function Mt(e,r=globalThis,n=["*"]){r.addEventListener("message",function o(t){if(!t||!t.data)return;if(!Dd(n,t.origin)){console.warn(`Invalid origin \'${t.origin}\' for comlink proxy`);return}let{id:a,type:c,path:m}=Object.assign({path:[]},t.data),s=(t.data.argumentList||[]).map(Te),u;try{let d=m.slice(0,-1).reduce((l,p)=>l[p],e),i=m.reduce((l,p)=>l[p],e);switch(c){case"GET":u=i;break;case"SET":d[m.slice(-1)[0]]=Te(t.data.value),u=!0;break;case"APPLY":u=i.apply(d,s);break;case"CONSTRUCT":{let l=new i(...s);u=Ld(l)}break;case"ENDPOINT":{let{port1:l,port2:p}=new MessageChannel;Mt(e,p),u=Ed(l,[l])}break;case"RELEASE":u=void 0;break;default:return}}catch(d){u={value:d,[Ct]:0}}Promise.resolve(u).catch(d=>({value:d,[Ct]:0})).then(d=>{let[i,l]=Ft(d);r.postMessage(Object.assign(Object.assign({},i),{id:a}),l),c==="RELEASE"&&(r.removeEventListener("message",o),lu(r),sn in e&&typeof e[sn]=="function"&&e[sn]())}).catch(d=>{let[i,l]=Ft({value:new TypeError("Unserializable return value"),[Ct]:0});r.postMessage(Object.assign(Object.assign({},i),{id:a}),l)})}),r.start&&r.start()}function Od(e){return e.constructor.name==="MessagePort"}function lu(e){Od(e)&&e.close()}function mn(e,r){let n=new Map;return e.addEventListener("message",function(t){let{data:a}=t;if(!a||!a.id)return;let c=n.get(a.id);if(c)try{c(a)}finally{n.delete(a.id)}}),dn(e,n,[],r)}function Lt(e){if(e)throw new Error("Proxy has been released and is not useable")}function su(e){return Ze(e,new Map,{type:"RELEASE"}).then(()=>{lu(e)})}var Rt=new WeakMap,At="FinalizationRegistry"in globalThis&&new FinalizationRegistry(e=>{let r=(Rt.get(e)||0)-1;Rt.set(e,r),r===0&&su(e)});function Ud(e,r){let n=(Rt.get(r)||0)+1;Rt.set(r,n),At&&At.register(e,r,e)}function Nd(e){At&&At.unregister(e)}function dn(e,r,n=[],o=function(){}){let t=!1,a=new Proxy(o,{get(c,m){if(Lt(t),m===wd)return()=>{Nd(a),su(e),r.clear(),t=!0};if(m==="then"){if(n.length===0)return{then:()=>a};let s=Ze(e,r,{type:"GET",path:n.map(u=>u.toString())}).then(Te);return s.then.bind(s)}return dn(e,r,[...n,m])},set(c,m,s){Lt(t);let[u,d]=Ft(s);return Ze(e,r,{type:"SET",path:[...n,m].map(i=>i.toString()),value:u},d).then(Te)},apply(c,m,s){Lt(t);let u=n[n.length-1];if(u===Td)return Ze(e,r,{type:"ENDPOINT"}).then(Te);if(u==="bind")return dn(e,r,n.slice(0,-1));let[d,i]=iu(s);return Ze(e,r,{type:"APPLY",path:n.map(l=>l.toString()),argumentList:d},i).then(Te)},construct(c,m){Lt(t);let[s,u]=iu(m);return Ze(e,r,{type:"CONSTRUCT",path:n.map(d=>d.toString()),argumentList:s},u).then(Te)}});return Ud(a,e),a}function Zd(e){return Array.prototype.concat.apply([],e)}function iu(e){let r=e.map(Ft);return[r.map(n=>n[0]),Zd(r.map(n=>n[1]))]}var du=new WeakMap;function Ed(e,r){return du.set(e,r),e}function Ld(e){return Object.assign(e,{[au]:!0})}function Ft(e){for(let[r,n]of uu)if(n.canHandle(e)){let[o,t]=n.serialize(e);return[{type:"HANDLER",name:r,value:o},t]}return[{type:"RAW",value:e},du.get(e)||[]]}function Te(e){switch(e.type){case"HANDLER":return uu.get(e.name).deserialize(e.value);case"RAW":return e.value}}function Ze(e,r,n,o){return new Promise(t=>{let a=Cd();r.set(a,t),e.start&&e.start(),e.postMessage(Object.assign({id:a},n),o)})}function Cd(){return new Array(4).fill(0).map(()=>Math.floor(Math.random()*Number.MAX_SAFE_INTEGER).toString(16)).join("-")}function mu(e,r,{batchSize:n=10}={}){let o=[],t=!1,a=!1;function c(d){o.push(d),m()}function m(){a||(a=!0,queueMicrotask(()=>{a=!1,s().catch(r)}))}async function s(){if(t||o.length===0)return;t=!0;let d=o.splice(0,n);try{await e(d)}finally{t=!1,o.length&&m()}}function u(){o.length=0}return{push:c,close:u}}function pu(){return typeof window=="undefined"&&typeof self!="undefined"}function Ad(e,r=10){let n=performance.now(),o;return e.addEventListener("abort",()=>{o!=null&&cancelAnimationFrame(o)}),{get isYieldRequested(){var a,c;return(c=(a=navigator.scheduling)==null?void 0:a.isInputPending)!=null&&c.call(a)?!0:performance.now()-n>=r},yield(){return this.isYieldRequested?new Promise(t=>{o=requestAnimationFrame(()=>{n=performance.now(),t()})}):null}}}function Fd(){return{isYieldRequested:!1,yield(){return null}}}function fu(e,r=10){return pu()?Fd():Ad(e,r)}var pe={};ve(pe,{$ZodAny:()=>Yo,$ZodArray:()=>ni,$ZodAsyncError:()=>ne,$ZodBase64:()=>Mo,$ZodBase64URL:()=>Vo,$ZodBigInt:()=>fr,$ZodBigIntFormat:()=>Wo,$ZodBoolean:()=>st,$ZodCIDRv4:()=>Ro,$ZodCIDRv6:()=>Ao,$ZodCUID:()=>To,$ZodCUID2:()=>wo,$ZodCatch:()=>xi,$ZodCheck:()=>L,$ZodCheckBigIntFormat:()=>ro,$ZodCheckEndsWith:()=>go,$ZodCheckGreaterThan:()=>cr,$ZodCheckIncludes:()=>po,$ZodCheckLengthEquals:()=>uo,$ZodCheckLessThan:()=>ar,$ZodCheckLowerCase:()=>so,$ZodCheckMaxLength:()=>ao,$ZodCheckMaxSize:()=>no,$ZodCheckMimeType:()=>ho,$ZodCheckMinLength:()=>co,$ZodCheckMinSize:()=>oo,$ZodCheckMultipleOf:()=>eo,$ZodCheckNumberFormat:()=>to,$ZodCheckOverwrite:()=>yo,$ZodCheckProperty:()=>vo,$ZodCheckRegex:()=>lo,$ZodCheckSizeEquals:()=>io,$ZodCheckStartsWith:()=>fo,$ZodCheckStringFormat:()=>Ve,$ZodCheckUpperCase:()=>mo,$ZodCodec:()=>mt,$ZodCustom:()=>Pi,$ZodCustomStringFormat:()=>Bo,$ZodDate:()=>ri,$ZodDefault:()=>hi,$ZodDiscriminatedUnion:()=>ai,$ZodE164:()=>Ko,$ZodEmail:()=>So,$ZodEmoji:()=>Io,$ZodEncodeError:()=>he,$ZodEnum:()=>di,$ZodError:()=>at,$ZodExactOptional:()=>gi,$ZodFile:()=>pi,$ZodFunction:()=>zi,$ZodGUID:()=>xo,$ZodIPv4:()=>Eo,$ZodIPv6:()=>Lo,$ZodISODate:()=>Uo,$ZodISODateTime:()=>Oo,$ZodISODuration:()=>Zo,$ZodISOTime:()=>No,$ZodIntersection:()=>ci,$ZodJWT:()=>Jo,$ZodKSUID:()=>Do,$ZodLazy:()=>wi,$ZodLiteral:()=>mi,$ZodMAC:()=>Co,$ZodMap:()=>li,$ZodNaN:()=>_i,$ZodNanoID:()=>zo,$ZodNever:()=>ei,$ZodNonOptional:()=>$i,$ZodNull:()=>Qo,$ZodNullable:()=>vi,$ZodNumber:()=>pr,$ZodNumberFormat:()=>Go,$ZodObject:()=>Vu,$ZodObjectJIT:()=>oi,$ZodOptional:()=>vr,$ZodPipe:()=>Si,$ZodPrefault:()=>yi,$ZodPromise:()=>Ti,$ZodReadonly:()=>ki,$ZodRealError:()=>G,$ZodRecord:()=>ui,$ZodRegistry:()=>br,$ZodSet:()=>si,$ZodString:()=>je,$ZodStringFormat:()=>E,$ZodSuccess:()=>bi,$ZodSymbol:()=>qo,$ZodTemplateLiteral:()=>Ii,$ZodTransform:()=>fi,$ZodTuple:()=>gr,$ZodType:()=>P,$ZodULID:()=>Po,$ZodURL:()=>ko,$ZodUUID:()=>_o,$ZodUndefined:()=>Xo,$ZodUnion:()=>dt,$ZodUnknown:()=>Ho,$ZodVoid:()=>ti,$ZodXID:()=>jo,$ZodXor:()=>ii,$brand:()=>pn,$constructor:()=>g,$input:()=>Vl,$output:()=>Ml,Doc:()=>lt,JSONSchema:()=>ic,JSONSchemaGenerator:()=>Kr,NEVER:()=>Vt,TimePrecision:()=>Kl,_any:()=>ea,_array:()=>ma,_base64:()=>Lr,_base64url:()=>Cr,_bigint:()=>Gi,_boolean:()=>Ji,_catch:()=>uf,_check:()=>Jl,_cidrv4:()=>Zr,_cidrv6:()=>Er,_coercedBigint:()=>Wi,_coercedBoolean:()=>Bi,_coercedDate:()=>ia,_coercedNumber:()=>Ri,_coercedString:()=>Oi,_cuid:()=>wr,_cuid2:()=>Pr,_custom:()=>fa,_date:()=>oa,_decode:()=>Qt,_decodeAsync:()=>Ht,_default:()=>of,_discriminatedUnion:()=>Bp,_e164:()=>Rr,_email:()=>xr,_emoji:()=>zr,_encode:()=>Xt,_encodeAsync:()=>Yt,_endsWith:()=>xt,_enum:()=>Yp,_file:()=>pa,_float32:()=>Fi,_float64:()=>Mi,_gt:()=>de,_gte:()=>W,_guid:()=>ft,_includes:()=>$t,_int:()=>Ai,_int32:()=>Vi,_int64:()=>qi,_intersection:()=>Gp,_ipv4:()=>Ur,_ipv6:()=>Nr,_isoDate:()=>Zi,_isoDateTime:()=>Ni,_isoDuration:()=>Li,_isoTime:()=>Ei,_jwt:()=>Ar,_ksuid:()=>Or,_lazy:()=>mf,_length:()=>We,_literal:()=>ef,_lowercase:()=>ht,_lt:()=>se,_lte:()=>te,_mac:()=>Ui,_map:()=>Xp,_max:()=>te,_maxLength:()=>Ge,_maxSize:()=>Oe,_mime:()=>_t,_min:()=>W,_minLength:()=>_e,_minSize:()=>me,_multipleOf:()=>De,_nan:()=>aa,_nanoid:()=>Tr,_nativeEnum:()=>Hp,_negative:()=>ua,_never:()=>ra,_nonnegative:()=>sa,_nonoptional:()=>af,_nonpositive:()=>la,_normalize:()=>St,_null:()=>Hi,_nullable:()=>nf,_number:()=>Ci,_optional:()=>rf,_overwrite:()=>ie,_parse:()=>Re,_parseAsync:()=>Ae,_pipe:()=>lf,_positive:()=>ca,_promise:()=>pf,_property:()=>da,_readonly:()=>sf,_record:()=>qp,_refine:()=>ga,_regex:()=>vt,_safeDecode:()=>tr,_safeDecodeAsync:()=>nr,_safeEncode:()=>er,_safeEncodeAsync:()=>rr,_safeParse:()=>Fe,_safeParseAsync:()=>Me,_set:()=>Qp,_size:()=>Be,_slugify:()=>Tt,_startsWith:()=>bt,_string:()=>Di,_stringFormat:()=>qe,_stringbool:()=>$a,_success:()=>cf,_superRefine:()=>va,_symbol:()=>Qi,_templateLiteral:()=>df,_toLowerCase:()=>It,_toUpperCase:()=>zt,_transform:()=>tf,_trim:()=>kt,_tuple:()=>Wp,_uint32:()=>Ki,_uint64:()=>Xi,_ulid:()=>jr,_undefined:()=>Yi,_union:()=>Kp,_unknown:()=>ta,_uppercase:()=>yt,_url:()=>gt,_uuid:()=>_r,_uuidv4:()=>Sr,_uuidv6:()=>kr,_uuidv7:()=>Ir,_void:()=>na,_xid:()=>Dr,_xor:()=>Jp,clone:()=>J,config:()=>F,createStandardJSONSchemaMethod:()=>Xe,createToJSONSchemaMethod:()=>ba,decode:()=>gm,decodeAsync:()=>hm,describe:()=>ha,encode:()=>fm,encodeAsync:()=>vm,extractDefs:()=>ke,finalize:()=>Ie,flattenError:()=>Bt,formatError:()=>Gt,globalConfig:()=>He,globalRegistry:()=>M,initializeContext:()=>Se,isValidBase64:()=>Fo,isValidBase64URL:()=>Ru,isValidJWT:()=>Au,locales:()=>Je,meta:()=>ya,parse:()=>Wt,parseAsync:()=>qt,prettifyError:()=>xu,process:()=>Z,regexes:()=>ee,registry:()=>ji,safeDecode:()=>$m,safeDecodeAsync:()=>xm,safeEncode:()=>ym,safeEncodeAsync:()=>bm,safeParse:()=>kn,safeParseAsync:()=>In,toDotPath:()=>bu,toJSONSchema:()=>oc,treeifyError:()=>$u,util:()=>x,version:()=>$o});var Vt=Object.freeze({status:"aborted"});function g(e,r,n){var m;function o(s,u){if(s._zod||Object.defineProperty(s,"_zod",{value:{def:u,constr:c,traits:new Set},enumerable:!1}),s._zod.traits.has(e))return;s._zod.traits.add(e),r(s,u);let d=c.prototype,i=Object.keys(d);for(let l=0;l<i.length;l++){let p=i[l];p in s||(s[p]=d[p].bind(s))}}let t=(m=n==null?void 0:n.Parent)!=null?m:Object;class a extends t{}Object.defineProperty(a,"name",{value:e});function c(s){var i;var u;let d=n!=null&&n.Parent?new a:this;o(d,s),(i=(u=d._zod).deferred)!=null||(u.deferred=[]);for(let l of d._zod.deferred)l();return d}return Object.defineProperty(c,"init",{value:o}),Object.defineProperty(c,Symbol.hasInstance,{value:s=>{var u,d;return n!=null&&n.Parent&&s instanceof n.Parent?!0:(d=(u=s==null?void 0:s._zod)==null?void 0:u.traits)==null?void 0:d.has(e)}}),Object.defineProperty(c,"name",{value:e}),c}var pn=Symbol("zod_brand"),ne=class extends Error{constructor(){super("Encountered Promise during synchronous parse. Use .parseAsync() instead.")}},he=class extends Error{constructor(r){super(`Encountered unidirectional transform during encode: ${r}`),this.name="ZodEncodeError"}},He={};function F(e){return e&&Object.assign(He,e),He}var x={};ve(x,{BIGINT_FORMAT_RANGES:()=>Sn,Class:()=>gn,NUMBER_FORMAT_RANGES:()=>_n,aborted:()=>xe,allowsEval:()=>yn,assert:()=>Bd,assertEqual:()=>Md,assertIs:()=>Kd,assertNever:()=>Jd,assertNotEqual:()=>Vd,assignProp:()=>$e,base64ToUint8Array:()=>vu,base64urlToUint8Array:()=>lm,cached:()=>Le,captureStackTrace:()=>Jt,cleanEnum:()=>um,cleanRegex:()=>rt,clone:()=>J,cloneDef:()=>Wd,createTransparentProxy:()=>em,defineLazy:()=>O,esc:()=>Kt,escapeRegex:()=>H,extend:()=>nm,finalizeIssue:()=>B,floatSafeRemainder:()=>vn,getElementAtPath:()=>qd,getEnumValues:()=>tt,getLengthableOrigin:()=>it,getParsedType:()=>Hd,getSizableOrigin:()=>ot,hexToUint8Array:()=>dm,isObject:()=>we,isPlainObject:()=>be,issue:()=>Ce,joinValues:()=>h,jsonStringifyReplacer:()=>Ee,merge:()=>im,mergeDefs:()=>le,normalizeParams:()=>_,nullish:()=>ye,numKeys:()=>Yd,objectClone:()=>Gd,omit:()=>rm,optionalKeys:()=>xn,parsedType:()=>b,partial:()=>am,pick:()=>tm,prefixIssues:()=>q,primitiveTypes:()=>bn,promiseAllObject:()=>Xd,propertyKeyTypes:()=>nt,randomString:()=>Qd,required:()=>cm,safeExtend:()=>om,shallowClone:()=>$n,slugify:()=>hn,stringifyPrimitive:()=>$,uint8ArrayToBase64:()=>hu,uint8ArrayToBase64url:()=>sm,uint8ArrayToHex:()=>mm,unwrapMessage:()=>et});function Md(e){return e}function Vd(e){return e}function Kd(e){}function Jd(e){throw new Error("Unexpected value in exhaustive check")}function Bd(e){}function tt(e){let r=Object.values(e).filter(o=>typeof o=="number");return Object.entries(e).filter(([o,t])=>r.indexOf(+o)===-1).map(([o,t])=>t)}function h(e,r="|"){return e.map(n=>$(n)).join(r)}function Ee(e,r){return typeof r=="bigint"?r.toString():r}function Le(e){return{get value(){{let n=e();return Object.defineProperty(this,"value",{value:n}),n}throw new Error("cached value already set")}}}function ye(e){return e==null}function rt(e){let r=e.startsWith("^")?1:0,n=e.endsWith("$")?e.length-1:e.length;return e.slice(r,n)}function vn(e,r){let n=(e.toString().split(".")[1]||"").length,o=r.toString(),t=(o.split(".")[1]||"").length;if(t===0&&/\\d?e-\\d?/.test(o)){let s=o.match(/\\d?e-(\\d?)/);s!=null&&s[1]&&(t=Number.parseInt(s[1]))}let a=n>t?n:t,c=Number.parseInt(e.toFixed(a).replace(".","")),m=Number.parseInt(r.toFixed(a).replace(".",""));return c%m/10**a}var gu=Symbol("evaluating");function O(e,r,n){let o;Object.defineProperty(e,r,{get(){if(o!==gu)return o===void 0&&(o=gu,o=n()),o},set(t){Object.defineProperty(e,r,{value:t})},configurable:!0})}function Gd(e){return Object.create(Object.getPrototypeOf(e),Object.getOwnPropertyDescriptors(e))}function $e(e,r,n){Object.defineProperty(e,r,{value:n,writable:!0,enumerable:!0,configurable:!0})}function le(...e){let r={};for(let n of e){let o=Object.getOwnPropertyDescriptors(n);Object.assign(r,o)}return Object.defineProperties({},r)}function Wd(e){return le(e._zod.def)}function qd(e,r){return r?r.reduce((n,o)=>n==null?void 0:n[o],e):e}function Xd(e){let r=Object.keys(e),n=r.map(o=>e[o]);return Promise.all(n).then(o=>{let t={};for(let a=0;a<r.length;a++)t[r[a]]=o[a];return t})}function Qd(e=10){let r="abcdefghijklmnopqrstuvwxyz",n="";for(let o=0;o<e;o++)n+=r[Math.floor(Math.random()*r.length)];return n}function Kt(e){return JSON.stringify(e)}function hn(e){return e.toLowerCase().trim().replace(/[^\\w\\s-]/g,"").replace(/[\\s_-]+/g,"-").replace(/^-+|-+$/g,"")}var Jt="captureStackTrace"in Error?Error.captureStackTrace:(...e)=>{};function we(e){return typeof e=="object"&&e!==null&&!Array.isArray(e)}var yn=Le(()=>{var e;if(typeof navigator!="undefined"&&((e=navigator==null?void 0:navigator.userAgent)!=null&&e.includes("Cloudflare")))return!1;try{let r=Function;return new r(""),!0}catch(r){return!1}});function be(e){if(we(e)===!1)return!1;let r=e.constructor;if(r===void 0||typeof r!="function")return!0;let n=r.prototype;return!(we(n)===!1||Object.prototype.hasOwnProperty.call(n,"isPrototypeOf")===!1)}function $n(e){return be(e)?f({},e):Array.isArray(e)?[...e]:e}function Yd(e){let r=0;for(let n in e)Object.prototype.hasOwnProperty.call(e,n)&&r++;return r}var Hd=e=>{let r=typeof e;switch(r){case"undefined":return"undefined";case"string":return"string";case"number":return Number.isNaN(e)?"nan":"number";case"boolean":return"boolean";case"function":return"function";case"bigint":return"bigint";case"symbol":return"symbol";case"object":return Array.isArray(e)?"array":e===null?"null":e.then&&typeof e.then=="function"&&e.catch&&typeof e.catch=="function"?"promise":typeof Map!="undefined"&&e instanceof Map?"map":typeof Set!="undefined"&&e instanceof Set?"set":typeof Date!="undefined"&&e instanceof Date?"date":typeof File!="undefined"&&e instanceof File?"file":"object";default:throw new Error(`Unknown data type: ${r}`)}},nt=new Set(["string","number","symbol"]),bn=new Set(["string","number","bigint","boolean","symbol","undefined"]);function H(e){return e.replace(/[.*+?^${}()|[\\]\\\\]/g,"\\\\$&")}function J(e,r,n){let o=new e._zod.constr(r!=null?r:e._zod.def);return(!r||n!=null&&n.parent)&&(o._zod.parent=e),o}function _(e){let r=e;if(!r)return{};if(typeof r=="string")return{error:()=>r};if((r==null?void 0:r.message)!==void 0){if((r==null?void 0:r.error)!==void 0)throw new Error("Cannot specify both `message` and `error` params");r.error=r.message}return delete r.message,typeof r.error=="string"?I(f({},r),{error:()=>r.error}):r}function em(e){let r;return new Proxy({},{get(n,o,t){return r!=null||(r=e()),Reflect.get(r,o,t)},set(n,o,t,a){return r!=null||(r=e()),Reflect.set(r,o,t,a)},has(n,o){return r!=null||(r=e()),Reflect.has(r,o)},deleteProperty(n,o){return r!=null||(r=e()),Reflect.deleteProperty(r,o)},ownKeys(n){return r!=null||(r=e()),Reflect.ownKeys(r)},getOwnPropertyDescriptor(n,o){return r!=null||(r=e()),Reflect.getOwnPropertyDescriptor(r,o)},defineProperty(n,o,t){return r!=null||(r=e()),Reflect.defineProperty(r,o,t)}})}function $(e){return typeof e=="bigint"?e.toString()+"n":typeof e=="string"?`"${e}"`:`${e}`}function xn(e){return Object.keys(e).filter(r=>e[r]._zod.optin==="optional"&&e[r]._zod.optout==="optional")}var _n={safeint:[Number.MIN_SAFE_INTEGER,Number.MAX_SAFE_INTEGER],int32:[-2147483648,2147483647],uint32:[0,4294967295],float32:[-34028234663852886e22,34028234663852886e22],float64:[-Number.MAX_VALUE,Number.MAX_VALUE]},Sn={int64:[BigInt("-9223372036854775808"),BigInt("9223372036854775807")],uint64:[BigInt(0),BigInt("18446744073709551615")]};function tm(e,r){let n=e._zod.def,o=n.checks;if(o&&o.length>0)throw new Error(".pick() cannot be used on object schemas containing refinements");let a=le(e._zod.def,{get shape(){let c={};for(let m in r){if(!(m in n.shape))throw new Error(`Unrecognized key: "${m}"`);r[m]&&(c[m]=n.shape[m])}return $e(this,"shape",c),c},checks:[]});return J(e,a)}function rm(e,r){let n=e._zod.def,o=n.checks;if(o&&o.length>0)throw new Error(".omit() cannot be used on object schemas containing refinements");let a=le(e._zod.def,{get shape(){let c=f({},e._zod.def.shape);for(let m in r){if(!(m in n.shape))throw new Error(`Unrecognized key: "${m}"`);r[m]&&delete c[m]}return $e(this,"shape",c),c},checks:[]});return J(e,a)}function nm(e,r){if(!be(r))throw new Error("Invalid input to extend: expected a plain object");let n=e._zod.def.checks;if(n&&n.length>0){let a=e._zod.def.shape;for(let c in r)if(Object.getOwnPropertyDescriptor(a,c)!==void 0)throw new Error("Cannot overwrite keys on object schemas containing refinements. Use `.safeExtend()` instead.")}let t=le(e._zod.def,{get shape(){let a=f(f({},e._zod.def.shape),r);return $e(this,"shape",a),a}});return J(e,t)}function om(e,r){if(!be(r))throw new Error("Invalid input to safeExtend: expected a plain object");let n=le(e._zod.def,{get shape(){let o=f(f({},e._zod.def.shape),r);return $e(this,"shape",o),o}});return J(e,n)}function im(e,r){let n=le(e._zod.def,{get shape(){let o=f(f({},e._zod.def.shape),r._zod.def.shape);return $e(this,"shape",o),o},get catchall(){return r._zod.def.catchall},checks:[]});return J(e,n)}function am(e,r,n){let t=r._zod.def.checks;if(t&&t.length>0)throw new Error(".partial() cannot be used on object schemas containing refinements");let c=le(r._zod.def,{get shape(){let m=r._zod.def.shape,s=f({},m);if(n)for(let u in n){if(!(u in m))throw new Error(`Unrecognized key: "${u}"`);n[u]&&(s[u]=e?new e({type:"optional",innerType:m[u]}):m[u])}else for(let u in m)s[u]=e?new e({type:"optional",innerType:m[u]}):m[u];return $e(this,"shape",s),s},checks:[]});return J(r,c)}function cm(e,r,n){let o=le(r._zod.def,{get shape(){let t=r._zod.def.shape,a=f({},t);if(n)for(let c in n){if(!(c in a))throw new Error(`Unrecognized key: "${c}"`);n[c]&&(a[c]=new e({type:"nonoptional",innerType:t[c]}))}else for(let c in t)a[c]=new e({type:"nonoptional",innerType:t[c]});return $e(this,"shape",a),a}});return J(r,o)}function xe(e,r=0){var n;if(e.aborted===!0)return!0;for(let o=r;o<e.issues.length;o++)if(((n=e.issues[o])==null?void 0:n.continue)!==!0)return!0;return!1}function q(e,r){return r.map(n=>{var t;var o;return(t=(o=n).path)!=null||(o.path=[]),n.path.unshift(e),n})}function et(e){return typeof e=="string"?e:e==null?void 0:e.message}function B(e,r,n){var t,a,c,m,s,u,d,i,l,p,v;let o=I(f({},e),{path:(t=e.path)!=null?t:[]});if(!e.message){let y=(v=(p=(i=(u=et((m=(c=(a=e.inst)==null?void 0:a._zod.def)==null?void 0:c.error)==null?void 0:m.call(c,e)))!=null?u:et((s=r==null?void 0:r.error)==null?void 0:s.call(r,e)))!=null?i:et((d=n.customError)==null?void 0:d.call(n,e)))!=null?p:et((l=n.localeError)==null?void 0:l.call(n,e)))!=null?v:"Invalid input";o.message=y}return delete o.inst,delete o.continue,r!=null&&r.reportInput||delete o.input,o}function ot(e){return e instanceof Set?"set":e instanceof Map?"map":e instanceof File?"file":"unknown"}function it(e){return Array.isArray(e)?"array":typeof e=="string"?"string":"unknown"}function b(e){let r=typeof e;switch(r){case"number":return Number.isNaN(e)?"nan":"number";case"object":{if(e===null)return"null";if(Array.isArray(e))return"array";let n=e;if(n&&Object.getPrototypeOf(n)!==Object.prototype&&"constructor"in n&&n.constructor)return n.constructor.name}}return r}function Ce(...e){let[r,n,o]=e;return typeof r=="string"?{message:r,code:"custom",input:n,inst:o}:f({},r)}function um(e){return Object.entries(e).filter(([r,n])=>Number.isNaN(Number.parseInt(r,10))).map(r=>r[1])}function vu(e){let r=atob(e),n=new Uint8Array(r.length);for(let o=0;o<r.length;o++)n[o]=r.charCodeAt(o);return n}function hu(e){let r="";for(let n=0;n<e.length;n++)r+=String.fromCharCode(e[n]);return btoa(r)}function lm(e){let r=e.replace(/-/g,"+").replace(/_/g,"/"),n="=".repeat((4-r.length%4)%4);return vu(r+n)}function sm(e){return hu(e).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=/g,"")}function dm(e){let r=e.replace(/^0x/,"");if(r.length%2!==0)throw new Error("Invalid hex string length");let n=new Uint8Array(r.length/2);for(let o=0;o<r.length;o+=2)n[o/2]=Number.parseInt(r.slice(o,o+2),16);return n}function mm(e){return Array.from(e).map(r=>r.toString(16).padStart(2,"0")).join("")}var gn=class{constructor(...r){}};var yu=(e,r)=>{e.name="$ZodError",Object.defineProperty(e,"_zod",{value:e._zod,enumerable:!1}),Object.defineProperty(e,"issues",{value:r,enumerable:!1}),e.message=JSON.stringify(r,Ee,2),Object.defineProperty(e,"toString",{value:()=>e.message,enumerable:!1})},at=g("$ZodError",yu),G=g("$ZodError",yu,{Parent:Error});function Bt(e,r=n=>n.message){let n={},o=[];for(let t of e.issues)t.path.length>0?(n[t.path[0]]=n[t.path[0]]||[],n[t.path[0]].push(r(t))):o.push(r(t));return{formErrors:o,fieldErrors:n}}function Gt(e,r=n=>n.message){let n={_errors:[]},o=t=>{for(let a of t.issues)if(a.code==="invalid_union"&&a.errors.length)a.errors.map(c=>o({issues:c}));else if(a.code==="invalid_key")o({issues:a.issues});else if(a.code==="invalid_element")o({issues:a.issues});else if(a.path.length===0)n._errors.push(r(a));else{let c=n,m=0;for(;m<a.path.length;){let s=a.path[m];m===a.path.length-1?(c[s]=c[s]||{_errors:[]},c[s]._errors.push(r(a))):c[s]=c[s]||{_errors:[]},c=c[s],m++}}};return o(e),n}function $u(e,r=n=>n.message){let n={errors:[]},o=(t,a=[])=>{var s,u,d,i;var c,m;for(let l of t.issues)if(l.code==="invalid_union"&&l.errors.length)l.errors.map(p=>o({issues:p},l.path));else if(l.code==="invalid_key")o({issues:l.issues},l.path);else if(l.code==="invalid_element")o({issues:l.issues},l.path);else{let p=[...a,...l.path];if(p.length===0){n.errors.push(r(l));continue}let v=n,y=0;for(;y<p.length;){let S=p[y],w=y===p.length-1;typeof S=="string"?((s=v.properties)!=null||(v.properties={}),(u=(c=v.properties)[S])!=null||(c[S]={errors:[]}),v=v.properties[S]):((d=v.items)!=null||(v.items=[]),(i=(m=v.items)[S])!=null||(m[S]={errors:[]}),v=v.items[S]),w&&v.errors.push(r(l)),y++}}};return o(e),n}function bu(e){let r=[],n=e.map(o=>typeof o=="object"?o.key:o);for(let o of n)typeof o=="number"?r.push(`[${o}]`):typeof o=="symbol"?r.push(`[${JSON.stringify(String(o))}]`):/[^\\w$]/.test(o)?r.push(`[${JSON.stringify(o)}]`):(r.length&&r.push("."),r.push(o));return r.join("")}function xu(e){var o;let r=[],n=[...e.issues].sort((t,a)=>{var c,m;return((c=t.path)!=null?c:[]).length-((m=a.path)!=null?m:[]).length});for(let t of n)r.push(`\\u2716 ${t.message}`),(o=t.path)!=null&&o.length&&r.push(`  \\u2192 at ${bu(t.path)}`);return r.join(`\n`)}var Re=e=>(r,n,o,t)=>{var m;let a=o?Object.assign(o,{async:!1}):{async:!1},c=r._zod.run({value:n,issues:[]},a);if(c instanceof Promise)throw new ne;if(c.issues.length){let s=new((m=t==null?void 0:t.Err)!=null?m:e)(c.issues.map(u=>B(u,a,F())));throw Jt(s,t==null?void 0:t.callee),s}return c.value},Wt=Re(G),Ae=e=>async(r,n,o,t)=>{var m;let a=o?Object.assign(o,{async:!0}):{async:!0},c=r._zod.run({value:n,issues:[]},a);if(c instanceof Promise&&(c=await c),c.issues.length){let s=new((m=t==null?void 0:t.Err)!=null?m:e)(c.issues.map(u=>B(u,a,F())));throw Jt(s,t==null?void 0:t.callee),s}return c.value},qt=Ae(G),Fe=e=>(r,n,o)=>{let t=o?I(f({},o),{async:!1}):{async:!1},a=r._zod.run({value:n,issues:[]},t);if(a instanceof Promise)throw new ne;return a.issues.length?{success:!1,error:new(e!=null?e:at)(a.issues.map(c=>B(c,t,F())))}:{success:!0,data:a.value}},kn=Fe(G),Me=e=>async(r,n,o)=>{let t=o?Object.assign(o,{async:!0}):{async:!0},a=r._zod.run({value:n,issues:[]},t);return a instanceof Promise&&(a=await a),a.issues.length?{success:!1,error:new e(a.issues.map(c=>B(c,t,F())))}:{success:!0,data:a.value}},In=Me(G),Xt=e=>(r,n,o)=>{let t=o?Object.assign(o,{direction:"backward"}):{direction:"backward"};return Re(e)(r,n,t)},fm=Xt(G),Qt=e=>(r,n,o)=>Re(e)(r,n,o),gm=Qt(G),Yt=e=>async(r,n,o)=>{let t=o?Object.assign(o,{direction:"backward"}):{direction:"backward"};return Ae(e)(r,n,t)},vm=Yt(G),Ht=e=>async(r,n,o)=>Ae(e)(r,n,o),hm=Ht(G),er=e=>(r,n,o)=>{let t=o?Object.assign(o,{direction:"backward"}):{direction:"backward"};return Fe(e)(r,n,t)},ym=er(G),tr=e=>(r,n,o)=>Fe(e)(r,n,o),$m=tr(G),rr=e=>async(r,n,o)=>{let t=o?Object.assign(o,{direction:"backward"}):{direction:"backward"};return Me(e)(r,n,t)},bm=rr(G),nr=e=>async(r,n,o)=>Me(e)(r,n,o),xm=nr(G);var ee={};ve(ee,{base64:()=>Fn,base64url:()=>or,bigint:()=>Gn,boolean:()=>qn,browserEmail:()=>Pm,cidrv4:()=>Rn,cidrv6:()=>An,cuid:()=>zn,cuid2:()=>Tn,date:()=>Vn,datetime:()=>Jn,domain:()=>Om,duration:()=>On,e164:()=>Mn,email:()=>Nn,emoji:()=>Zn,extendedDuration:()=>_m,guid:()=>Un,hex:()=>Um,hostname:()=>Dm,html5Email:()=>zm,idnEmail:()=>wm,integer:()=>Wn,ipv4:()=>En,ipv6:()=>Ln,ksuid:()=>jn,lowercase:()=>Yn,mac:()=>Cn,md5_base64:()=>Zm,md5_base64url:()=>Em,md5_hex:()=>Nm,nanoid:()=>Dn,null:()=>Xn,number:()=>ir,rfc5322Email:()=>Tm,sha1_base64:()=>Cm,sha1_base64url:()=>Rm,sha1_hex:()=>Lm,sha256_base64:()=>Fm,sha256_base64url:()=>Mm,sha256_hex:()=>Am,sha384_base64:()=>Km,sha384_base64url:()=>Jm,sha384_hex:()=>Vm,sha512_base64:()=>Gm,sha512_base64url:()=>Wm,sha512_hex:()=>Bm,string:()=>Bn,time:()=>Kn,ulid:()=>wn,undefined:()=>Qn,unicodeEmail:()=>_u,uppercase:()=>Hn,uuid:()=>Pe,uuid4:()=>Sm,uuid6:()=>km,uuid7:()=>Im,xid:()=>Pn});var zn=/^[cC][^\\s-]{8,}$/,Tn=/^[0-9a-z]+$/,wn=/^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/,Pn=/^[0-9a-vA-V]{20}$/,jn=/^[A-Za-z0-9]{27}$/,Dn=/^[a-zA-Z0-9_-]{21}$/,On=/^P(?:(\\d+W)|(?!.*W)(?=\\d|T\\d)(\\d+Y)?(\\d+M)?(\\d+D)?(T(?=\\d)(\\d+H)?(\\d+M)?(\\d+([.,]\\d+)?S)?)?)$/,_m=/^[-+]?P(?!$)(?:(?:[-+]?\\d+Y)|(?:[-+]?\\d+[.,]\\d+Y$))?(?:(?:[-+]?\\d+M)|(?:[-+]?\\d+[.,]\\d+M$))?(?:(?:[-+]?\\d+W)|(?:[-+]?\\d+[.,]\\d+W$))?(?:(?:[-+]?\\d+D)|(?:[-+]?\\d+[.,]\\d+D$))?(?:T(?=[\\d+-])(?:(?:[-+]?\\d+H)|(?:[-+]?\\d+[.,]\\d+H$))?(?:(?:[-+]?\\d+M)|(?:[-+]?\\d+[.,]\\d+M$))?(?:[-+]?\\d+(?:[.,]\\d+)?S)?)??$/,Un=/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/,Pe=e=>e?new RegExp(`^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${e}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`):/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/,Sm=Pe(4),km=Pe(6),Im=Pe(7),Nn=/^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_\'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$/,zm=/^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,Tm=/^(([^<>()\\[\\]\\\\.,;:\\s@"]+(\\.[^<>()\\[\\]\\\\.,;:\\s@"]+)*)|(".+"))@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}])|(([a-zA-Z\\-0-9]+\\.)+[a-zA-Z]{2,}))$/,_u=/^[^\\s@"]{1,64}@[^\\s@]{1,255}$/u,wm=_u,Pm=/^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,jm="^(\\\\p{Extended_Pictographic}|\\\\p{Emoji_Component})+$";function Zn(){return new RegExp(jm,"u")}var En=/^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/,Ln=/^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/,Cn=e=>{let r=H(e!=null?e:":");return new RegExp(`^(?:[0-9A-F]{2}${r}){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}${r}){5}[0-9a-f]{2}$`)},Rn=/^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$/,An=/^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::|([0-9a-fA-F]{1,4})?::([0-9a-fA-F]{1,4}:?){0,6})\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$/,Fn=/^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$/,or=/^[A-Za-z0-9_-]*$/,Dm=/^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$/,Om=/^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$/,Mn=/^\\+[1-9]\\d{6,14}$/,Su="(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))",Vn=new RegExp(`^${Su}$`);function ku(e){let r="(?:[01]\\\\d|2[0-3]):[0-5]\\\\d";return typeof e.precision=="number"?e.precision===-1?`${r}`:e.precision===0?`${r}:[0-5]\\\\d`:`${r}:[0-5]\\\\d\\\\.\\\\d{${e.precision}}`:`${r}(?::[0-5]\\\\d(?:\\\\.\\\\d+)?)?`}function Kn(e){return new RegExp(`^${ku(e)}$`)}function Jn(e){let r=ku({precision:e.precision}),n=["Z"];e.local&&n.push(""),e.offset&&n.push("([+-](?:[01]\\\\d|2[0-3]):[0-5]\\\\d)");let o=`${r}(?:${n.join("|")})`;return new RegExp(`^${Su}T(?:${o})$`)}var Bn=e=>{var n,o;let r=e?`[\\\\s\\\\S]{${(n=e==null?void 0:e.minimum)!=null?n:0},${(o=e==null?void 0:e.maximum)!=null?o:""}}`:"[\\\\s\\\\S]*";return new RegExp(`^${r}$`)},Gn=/^-?\\d+n?$/,Wn=/^-?\\d+$/,ir=/^-?\\d+(?:\\.\\d+)?$/,qn=/^(?:true|false)$/i,Xn=/^null$/i;var Qn=/^undefined$/i;var Yn=/^[^A-Z]*$/,Hn=/^[^a-z]*$/,Um=/^[0-9a-fA-F]*$/;function ct(e,r){return new RegExp(`^[A-Za-z0-9+/]{${e}}${r}$`)}function ut(e){return new RegExp(`^[A-Za-z0-9_-]{${e}}$`)}var Nm=/^[0-9a-fA-F]{32}$/,Zm=ct(22,"=="),Em=ut(22),Lm=/^[0-9a-fA-F]{40}$/,Cm=ct(27,"="),Rm=ut(27),Am=/^[0-9a-fA-F]{64}$/,Fm=ct(43,"="),Mm=ut(43),Vm=/^[0-9a-fA-F]{96}$/,Km=ct(64,""),Jm=ut(64),Bm=/^[0-9a-fA-F]{128}$/,Gm=ct(86,"=="),Wm=ut(86);var L=g("$ZodCheck",(e,r)=>{var o,t;var n;(o=e._zod)!=null||(e._zod={}),e._zod.def=r,(t=(n=e._zod).onattach)!=null||(n.onattach=[])}),zu={number:"number",bigint:"bigint",object:"date"},ar=g("$ZodCheckLessThan",(e,r)=>{L.init(e,r);let n=zu[typeof r.value];e._zod.onattach.push(o=>{var c;let t=o._zod.bag,a=(c=r.inclusive?t.maximum:t.exclusiveMaximum)!=null?c:Number.POSITIVE_INFINITY;r.value<a&&(r.inclusive?t.maximum=r.value:t.exclusiveMaximum=r.value)}),e._zod.check=o=>{(r.inclusive?o.value<=r.value:o.value<r.value)||o.issues.push({origin:n,code:"too_big",maximum:typeof r.value=="object"?r.value.getTime():r.value,input:o.value,inclusive:r.inclusive,inst:e,continue:!r.abort})}}),cr=g("$ZodCheckGreaterThan",(e,r)=>{L.init(e,r);let n=zu[typeof r.value];e._zod.onattach.push(o=>{var c;let t=o._zod.bag,a=(c=r.inclusive?t.minimum:t.exclusiveMinimum)!=null?c:Number.NEGATIVE_INFINITY;r.value>a&&(r.inclusive?t.minimum=r.value:t.exclusiveMinimum=r.value)}),e._zod.check=o=>{(r.inclusive?o.value>=r.value:o.value>r.value)||o.issues.push({origin:n,code:"too_small",minimum:typeof r.value=="object"?r.value.getTime():r.value,input:o.value,inclusive:r.inclusive,inst:e,continue:!r.abort})}}),eo=g("$ZodCheckMultipleOf",(e,r)=>{L.init(e,r),e._zod.onattach.push(n=>{var t;var o;(t=(o=n._zod.bag).multipleOf)!=null||(o.multipleOf=r.value)}),e._zod.check=n=>{if(typeof n.value!=typeof r.value)throw new Error("Cannot mix number and bigint in multiple_of check.");(typeof n.value=="bigint"?n.value%r.value===BigInt(0):vn(n.value,r.value)===0)||n.issues.push({origin:typeof n.value,code:"not_multiple_of",divisor:r.value,input:n.value,inst:e,continue:!r.abort})}}),to=g("$ZodCheckNumberFormat",(e,r)=>{var c;L.init(e,r),r.format=r.format||"float64";let n=(c=r.format)==null?void 0:c.includes("int"),o=n?"int":"number",[t,a]=_n[r.format];e._zod.onattach.push(m=>{let s=m._zod.bag;s.format=r.format,s.minimum=t,s.maximum=a,n&&(s.pattern=Wn)}),e._zod.check=m=>{let s=m.value;if(n){if(!Number.isInteger(s)){m.issues.push({expected:o,format:r.format,code:"invalid_type",continue:!1,input:s,inst:e});return}if(!Number.isSafeInteger(s)){s>0?m.issues.push({input:s,code:"too_big",maximum:Number.MAX_SAFE_INTEGER,note:"Integers must be within the safe integer range.",inst:e,origin:o,inclusive:!0,continue:!r.abort}):m.issues.push({input:s,code:"too_small",minimum:Number.MIN_SAFE_INTEGER,note:"Integers must be within the safe integer range.",inst:e,origin:o,inclusive:!0,continue:!r.abort});return}}s<t&&m.issues.push({origin:"number",input:s,code:"too_small",minimum:t,inclusive:!0,inst:e,continue:!r.abort}),s>a&&m.issues.push({origin:"number",input:s,code:"too_big",maximum:a,inclusive:!0,inst:e,continue:!r.abort})}}),ro=g("$ZodCheckBigIntFormat",(e,r)=>{L.init(e,r);let[n,o]=Sn[r.format];e._zod.onattach.push(t=>{let a=t._zod.bag;a.format=r.format,a.minimum=n,a.maximum=o}),e._zod.check=t=>{let a=t.value;a<n&&t.issues.push({origin:"bigint",input:a,code:"too_small",minimum:n,inclusive:!0,inst:e,continue:!r.abort}),a>o&&t.issues.push({origin:"bigint",input:a,code:"too_big",maximum:o,inclusive:!0,inst:e,continue:!r.abort})}}),no=g("$ZodCheckMaxSize",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.size!==void 0}),e._zod.onattach.push(t=>{var c;let a=(c=t._zod.bag.maximum)!=null?c:Number.POSITIVE_INFINITY;r.maximum<a&&(t._zod.bag.maximum=r.maximum)}),e._zod.check=t=>{let a=t.value;a.size<=r.maximum||t.issues.push({origin:ot(a),code:"too_big",maximum:r.maximum,inclusive:!0,input:a,inst:e,continue:!r.abort})}}),oo=g("$ZodCheckMinSize",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.size!==void 0}),e._zod.onattach.push(t=>{var c;let a=(c=t._zod.bag.minimum)!=null?c:Number.NEGATIVE_INFINITY;r.minimum>a&&(t._zod.bag.minimum=r.minimum)}),e._zod.check=t=>{let a=t.value;a.size>=r.minimum||t.issues.push({origin:ot(a),code:"too_small",minimum:r.minimum,inclusive:!0,input:a,inst:e,continue:!r.abort})}}),io=g("$ZodCheckSizeEquals",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.size!==void 0}),e._zod.onattach.push(t=>{let a=t._zod.bag;a.minimum=r.size,a.maximum=r.size,a.size=r.size}),e._zod.check=t=>{let a=t.value,c=a.size;if(c===r.size)return;let m=c>r.size;t.issues.push(I(f({origin:ot(a)},m?{code:"too_big",maximum:r.size}:{code:"too_small",minimum:r.size}),{inclusive:!0,exact:!0,input:t.value,inst:e,continue:!r.abort}))}}),ao=g("$ZodCheckMaxLength",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.length!==void 0}),e._zod.onattach.push(t=>{var c;let a=(c=t._zod.bag.maximum)!=null?c:Number.POSITIVE_INFINITY;r.maximum<a&&(t._zod.bag.maximum=r.maximum)}),e._zod.check=t=>{let a=t.value;if(a.length<=r.maximum)return;let m=it(a);t.issues.push({origin:m,code:"too_big",maximum:r.maximum,inclusive:!0,input:a,inst:e,continue:!r.abort})}}),co=g("$ZodCheckMinLength",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.length!==void 0}),e._zod.onattach.push(t=>{var c;let a=(c=t._zod.bag.minimum)!=null?c:Number.NEGATIVE_INFINITY;r.minimum>a&&(t._zod.bag.minimum=r.minimum)}),e._zod.check=t=>{let a=t.value;if(a.length>=r.minimum)return;let m=it(a);t.issues.push({origin:m,code:"too_small",minimum:r.minimum,inclusive:!0,input:a,inst:e,continue:!r.abort})}}),uo=g("$ZodCheckLengthEquals",(e,r)=>{var o;var n;L.init(e,r),(o=(n=e._zod.def).when)!=null||(n.when=t=>{let a=t.value;return!ye(a)&&a.length!==void 0}),e._zod.onattach.push(t=>{let a=t._zod.bag;a.minimum=r.length,a.maximum=r.length,a.length=r.length}),e._zod.check=t=>{let a=t.value,c=a.length;if(c===r.length)return;let m=it(a),s=c>r.length;t.issues.push(I(f({origin:m},s?{code:"too_big",maximum:r.length}:{code:"too_small",minimum:r.length}),{inclusive:!0,exact:!0,input:t.value,inst:e,continue:!r.abort}))}}),Ve=g("$ZodCheckStringFormat",(e,r)=>{var t,a;var n,o;L.init(e,r),e._zod.onattach.push(c=>{var s;let m=c._zod.bag;m.format=r.format,r.pattern&&((s=m.patterns)!=null||(m.patterns=new Set),m.patterns.add(r.pattern))}),r.pattern?(t=(n=e._zod).check)!=null||(n.check=c=>{r.pattern.lastIndex=0,!r.pattern.test(c.value)&&c.issues.push(I(f({origin:"string",code:"invalid_format",format:r.format,input:c.value},r.pattern?{pattern:r.pattern.toString()}:{}),{inst:e,continue:!r.abort}))}):(a=(o=e._zod).check)!=null||(o.check=()=>{})}),lo=g("$ZodCheckRegex",(e,r)=>{Ve.init(e,r),e._zod.check=n=>{r.pattern.lastIndex=0,!r.pattern.test(n.value)&&n.issues.push({origin:"string",code:"invalid_format",format:"regex",input:n.value,pattern:r.pattern.toString(),inst:e,continue:!r.abort})}}),so=g("$ZodCheckLowerCase",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Yn),Ve.init(e,r)}),mo=g("$ZodCheckUpperCase",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Hn),Ve.init(e,r)}),po=g("$ZodCheckIncludes",(e,r)=>{L.init(e,r);let n=H(r.includes),o=new RegExp(typeof r.position=="number"?`^.{${r.position}}${n}`:n);r.pattern=o,e._zod.onattach.push(t=>{var c;let a=t._zod.bag;(c=a.patterns)!=null||(a.patterns=new Set),a.patterns.add(o)}),e._zod.check=t=>{t.value.includes(r.includes,r.position)||t.issues.push({origin:"string",code:"invalid_format",format:"includes",includes:r.includes,input:t.value,inst:e,continue:!r.abort})}}),fo=g("$ZodCheckStartsWith",(e,r)=>{var o;L.init(e,r);let n=new RegExp(`^${H(r.prefix)}.*`);(o=r.pattern)!=null||(r.pattern=n),e._zod.onattach.push(t=>{var c;let a=t._zod.bag;(c=a.patterns)!=null||(a.patterns=new Set),a.patterns.add(n)}),e._zod.check=t=>{t.value.startsWith(r.prefix)||t.issues.push({origin:"string",code:"invalid_format",format:"starts_with",prefix:r.prefix,input:t.value,inst:e,continue:!r.abort})}}),go=g("$ZodCheckEndsWith",(e,r)=>{var o;L.init(e,r);let n=new RegExp(`.*${H(r.suffix)}$`);(o=r.pattern)!=null||(r.pattern=n),e._zod.onattach.push(t=>{var c;let a=t._zod.bag;(c=a.patterns)!=null||(a.patterns=new Set),a.patterns.add(n)}),e._zod.check=t=>{t.value.endsWith(r.suffix)||t.issues.push({origin:"string",code:"invalid_format",format:"ends_with",suffix:r.suffix,input:t.value,inst:e,continue:!r.abort})}});function Iu(e,r,n){e.issues.length&&r.issues.push(...q(n,e.issues))}var vo=g("$ZodCheckProperty",(e,r)=>{L.init(e,r),e._zod.check=n=>{let o=r.schema._zod.run({value:n.value[r.property],issues:[]},{});if(o instanceof Promise)return o.then(t=>Iu(t,n,r.property));Iu(o,n,r.property)}}),ho=g("$ZodCheckMimeType",(e,r)=>{L.init(e,r);let n=new Set(r.mime);e._zod.onattach.push(o=>{o._zod.bag.mime=r.mime}),e._zod.check=o=>{n.has(o.value.type)||o.issues.push({code:"invalid_value",values:r.mime,input:o.value.type,inst:e,continue:!r.abort})}}),yo=g("$ZodCheckOverwrite",(e,r)=>{L.init(e,r),e._zod.check=n=>{n.value=r.tx(n.value)}});var lt=class{constructor(r=[]){this.content=[],this.indent=0,this&&(this.args=r)}indented(r){this.indent+=1,r(this),this.indent-=1}write(r){if(typeof r=="function"){r(this,{execution:"sync"}),r(this,{execution:"async"});return}let o=r.split(`\n`).filter(c=>c),t=Math.min(...o.map(c=>c.length-c.trimStart().length)),a=o.map(c=>c.slice(t)).map(c=>" ".repeat(this.indent*2)+c);for(let c of a)this.content.push(c)}compile(){var a;let r=Function,n=this==null?void 0:this.args,t=[...((a=this==null?void 0:this.content)!=null?a:[""]).map(c=>`  ${c}`)];return new r(...n,t.join(`\n`))}};var $o={major:4,minor:3,patch:6};var P=g("$ZodType",(e,r)=>{var t,a,c;var n;e!=null||(e={}),e._zod.def=r,e._zod.bag=e._zod.bag||{},e._zod.version=$o;let o=[...(t=e._zod.def.checks)!=null?t:[]];e._zod.traits.has("$ZodCheck")&&o.unshift(e);for(let m of o)for(let s of m._zod.onattach)s(e);if(o.length===0)(a=(n=e._zod).deferred)!=null||(n.deferred=[]),(c=e._zod.deferred)==null||c.push(()=>{e._zod.run=e._zod.parse});else{let m=(u,d,i)=>{let l=xe(u),p;for(let v of d){if(v._zod.def.when){if(!v._zod.def.when(u))continue}else if(l)continue;let y=u.issues.length,S=v._zod.check(u);if(S instanceof Promise&&(i==null?void 0:i.async)===!1)throw new ne;if(p||S instanceof Promise)p=(p!=null?p:Promise.resolve()).then(async()=>{await S,u.issues.length!==y&&(l||(l=xe(u,y)))});else{if(u.issues.length===y)continue;l||(l=xe(u,y))}}return p?p.then(()=>u):u},s=(u,d,i)=>{if(xe(u))return u.aborted=!0,u;let l=m(d,o,i);if(l instanceof Promise){if(i.async===!1)throw new ne;return l.then(p=>e._zod.parse(p,i))}return e._zod.parse(l,i)};e._zod.run=(u,d)=>{if(d.skipChecks)return e._zod.parse(u,d);if(d.direction==="backward"){let l=e._zod.parse({value:u.value,issues:[]},I(f({},d),{skipChecks:!0}));return l instanceof Promise?l.then(p=>s(p,u,d)):s(l,u,d)}let i=e._zod.parse(u,d);if(i instanceof Promise){if(d.async===!1)throw new ne;return i.then(l=>m(l,o,d))}return m(i,o,d)}}O(e,"~standard",()=>({validate:m=>{var s;try{let u=kn(e,m);return u.success?{value:u.data}:{issues:(s=u.error)==null?void 0:s.issues}}catch(u){return In(e,m).then(d=>{var i;return d.success?{value:d.data}:{issues:(i=d.error)==null?void 0:i.issues}})}},vendor:"zod",version:1}))}),je=g("$ZodString",(e,r)=>{var n,o,t;P.init(e,r),e._zod.pattern=(t=[...(o=(n=e==null?void 0:e._zod.bag)==null?void 0:n.patterns)!=null?o:[]].pop())!=null?t:Bn(e._zod.bag),e._zod.parse=(a,c)=>{if(r.coerce)try{a.value=String(a.value)}catch(m){}return typeof a.value=="string"||a.issues.push({expected:"string",code:"invalid_type",input:a.value,inst:e}),a}}),E=g("$ZodStringFormat",(e,r)=>{Ve.init(e,r),je.init(e,r)}),xo=g("$ZodGUID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Un),E.init(e,r)}),_o=g("$ZodUUID",(e,r)=>{var n,o;if(r.version){let a={v1:1,v2:2,v3:3,v4:4,v5:5,v6:6,v7:7,v8:8}[r.version];if(a===void 0)throw new Error(`Invalid UUID version: "${r.version}"`);(n=r.pattern)!=null||(r.pattern=Pe(a))}else(o=r.pattern)!=null||(r.pattern=Pe());E.init(e,r)}),So=g("$ZodEmail",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Nn),E.init(e,r)}),ko=g("$ZodURL",(e,r)=>{E.init(e,r),e._zod.check=n=>{try{let o=n.value.trim(),t=new URL(o);r.hostname&&(r.hostname.lastIndex=0,r.hostname.test(t.hostname)||n.issues.push({code:"invalid_format",format:"url",note:"Invalid hostname",pattern:r.hostname.source,input:n.value,inst:e,continue:!r.abort})),r.protocol&&(r.protocol.lastIndex=0,r.protocol.test(t.protocol.endsWith(":")?t.protocol.slice(0,-1):t.protocol)||n.issues.push({code:"invalid_format",format:"url",note:"Invalid protocol",pattern:r.protocol.source,input:n.value,inst:e,continue:!r.abort})),r.normalize?n.value=t.href:n.value=o;return}catch(o){n.issues.push({code:"invalid_format",format:"url",input:n.value,inst:e,continue:!r.abort})}}}),Io=g("$ZodEmoji",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Zn()),E.init(e,r)}),zo=g("$ZodNanoID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Dn),E.init(e,r)}),To=g("$ZodCUID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=zn),E.init(e,r)}),wo=g("$ZodCUID2",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Tn),E.init(e,r)}),Po=g("$ZodULID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=wn),E.init(e,r)}),jo=g("$ZodXID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Pn),E.init(e,r)}),Do=g("$ZodKSUID",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=jn),E.init(e,r)}),Oo=g("$ZodISODateTime",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Jn(r)),E.init(e,r)}),Uo=g("$ZodISODate",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Vn),E.init(e,r)}),No=g("$ZodISOTime",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Kn(r)),E.init(e,r)}),Zo=g("$ZodISODuration",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=On),E.init(e,r)}),Eo=g("$ZodIPv4",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=En),E.init(e,r),e._zod.bag.format="ipv4"}),Lo=g("$ZodIPv6",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Ln),E.init(e,r),e._zod.bag.format="ipv6",e._zod.check=o=>{try{new URL(`http://[${o.value}]`)}catch(t){o.issues.push({code:"invalid_format",format:"ipv6",input:o.value,inst:e,continue:!r.abort})}}}),Co=g("$ZodMAC",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Cn(r.delimiter)),E.init(e,r),e._zod.bag.format="mac"}),Ro=g("$ZodCIDRv4",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Rn),E.init(e,r)}),Ao=g("$ZodCIDRv6",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=An),E.init(e,r),e._zod.check=o=>{let t=o.value.split("/");try{if(t.length!==2)throw new Error;let[a,c]=t;if(!c)throw new Error;let m=Number(c);if(`${m}`!==c)throw new Error;if(m<0||m>128)throw new Error;new URL(`http://[${a}]`)}catch(a){o.issues.push({code:"invalid_format",format:"cidrv6",input:o.value,inst:e,continue:!r.abort})}}});function Fo(e){if(e==="")return!0;if(e.length%4!==0)return!1;try{return atob(e),!0}catch(r){return!1}}var Mo=g("$ZodBase64",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Fn),E.init(e,r),e._zod.bag.contentEncoding="base64",e._zod.check=o=>{Fo(o.value)||o.issues.push({code:"invalid_format",format:"base64",input:o.value,inst:e,continue:!r.abort})}});function Ru(e){if(!or.test(e))return!1;let r=e.replace(/[-_]/g,o=>o==="-"?"+":"/"),n=r.padEnd(Math.ceil(r.length/4)*4,"=");return Fo(n)}var Vo=g("$ZodBase64URL",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=or),E.init(e,r),e._zod.bag.contentEncoding="base64url",e._zod.check=o=>{Ru(o.value)||o.issues.push({code:"invalid_format",format:"base64url",input:o.value,inst:e,continue:!r.abort})}}),Ko=g("$ZodE164",(e,r)=>{var n;(n=r.pattern)!=null||(r.pattern=Mn),E.init(e,r)});function Au(e,r=null){try{let n=e.split(".");if(n.length!==3)return!1;let[o]=n;if(!o)return!1;let t=JSON.parse(atob(o));return!("typ"in t&&(t==null?void 0:t.typ)!=="JWT"||!t.alg||r&&(!("alg"in t)||t.alg!==r))}catch(n){return!1}}var Jo=g("$ZodJWT",(e,r)=>{E.init(e,r),e._zod.check=n=>{Au(n.value,r.alg)||n.issues.push({code:"invalid_format",format:"jwt",input:n.value,inst:e,continue:!r.abort})}}),Bo=g("$ZodCustomStringFormat",(e,r)=>{E.init(e,r),e._zod.check=n=>{r.fn(n.value)||n.issues.push({code:"invalid_format",format:r.format,input:n.value,inst:e,continue:!r.abort})}}),pr=g("$ZodNumber",(e,r)=>{var n;P.init(e,r),e._zod.pattern=(n=e._zod.bag.pattern)!=null?n:ir,e._zod.parse=(o,t)=>{if(r.coerce)try{o.value=Number(o.value)}catch(m){}let a=o.value;if(typeof a=="number"&&!Number.isNaN(a)&&Number.isFinite(a))return o;let c=typeof a=="number"?Number.isNaN(a)?"NaN":Number.isFinite(a)?void 0:"Infinity":void 0;return o.issues.push(f({expected:"number",code:"invalid_type",input:a,inst:e},c?{received:c}:{})),o}}),Go=g("$ZodNumberFormat",(e,r)=>{to.init(e,r),pr.init(e,r)}),st=g("$ZodBoolean",(e,r)=>{P.init(e,r),e._zod.pattern=qn,e._zod.parse=(n,o)=>{if(r.coerce)try{n.value=!!n.value}catch(a){}let t=n.value;return typeof t=="boolean"||n.issues.push({expected:"boolean",code:"invalid_type",input:t,inst:e}),n}}),fr=g("$ZodBigInt",(e,r)=>{P.init(e,r),e._zod.pattern=Gn,e._zod.parse=(n,o)=>{if(r.coerce)try{n.value=BigInt(n.value)}catch(t){}return typeof n.value=="bigint"||n.issues.push({expected:"bigint",code:"invalid_type",input:n.value,inst:e}),n}}),Wo=g("$ZodBigIntFormat",(e,r)=>{ro.init(e,r),fr.init(e,r)}),qo=g("$ZodSymbol",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;return typeof t=="symbol"||n.issues.push({expected:"symbol",code:"invalid_type",input:t,inst:e}),n}}),Xo=g("$ZodUndefined",(e,r)=>{P.init(e,r),e._zod.pattern=Qn,e._zod.values=new Set([void 0]),e._zod.optin="optional",e._zod.optout="optional",e._zod.parse=(n,o)=>{let t=n.value;return typeof t=="undefined"||n.issues.push({expected:"undefined",code:"invalid_type",input:t,inst:e}),n}}),Qo=g("$ZodNull",(e,r)=>{P.init(e,r),e._zod.pattern=Xn,e._zod.values=new Set([null]),e._zod.parse=(n,o)=>{let t=n.value;return t===null||n.issues.push({expected:"null",code:"invalid_type",input:t,inst:e}),n}}),Yo=g("$ZodAny",(e,r)=>{P.init(e,r),e._zod.parse=n=>n}),Ho=g("$ZodUnknown",(e,r)=>{P.init(e,r),e._zod.parse=n=>n}),ei=g("$ZodNever",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>(n.issues.push({expected:"never",code:"invalid_type",input:n.value,inst:e}),n)}),ti=g("$ZodVoid",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;return typeof t=="undefined"||n.issues.push({expected:"void",code:"invalid_type",input:t,inst:e}),n}}),ri=g("$ZodDate",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{if(r.coerce)try{n.value=new Date(n.value)}catch(m){}let t=n.value,a=t instanceof Date;return a&&!Number.isNaN(t.getTime())||n.issues.push(I(f({expected:"date",code:"invalid_type",input:t},a?{received:"Invalid Date"}:{}),{inst:e})),n}});function wu(e,r,n){e.issues.length&&r.issues.push(...q(n,e.issues)),r.value[n]=e.value}var ni=g("$ZodArray",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;if(!Array.isArray(t))return n.issues.push({expected:"array",code:"invalid_type",input:t,inst:e}),n;n.value=Array(t.length);let a=[];for(let c=0;c<t.length;c++){let m=t[c],s=r.element._zod.run({value:m,issues:[]},o);s instanceof Promise?a.push(s.then(u=>wu(u,n,c))):wu(s,n,c)}return a.length?Promise.all(a).then(()=>n):n}});function mr(e,r,n,o,t){if(e.issues.length){if(t&&!(n in o))return;r.issues.push(...q(n,e.issues))}e.value===void 0?n in o&&(r.value[n]=void 0):r.value[n]=e.value}function Fu(e){var o,t,a,c;let r=Object.keys(e.shape);for(let m of r)if(!((c=(a=(t=(o=e.shape)==null?void 0:o[m])==null?void 0:t._zod)==null?void 0:a.traits)!=null&&c.has("$ZodType")))throw new Error(`Invalid element at key "${m}": expected a Zod schema`);let n=xn(e.shape);return I(f({},e),{keys:r,keySet:new Set(r),numKeys:r.length,optionalKeys:new Set(n)})}function Mu(e,r,n,o,t,a){let c=[],m=t.keySet,s=t.catchall._zod,u=s.def.type,d=s.optout==="optional";for(let i in r){if(m.has(i))continue;if(u==="never"){c.push(i);continue}let l=s.run({value:r[i],issues:[]},o);l instanceof Promise?e.push(l.then(p=>mr(p,n,i,r,d))):mr(l,n,i,r,d)}return c.length&&n.issues.push({code:"unrecognized_keys",keys:c,input:r,inst:a}),e.length?Promise.all(e).then(()=>n):n}var Vu=g("$ZodObject",(e,r)=>{P.init(e,r);let n=Object.getOwnPropertyDescriptor(r,"shape");if(!(n!=null&&n.get)){let m=r.shape;Object.defineProperty(r,"shape",{get:()=>{let s=f({},m);return Object.defineProperty(r,"shape",{value:s}),s}})}let o=Le(()=>Fu(r));O(e._zod,"propValues",()=>{var u;let m=r.shape,s={};for(let d in m){let i=m[d]._zod;if(i.values){(u=s[d])!=null||(s[d]=new Set);for(let l of i.values)s[d].add(l)}}return s});let t=we,a=r.catchall,c;e._zod.parse=(m,s)=>{c!=null||(c=o.value);let u=m.value;if(!t(u))return m.issues.push({expected:"object",code:"invalid_type",input:u,inst:e}),m;m.value={};let d=[],i=c.shape;for(let l of c.keys){let p=i[l],v=p._zod.optout==="optional",y=p._zod.run({value:u[l],issues:[]},s);y instanceof Promise?d.push(y.then(S=>mr(S,m,l,u,v))):mr(y,m,l,u,v)}return a?Mu(d,u,m,s,o.value,e):d.length?Promise.all(d).then(()=>m):m}}),oi=g("$ZodObjectJIT",(e,r)=>{Vu.init(e,r);let n=e._zod.parse,o=Le(()=>Fu(r)),t=l=>{var N;let p=new lt(["shape","payload","ctx"]),v=o.value,y=k=>{let T=Kt(k);return`shape[${T}]._zod.run({ value: input[${T}], issues: [] }, ctx)`};p.write("const input = payload.value;");let S=Object.create(null),w=0;for(let k of v.keys)S[k]=`key_${w++}`;p.write("const newResult = {};");for(let k of v.keys){let T=S[k],U=Kt(k),R=l[k],Ne=((N=R==null?void 0:R._zod)==null?void 0:N.optout)==="optional";p.write(`const ${T} = ${y(k)};`),Ne?p.write(`\n        if (${T}.issues.length) {\n          if (${U} in input) {\n            payload.issues = payload.issues.concat(${T}.issues.map(iss => ({\n              ...iss,\n              path: iss.path ? [${U}, ...iss.path] : [${U}]\n            })));\n          }\n        }\n        \n        if (${T}.value === undefined) {\n          if (${U} in input) {\n            newResult[${U}] = undefined;\n          }\n        } else {\n          newResult[${U}] = ${T}.value;\n        }\n        \n      `):p.write(`\n        if (${T}.issues.length) {\n          payload.issues = payload.issues.concat(${T}.issues.map(iss => ({\n            ...iss,\n            path: iss.path ? [${U}, ...iss.path] : [${U}]\n          })));\n        }\n        \n        if (${T}.value === undefined) {\n          if (${U} in input) {\n            newResult[${U}] = undefined;\n          }\n        } else {\n          newResult[${U}] = ${T}.value;\n        }\n        \n      `)}p.write("payload.value = newResult;"),p.write("return payload;");let j=p.compile();return(k,T)=>j(l,k,T)},a,c=we,m=!He.jitless,u=m&&yn.value,d=r.catchall,i;e._zod.parse=(l,p)=>{i!=null||(i=o.value);let v=l.value;return c(v)?m&&u&&(p==null?void 0:p.async)===!1&&p.jitless!==!0?(a||(a=t(r.shape)),l=a(l,p),d?Mu([],v,l,p,i,e):l):n(l,p):(l.issues.push({expected:"object",code:"invalid_type",input:v,inst:e}),l)}});function Pu(e,r,n,o){for(let a of e)if(a.issues.length===0)return r.value=a.value,r;let t=e.filter(a=>!xe(a));return t.length===1?(r.value=t[0].value,t[0]):(r.issues.push({code:"invalid_union",input:r.value,inst:n,errors:e.map(a=>a.issues.map(c=>B(c,o,F())))}),r)}var dt=g("$ZodUnion",(e,r)=>{P.init(e,r),O(e._zod,"optin",()=>r.options.some(t=>t._zod.optin==="optional")?"optional":void 0),O(e._zod,"optout",()=>r.options.some(t=>t._zod.optout==="optional")?"optional":void 0),O(e._zod,"values",()=>{if(r.options.every(t=>t._zod.values))return new Set(r.options.flatMap(t=>Array.from(t._zod.values)))}),O(e._zod,"pattern",()=>{if(r.options.every(t=>t._zod.pattern)){let t=r.options.map(a=>a._zod.pattern);return new RegExp(`^(${t.map(a=>rt(a.source)).join("|")})$`)}});let n=r.options.length===1,o=r.options[0]._zod.run;e._zod.parse=(t,a)=>{if(n)return o(t,a);let c=!1,m=[];for(let s of r.options){let u=s._zod.run({value:t.value,issues:[]},a);if(u instanceof Promise)m.push(u),c=!0;else{if(u.issues.length===0)return u;m.push(u)}}return c?Promise.all(m).then(s=>Pu(s,t,e,a)):Pu(m,t,e,a)}});function ju(e,r,n,o){let t=e.filter(a=>a.issues.length===0);return t.length===1?(r.value=t[0].value,r):(t.length===0?r.issues.push({code:"invalid_union",input:r.value,inst:n,errors:e.map(a=>a.issues.map(c=>B(c,o,F())))}):r.issues.push({code:"invalid_union",input:r.value,inst:n,errors:[],inclusive:!1}),r)}var ii=g("$ZodXor",(e,r)=>{dt.init(e,r),r.inclusive=!1;let n=r.options.length===1,o=r.options[0]._zod.run;e._zod.parse=(t,a)=>{if(n)return o(t,a);let c=!1,m=[];for(let s of r.options){let u=s._zod.run({value:t.value,issues:[]},a);u instanceof Promise?(m.push(u),c=!0):m.push(u)}return c?Promise.all(m).then(s=>ju(s,t,e,a)):ju(m,t,e,a)}}),ai=g("$ZodDiscriminatedUnion",(e,r)=>{r.inclusive=!1,dt.init(e,r);let n=e._zod.parse;O(e._zod,"propValues",()=>{let t={};for(let a of r.options){let c=a._zod.propValues;if(!c||Object.keys(c).length===0)throw new Error(`Invalid discriminated union option at index "${r.options.indexOf(a)}"`);for(let[m,s]of Object.entries(c)){t[m]||(t[m]=new Set);for(let u of s)t[m].add(u)}}return t});let o=Le(()=>{var c;let t=r.options,a=new Map;for(let m of t){let s=(c=m._zod.propValues)==null?void 0:c[r.discriminator];if(!s||s.size===0)throw new Error(`Invalid discriminated union option at index "${r.options.indexOf(m)}"`);for(let u of s){if(a.has(u))throw new Error(`Duplicate discriminator value "${String(u)}"`);a.set(u,m)}}return a});e._zod.parse=(t,a)=>{let c=t.value;if(!we(c))return t.issues.push({code:"invalid_type",expected:"object",input:c,inst:e}),t;let m=o.value.get(c==null?void 0:c[r.discriminator]);return m?m._zod.run(t,a):r.unionFallback?n(t,a):(t.issues.push({code:"invalid_union",errors:[],note:"No matching discriminator",discriminator:r.discriminator,input:c,path:[r.discriminator],inst:e}),t)}}),ci=g("$ZodIntersection",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value,a=r.left._zod.run({value:t,issues:[]},o),c=r.right._zod.run({value:t,issues:[]},o);return a instanceof Promise||c instanceof Promise?Promise.all([a,c]).then(([s,u])=>Du(n,s,u)):Du(n,a,c)}});function bo(e,r){if(e===r)return{valid:!0,data:e};if(e instanceof Date&&r instanceof Date&&+e==+r)return{valid:!0,data:e};if(be(e)&&be(r)){let n=Object.keys(r),o=Object.keys(e).filter(a=>n.indexOf(a)!==-1),t=f(f({},e),r);for(let a of o){let c=bo(e[a],r[a]);if(!c.valid)return{valid:!1,mergeErrorPath:[a,...c.mergeErrorPath]};t[a]=c.data}return{valid:!0,data:t}}if(Array.isArray(e)&&Array.isArray(r)){if(e.length!==r.length)return{valid:!1,mergeErrorPath:[]};let n=[];for(let o=0;o<e.length;o++){let t=e[o],a=r[o],c=bo(t,a);if(!c.valid)return{valid:!1,mergeErrorPath:[o,...c.mergeErrorPath]};n.push(c.data)}return{valid:!0,data:n}}return{valid:!1,mergeErrorPath:[]}}function Du(e,r,n){let o=new Map,t;for(let m of r.issues)if(m.code==="unrecognized_keys"){t!=null||(t=m);for(let s of m.keys)o.has(s)||o.set(s,{}),o.get(s).l=!0}else e.issues.push(m);for(let m of n.issues)if(m.code==="unrecognized_keys")for(let s of m.keys)o.has(s)||o.set(s,{}),o.get(s).r=!0;else e.issues.push(m);let a=[...o].filter(([,m])=>m.l&&m.r).map(([m])=>m);if(a.length&&t&&e.issues.push(I(f({},t),{keys:a})),xe(e))return e;let c=bo(r.value,n.value);if(!c.valid)throw new Error(`Unmergable intersection. Error path: ${JSON.stringify(c.mergeErrorPath)}`);return e.value=c.data,e}var gr=g("$ZodTuple",(e,r)=>{P.init(e,r);let n=r.items;e._zod.parse=(o,t)=>{let a=o.value;if(!Array.isArray(a))return o.issues.push({input:a,inst:e,expected:"tuple",code:"invalid_type"}),o;o.value=[];let c=[],m=[...n].reverse().findIndex(d=>d._zod.optin!=="optional"),s=m===-1?0:n.length-m;if(!r.rest){let d=a.length>n.length,i=a.length<s-1;if(d||i)return o.issues.push(I(f({},d?{code:"too_big",maximum:n.length,inclusive:!0}:{code:"too_small",minimum:n.length}),{input:a,inst:e,origin:"array"})),o}let u=-1;for(let d of n){if(u++,u>=a.length&&u>=s)continue;let i=d._zod.run({value:a[u],issues:[]},t);i instanceof Promise?c.push(i.then(l=>ur(l,o,u))):ur(i,o,u)}if(r.rest){let d=a.slice(n.length);for(let i of d){u++;let l=r.rest._zod.run({value:i,issues:[]},t);l instanceof Promise?c.push(l.then(p=>ur(p,o,u))):ur(l,o,u)}}return c.length?Promise.all(c).then(()=>o):o}});function ur(e,r,n){e.issues.length&&r.issues.push(...q(n,e.issues)),r.value[n]=e.value}var ui=g("$ZodRecord",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;if(!be(t))return n.issues.push({expected:"record",code:"invalid_type",input:t,inst:e}),n;let a=[],c=r.keyType._zod.values;if(c){n.value={};let m=new Set;for(let u of c)if(typeof u=="string"||typeof u=="number"||typeof u=="symbol"){m.add(typeof u=="number"?u.toString():u);let d=r.valueType._zod.run({value:t[u],issues:[]},o);d instanceof Promise?a.push(d.then(i=>{i.issues.length&&n.issues.push(...q(u,i.issues)),n.value[u]=i.value})):(d.issues.length&&n.issues.push(...q(u,d.issues)),n.value[u]=d.value)}let s;for(let u in t)m.has(u)||(s=s!=null?s:[],s.push(u));s&&s.length>0&&n.issues.push({code:"unrecognized_keys",input:t,inst:e,keys:s})}else{n.value={};for(let m of Reflect.ownKeys(t)){if(m==="__proto__")continue;let s=r.keyType._zod.run({value:m,issues:[]},o);if(s instanceof Promise)throw new Error("Async schemas not supported in object keys currently");if(typeof m=="string"&&ir.test(m)&&s.issues.length){let i=r.keyType._zod.run({value:Number(m),issues:[]},o);if(i instanceof Promise)throw new Error("Async schemas not supported in object keys currently");i.issues.length===0&&(s=i)}if(s.issues.length){r.mode==="loose"?n.value[m]=t[m]:n.issues.push({code:"invalid_key",origin:"record",issues:s.issues.map(i=>B(i,o,F())),input:m,path:[m],inst:e});continue}let d=r.valueType._zod.run({value:t[m],issues:[]},o);d instanceof Promise?a.push(d.then(i=>{i.issues.length&&n.issues.push(...q(m,i.issues)),n.value[s.value]=i.value})):(d.issues.length&&n.issues.push(...q(m,d.issues)),n.value[s.value]=d.value)}}return a.length?Promise.all(a).then(()=>n):n}}),li=g("$ZodMap",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;if(!(t instanceof Map))return n.issues.push({expected:"map",code:"invalid_type",input:t,inst:e}),n;let a=[];n.value=new Map;for(let[c,m]of t){let s=r.keyType._zod.run({value:c,issues:[]},o),u=r.valueType._zod.run({value:m,issues:[]},o);s instanceof Promise||u instanceof Promise?a.push(Promise.all([s,u]).then(([d,i])=>{Ou(d,i,n,c,t,e,o)})):Ou(s,u,n,c,t,e,o)}return a.length?Promise.all(a).then(()=>n):n}});function Ou(e,r,n,o,t,a,c){e.issues.length&&(nt.has(typeof o)?n.issues.push(...q(o,e.issues)):n.issues.push({code:"invalid_key",origin:"map",input:t,inst:a,issues:e.issues.map(m=>B(m,c,F()))})),r.issues.length&&(nt.has(typeof o)?n.issues.push(...q(o,r.issues)):n.issues.push({origin:"map",code:"invalid_element",input:t,inst:a,key:o,issues:r.issues.map(m=>B(m,c,F()))})),n.value.set(e.value,r.value)}var si=g("$ZodSet",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;if(!(t instanceof Set))return n.issues.push({input:t,inst:e,expected:"set",code:"invalid_type"}),n;let a=[];n.value=new Set;for(let c of t){let m=r.valueType._zod.run({value:c,issues:[]},o);m instanceof Promise?a.push(m.then(s=>Uu(s,n))):Uu(m,n)}return a.length?Promise.all(a).then(()=>n):n}});function Uu(e,r){e.issues.length&&r.issues.push(...e.issues),r.value.add(e.value)}var di=g("$ZodEnum",(e,r)=>{P.init(e,r);let n=tt(r.entries),o=new Set(n);e._zod.values=o,e._zod.pattern=new RegExp(`^(${n.filter(t=>nt.has(typeof t)).map(t=>typeof t=="string"?H(t):t.toString()).join("|")})$`),e._zod.parse=(t,a)=>{let c=t.value;return o.has(c)||t.issues.push({code:"invalid_value",values:n,input:c,inst:e}),t}}),mi=g("$ZodLiteral",(e,r)=>{if(P.init(e,r),r.values.length===0)throw new Error("Cannot create literal schema with no valid values");let n=new Set(r.values);e._zod.values=n,e._zod.pattern=new RegExp(`^(${r.values.map(o=>typeof o=="string"?H(o):o?H(o.toString()):String(o)).join("|")})$`),e._zod.parse=(o,t)=>{let a=o.value;return n.has(a)||o.issues.push({code:"invalid_value",values:r.values,input:a,inst:e}),o}}),pi=g("$ZodFile",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{let t=n.value;return t instanceof File||n.issues.push({expected:"file",code:"invalid_type",input:t,inst:e}),n}}),fi=g("$ZodTransform",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{if(o.direction==="backward")throw new he(e.constructor.name);let t=r.transform(n.value,n);if(o.async)return(t instanceof Promise?t:Promise.resolve(t)).then(c=>(n.value=c,n));if(t instanceof Promise)throw new ne;return n.value=t,n}});function Nu(e,r){return e.issues.length&&r===void 0?{issues:[],value:void 0}:e}var vr=g("$ZodOptional",(e,r)=>{P.init(e,r),e._zod.optin="optional",e._zod.optout="optional",O(e._zod,"values",()=>r.innerType._zod.values?new Set([...r.innerType._zod.values,void 0]):void 0),O(e._zod,"pattern",()=>{let n=r.innerType._zod.pattern;return n?new RegExp(`^(${rt(n.source)})?$`):void 0}),e._zod.parse=(n,o)=>{if(r.innerType._zod.optin==="optional"){let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(a=>Nu(a,n.value)):Nu(t,n.value)}return n.value===void 0?n:r.innerType._zod.run(n,o)}}),gi=g("$ZodExactOptional",(e,r)=>{vr.init(e,r),O(e._zod,"values",()=>r.innerType._zod.values),O(e._zod,"pattern",()=>r.innerType._zod.pattern),e._zod.parse=(n,o)=>r.innerType._zod.run(n,o)}),vi=g("$ZodNullable",(e,r)=>{P.init(e,r),O(e._zod,"optin",()=>r.innerType._zod.optin),O(e._zod,"optout",()=>r.innerType._zod.optout),O(e._zod,"pattern",()=>{let n=r.innerType._zod.pattern;return n?new RegExp(`^(${rt(n.source)}|null)$`):void 0}),O(e._zod,"values",()=>r.innerType._zod.values?new Set([...r.innerType._zod.values,null]):void 0),e._zod.parse=(n,o)=>n.value===null?n:r.innerType._zod.run(n,o)}),hi=g("$ZodDefault",(e,r)=>{P.init(e,r),e._zod.optin="optional",O(e._zod,"values",()=>r.innerType._zod.values),e._zod.parse=(n,o)=>{if(o.direction==="backward")return r.innerType._zod.run(n,o);if(n.value===void 0)return n.value=r.defaultValue,n;let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(a=>Zu(a,r)):Zu(t,r)}});function Zu(e,r){return e.value===void 0&&(e.value=r.defaultValue),e}var yi=g("$ZodPrefault",(e,r)=>{P.init(e,r),e._zod.optin="optional",O(e._zod,"values",()=>r.innerType._zod.values),e._zod.parse=(n,o)=>(o.direction==="backward"||n.value===void 0&&(n.value=r.defaultValue),r.innerType._zod.run(n,o))}),$i=g("$ZodNonOptional",(e,r)=>{P.init(e,r),O(e._zod,"values",()=>{let n=r.innerType._zod.values;return n?new Set([...n].filter(o=>o!==void 0)):void 0}),e._zod.parse=(n,o)=>{let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(a=>Eu(a,e)):Eu(t,e)}});function Eu(e,r){return!e.issues.length&&e.value===void 0&&e.issues.push({code:"invalid_type",expected:"nonoptional",input:e.value,inst:r}),e}var bi=g("$ZodSuccess",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>{if(o.direction==="backward")throw new he("ZodSuccess");let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(a=>(n.value=a.issues.length===0,n)):(n.value=t.issues.length===0,n)}}),xi=g("$ZodCatch",(e,r)=>{P.init(e,r),O(e._zod,"optin",()=>r.innerType._zod.optin),O(e._zod,"optout",()=>r.innerType._zod.optout),O(e._zod,"values",()=>r.innerType._zod.values),e._zod.parse=(n,o)=>{if(o.direction==="backward")return r.innerType._zod.run(n,o);let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(a=>(n.value=a.value,a.issues.length&&(n.value=r.catchValue(I(f({},n),{error:{issues:a.issues.map(c=>B(c,o,F()))},input:n.value})),n.issues=[]),n)):(n.value=t.value,t.issues.length&&(n.value=r.catchValue(I(f({},n),{error:{issues:t.issues.map(a=>B(a,o,F()))},input:n.value})),n.issues=[]),n)}}),_i=g("$ZodNaN",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>((typeof n.value!="number"||!Number.isNaN(n.value))&&n.issues.push({input:n.value,inst:e,expected:"nan",code:"invalid_type"}),n)}),Si=g("$ZodPipe",(e,r)=>{P.init(e,r),O(e._zod,"values",()=>r.in._zod.values),O(e._zod,"optin",()=>r.in._zod.optin),O(e._zod,"optout",()=>r.out._zod.optout),O(e._zod,"propValues",()=>r.in._zod.propValues),e._zod.parse=(n,o)=>{if(o.direction==="backward"){let a=r.out._zod.run(n,o);return a instanceof Promise?a.then(c=>lr(c,r.in,o)):lr(a,r.in,o)}let t=r.in._zod.run(n,o);return t instanceof Promise?t.then(a=>lr(a,r.out,o)):lr(t,r.out,o)}});function lr(e,r,n){return e.issues.length?(e.aborted=!0,e):r._zod.run({value:e.value,issues:e.issues},n)}var mt=g("$ZodCodec",(e,r)=>{P.init(e,r),O(e._zod,"values",()=>r.in._zod.values),O(e._zod,"optin",()=>r.in._zod.optin),O(e._zod,"optout",()=>r.out._zod.optout),O(e._zod,"propValues",()=>r.in._zod.propValues),e._zod.parse=(n,o)=>{if((o.direction||"forward")==="forward"){let a=r.in._zod.run(n,o);return a instanceof Promise?a.then(c=>sr(c,r,o)):sr(a,r,o)}else{let a=r.out._zod.run(n,o);return a instanceof Promise?a.then(c=>sr(c,r,o)):sr(a,r,o)}}});function sr(e,r,n){if(e.issues.length)return e.aborted=!0,e;if((n.direction||"forward")==="forward"){let t=r.transform(e.value,e);return t instanceof Promise?t.then(a=>dr(e,a,r.out,n)):dr(e,t,r.out,n)}else{let t=r.reverseTransform(e.value,e);return t instanceof Promise?t.then(a=>dr(e,a,r.in,n)):dr(e,t,r.in,n)}}function dr(e,r,n,o){return e.issues.length?(e.aborted=!0,e):n._zod.run({value:r,issues:e.issues},o)}var ki=g("$ZodReadonly",(e,r)=>{P.init(e,r),O(e._zod,"propValues",()=>r.innerType._zod.propValues),O(e._zod,"values",()=>r.innerType._zod.values),O(e._zod,"optin",()=>{var n,o;return(o=(n=r.innerType)==null?void 0:n._zod)==null?void 0:o.optin}),O(e._zod,"optout",()=>{var n,o;return(o=(n=r.innerType)==null?void 0:n._zod)==null?void 0:o.optout}),e._zod.parse=(n,o)=>{if(o.direction==="backward")return r.innerType._zod.run(n,o);let t=r.innerType._zod.run(n,o);return t instanceof Promise?t.then(Lu):Lu(t)}});function Lu(e){return e.value=Object.freeze(e.value),e}var Ii=g("$ZodTemplateLiteral",(e,r)=>{P.init(e,r);let n=[];for(let o of r.parts)if(typeof o=="object"&&o!==null){if(!o._zod.pattern)throw new Error(`Invalid template literal part, no pattern found: ${[...o._zod.traits].shift()}`);let t=o._zod.pattern instanceof RegExp?o._zod.pattern.source:o._zod.pattern;if(!t)throw new Error(`Invalid template literal part: ${o._zod.traits}`);let a=t.startsWith("^")?1:0,c=t.endsWith("$")?t.length-1:t.length;n.push(t.slice(a,c))}else if(o===null||bn.has(typeof o))n.push(H(`${o}`));else throw new Error(`Invalid template literal part: ${o}`);e._zod.pattern=new RegExp(`^${n.join("")}$`),e._zod.parse=(o,t)=>{var a;return typeof o.value!="string"?(o.issues.push({input:o.value,inst:e,expected:"string",code:"invalid_type"}),o):(e._zod.pattern.lastIndex=0,e._zod.pattern.test(o.value)||o.issues.push({input:o.value,inst:e,code:"invalid_format",format:(a=r.format)!=null?a:"template_literal",pattern:e._zod.pattern.source}),o)}}),zi=g("$ZodFunction",(e,r)=>(P.init(e,r),e._def=r,e._zod.def=r,e.implement=n=>{if(typeof n!="function")throw new Error("implement() must be called with a function");return function(...o){let t=e._def.input?Wt(e._def.input,o):o,a=Reflect.apply(n,this,t);return e._def.output?Wt(e._def.output,a):a}},e.implementAsync=n=>{if(typeof n!="function")throw new Error("implementAsync() must be called with a function");return async function(...o){let t=e._def.input?await qt(e._def.input,o):o,a=await Reflect.apply(n,this,t);return e._def.output?await qt(e._def.output,a):a}},e._zod.parse=(n,o)=>typeof n.value!="function"?(n.issues.push({code:"invalid_type",expected:"function",input:n.value,inst:e}),n):(e._def.output&&e._def.output._zod.def.type==="promise"?n.value=e.implementAsync(n.value):n.value=e.implement(n.value),n),e.input=(...n)=>{let o=e.constructor;return Array.isArray(n[0])?new o({type:"function",input:new gr({type:"tuple",items:n[0],rest:n[1]}),output:e._def.output}):new o({type:"function",input:n[0],output:e._def.output})},e.output=n=>{let o=e.constructor;return new o({type:"function",input:e._def.input,output:n})},e)),Ti=g("$ZodPromise",(e,r)=>{P.init(e,r),e._zod.parse=(n,o)=>Promise.resolve(n.value).then(t=>r.innerType._zod.run({value:t,issues:[]},o))}),wi=g("$ZodLazy",(e,r)=>{P.init(e,r),O(e._zod,"innerType",()=>r.getter()),O(e._zod,"pattern",()=>{var n,o;return(o=(n=e._zod.innerType)==null?void 0:n._zod)==null?void 0:o.pattern}),O(e._zod,"propValues",()=>{var n,o;return(o=(n=e._zod.innerType)==null?void 0:n._zod)==null?void 0:o.propValues}),O(e._zod,"optin",()=>{var n,o,t;return(t=(o=(n=e._zod.innerType)==null?void 0:n._zod)==null?void 0:o.optin)!=null?t:void 0}),O(e._zod,"optout",()=>{var n,o,t;return(t=(o=(n=e._zod.innerType)==null?void 0:n._zod)==null?void 0:o.optout)!=null?t:void 0}),e._zod.parse=(n,o)=>e._zod.innerType._zod.run(n,o)}),Pi=g("$ZodCustom",(e,r)=>{L.init(e,r),P.init(e,r),e._zod.parse=(n,o)=>n,e._zod.check=n=>{let o=n.value,t=r.fn(o);if(t instanceof Promise)return t.then(a=>Cu(a,n,o,e));Cu(t,n,o,e)}});function Cu(e,r,n,o){var t;if(!e){let a={code:"custom",input:n,inst:o,path:[...(t=o._zod.def.path)!=null?t:[]],continue:!o._zod.def.abort};o._zod.def.params&&(a.params=o._zod.def.params),r.issues.push(Ce(a))}}var Je={};ve(Je,{ar:()=>Ku,az:()=>Ju,be:()=>Gu,bg:()=>Wu,ca:()=>qu,cs:()=>Xu,da:()=>Qu,de:()=>Yu,en:()=>hr,eo:()=>Hu,es:()=>el,fa:()=>tl,fi:()=>rl,fr:()=>nl,frCA:()=>ol,he:()=>il,hu:()=>al,hy:()=>ul,id:()=>ll,is:()=>sl,it:()=>dl,ja:()=>ml,ka:()=>pl,kh:()=>fl,km:()=>yr,ko:()=>gl,lt:()=>hl,mk:()=>yl,ms:()=>$l,nl:()=>bl,no:()=>xl,ota:()=>_l,pl:()=>kl,ps:()=>Sl,pt:()=>Il,ru:()=>Tl,sl:()=>wl,sv:()=>Pl,ta:()=>jl,th:()=>Dl,tr:()=>Ol,ua:()=>Ul,uk:()=>$r,ur:()=>Nl,uz:()=>Zl,vi:()=>El,yo:()=>Rl,zhCN:()=>Ll,zhTW:()=>Cl});var Xm=()=>{let e={string:{unit:"\\u062D\\u0631\\u0641",verb:"\\u0623\\u0646 \\u064A\\u062D\\u0648\\u064A"},file:{unit:"\\u0628\\u0627\\u064A\\u062A",verb:"\\u0623\\u0646 \\u064A\\u062D\\u0648\\u064A"},array:{unit:"\\u0639\\u0646\\u0635\\u0631",verb:"\\u0623\\u0646 \\u064A\\u062D\\u0648\\u064A"},set:{unit:"\\u0639\\u0646\\u0635\\u0631",verb:"\\u0623\\u0646 \\u064A\\u062D\\u0648\\u064A"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0645\\u062F\\u062E\\u0644",email:"\\u0628\\u0631\\u064A\\u062F \\u0625\\u0644\\u0643\\u062A\\u0631\\u0648\\u0646\\u064A",url:"\\u0631\\u0627\\u0628\\u0637",emoji:"\\u0625\\u064A\\u0645\\u0648\\u062C\\u064A",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u062A\\u0627\\u0631\\u064A\\u062E \\u0648\\u0648\\u0642\\u062A \\u0628\\u0645\\u0639\\u064A\\u0627\\u0631 ISO",date:"\\u062A\\u0627\\u0631\\u064A\\u062E \\u0628\\u0645\\u0639\\u064A\\u0627\\u0631 ISO",time:"\\u0648\\u0642\\u062A \\u0628\\u0645\\u0639\\u064A\\u0627\\u0631 ISO",duration:"\\u0645\\u062F\\u0629 \\u0628\\u0645\\u0639\\u064A\\u0627\\u0631 ISO",ipv4:"\\u0639\\u0646\\u0648\\u0627\\u0646 IPv4",ipv6:"\\u0639\\u0646\\u0648\\u0627\\u0646 IPv6",cidrv4:"\\u0645\\u062F\\u0649 \\u0639\\u0646\\u0627\\u0648\\u064A\\u0646 \\u0628\\u0635\\u064A\\u063A\\u0629 IPv4",cidrv6:"\\u0645\\u062F\\u0649 \\u0639\\u0646\\u0627\\u0648\\u064A\\u0646 \\u0628\\u0635\\u064A\\u063A\\u0629 IPv6",base64:"\\u0646\\u064E\\u0635 \\u0628\\u062A\\u0631\\u0645\\u064A\\u0632 base64-encoded",base64url:"\\u0646\\u064E\\u0635 \\u0628\\u062A\\u0631\\u0645\\u064A\\u0632 base64url-encoded",json_string:"\\u0646\\u064E\\u0635 \\u0639\\u0644\\u0649 \\u0647\\u064A\\u0626\\u0629 JSON",e164:"\\u0631\\u0642\\u0645 \\u0647\\u0627\\u062A\\u0641 \\u0628\\u0645\\u0639\\u064A\\u0627\\u0631 E.164",jwt:"JWT",template_literal:"\\u0645\\u062F\\u062E\\u0644"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0645\\u062F\\u062E\\u0644\\u0627\\u062A \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644\\u0629: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0625\\u062F\\u062E\\u0627\\u0644 instanceof ${t.expected}\\u060C \\u0648\\u0644\\u0643\\u0646 \\u062A\\u0645 \\u0625\\u062F\\u062E\\u0627\\u0644 ${p}`:`\\u0645\\u062F\\u062E\\u0644\\u0627\\u062A \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644\\u0629: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0625\\u062F\\u062E\\u0627\\u0644 ${i}\\u060C \\u0648\\u0644\\u0643\\u0646 \\u062A\\u0645 \\u0625\\u062F\\u062E\\u0627\\u0644 ${p}`}case"invalid_value":return t.values.length===1?`\\u0645\\u062F\\u062E\\u0644\\u0627\\u062A \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644\\u0629: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0625\\u062F\\u062E\\u0627\\u0644 ${$(t.values[0])}`:`\\u0627\\u062E\\u062A\\u064A\\u0627\\u0631 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062A\\u0648\\u0642\\u0639 \\u0627\\u0646\\u062A\\u0642\\u0627\\u0621 \\u0623\\u062D\\u062F \\u0647\\u0630\\u0647 \\u0627\\u0644\\u062E\\u064A\\u0627\\u0631\\u0627\\u062A: ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?` \\u0623\\u0643\\u0628\\u0631 \\u0645\\u0646 \\u0627\\u0644\\u0644\\u0627\\u0632\\u0645: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0623\\u0646 \\u062A\\u0643\\u0648\\u0646 ${(m=t.origin)!=null?m:"\\u0627\\u0644\\u0642\\u064A\\u0645\\u0629"} ${i} ${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0639\\u0646\\u0635\\u0631"}`:`\\u0623\\u0643\\u0628\\u0631 \\u0645\\u0646 \\u0627\\u0644\\u0644\\u0627\\u0632\\u0645: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0623\\u0646 \\u062A\\u0643\\u0648\\u0646 ${(u=t.origin)!=null?u:"\\u0627\\u0644\\u0642\\u064A\\u0645\\u0629"} ${i} ${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0623\\u0635\\u063A\\u0631 \\u0645\\u0646 \\u0627\\u0644\\u0644\\u0627\\u0632\\u0645: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0644\\u0640 ${t.origin} \\u0623\\u0646 \\u064A\\u0643\\u0648\\u0646 ${i} ${t.minimum.toString()} ${l.unit}`:`\\u0623\\u0635\\u063A\\u0631 \\u0645\\u0646 \\u0627\\u0644\\u0644\\u0627\\u0632\\u0645: \\u064A\\u0641\\u062A\\u0631\\u0636 \\u0644\\u0640 ${t.origin} \\u0623\\u0646 \\u064A\\u0643\\u0648\\u0646 ${i} ${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u0646\\u064E\\u0635 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062C\\u0628 \\u0623\\u0646 \\u064A\\u0628\\u062F\\u0623 \\u0628\\u0640 "${t.prefix}"`:i.format==="ends_with"?`\\u0646\\u064E\\u0635 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062C\\u0628 \\u0623\\u0646 \\u064A\\u0646\\u062A\\u0647\\u064A \\u0628\\u0640 "${i.suffix}"`:i.format==="includes"?`\\u0646\\u064E\\u0635 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062C\\u0628 \\u0623\\u0646 \\u064A\\u062A\\u0636\\u0645\\u0651\\u064E\\u0646 "${i.includes}"`:i.format==="regex"?`\\u0646\\u064E\\u0635 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062C\\u0628 \\u0623\\u0646 \\u064A\\u0637\\u0627\\u0628\\u0642 \\u0627\\u0644\\u0646\\u0645\\u0637 ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644`}case"not_multiple_of":return`\\u0631\\u0642\\u0645 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644: \\u064A\\u062C\\u0628 \\u0623\\u0646 \\u064A\\u0643\\u0648\\u0646 \\u0645\\u0646 \\u0645\\u0636\\u0627\\u0639\\u0641\\u0627\\u062A ${t.divisor}`;case"unrecognized_keys":return`\\u0645\\u0639\\u0631\\u0641${t.keys.length>1?"\\u0627\\u062A":""} \\u063A\\u0631\\u064A\\u0628${t.keys.length>1?"\\u0629":""}: ${h(t.keys,"\\u060C ")}`;case"invalid_key":return`\\u0645\\u0639\\u0631\\u0641 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644 \\u0641\\u064A ${t.origin}`;case"invalid_union":return"\\u0645\\u062F\\u062E\\u0644 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644";case"invalid_element":return`\\u0645\\u062F\\u062E\\u0644 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644 \\u0641\\u064A ${t.origin}`;default:return"\\u0645\\u062F\\u062E\\u0644 \\u063A\\u064A\\u0631 \\u0645\\u0642\\u0628\\u0648\\u0644"}}};function Ku(){return{localeError:Xm()}}var Qm=()=>{let e={string:{unit:"simvol",verb:"olmal\\u0131d\\u0131r"},file:{unit:"bayt",verb:"olmal\\u0131d\\u0131r"},array:{unit:"element",verb:"olmal\\u0131d\\u0131r"},set:{unit:"element",verb:"olmal\\u0131d\\u0131r"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"email address",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO datetime",date:"ISO date",time:"ISO time",duration:"ISO duration",ipv4:"IPv4 address",ipv6:"IPv6 address",cidrv4:"IPv4 range",cidrv6:"IPv6 range",base64:"base64-encoded string",base64url:"base64url-encoded string",json_string:"JSON string",e164:"E.164 number",jwt:"JWT",template_literal:"input"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Yanl\\u0131\\u015F d\\u0259y\\u0259r: g\\xF6zl\\u0259nil\\u0259n instanceof ${t.expected}, daxil olan ${p}`:`Yanl\\u0131\\u015F d\\u0259y\\u0259r: g\\xF6zl\\u0259nil\\u0259n ${i}, daxil olan ${p}`}case"invalid_value":return t.values.length===1?`Yanl\\u0131\\u015F d\\u0259y\\u0259r: g\\xF6zl\\u0259nil\\u0259n ${$(t.values[0])}`:`Yanl\\u0131\\u015F se\\xE7im: a\\u015Fa\\u011F\\u0131dak\\u0131lardan biri olmal\\u0131d\\u0131r: ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\xC7ox b\\xF6y\\xFCk: g\\xF6zl\\u0259nil\\u0259n ${(m=t.origin)!=null?m:"d\\u0259y\\u0259r"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"element"}`:`\\xC7ox b\\xF6y\\xFCk: g\\xF6zl\\u0259nil\\u0259n ${(u=t.origin)!=null?u:"d\\u0259y\\u0259r"} ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\xC7ox ki\\xE7ik: g\\xF6zl\\u0259nil\\u0259n ${t.origin} ${i}${t.minimum.toString()} ${l.unit}`:`\\xC7ox ki\\xE7ik: g\\xF6zl\\u0259nil\\u0259n ${t.origin} ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Yanl\\u0131\\u015F m\\u0259tn: "${i.prefix}" il\\u0259 ba\\u015Flamal\\u0131d\\u0131r`:i.format==="ends_with"?`Yanl\\u0131\\u015F m\\u0259tn: "${i.suffix}" il\\u0259 bitm\\u0259lidir`:i.format==="includes"?`Yanl\\u0131\\u015F m\\u0259tn: "${i.includes}" daxil olmal\\u0131d\\u0131r`:i.format==="regex"?`Yanl\\u0131\\u015F m\\u0259tn: ${i.pattern} \\u015Fablonuna uy\\u011Fun olmal\\u0131d\\u0131r`:`Yanl\\u0131\\u015F ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Yanl\\u0131\\u015F \\u0259d\\u0259d: ${t.divisor} il\\u0259 b\\xF6l\\xFCn\\u0259 bil\\u0259n olmal\\u0131d\\u0131r`;case"unrecognized_keys":return`Tan\\u0131nmayan a\\xE7ar${t.keys.length>1?"lar":""}: ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} daxilind\\u0259 yanl\\u0131\\u015F a\\xE7ar`;case"invalid_union":return"Yanl\\u0131\\u015F d\\u0259y\\u0259r";case"invalid_element":return`${t.origin} daxilind\\u0259 yanl\\u0131\\u015F d\\u0259y\\u0259r`;default:return"Yanl\\u0131\\u015F d\\u0259y\\u0259r"}}};function Ju(){return{localeError:Qm()}}function Bu(e,r,n,o){let t=Math.abs(e),a=t%10,c=t%100;return c>=11&&c<=19?o:a===1?r:a>=2&&a<=4?n:o}var Ym=()=>{let e={string:{unit:{one:"\\u0441\\u0456\\u043C\\u0432\\u0430\\u043B",few:"\\u0441\\u0456\\u043C\\u0432\\u0430\\u043B\\u044B",many:"\\u0441\\u0456\\u043C\\u0432\\u0430\\u043B\\u0430\\u045E"},verb:"\\u043C\\u0435\\u0446\\u044C"},array:{unit:{one:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442",few:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u044B",many:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430\\u045E"},verb:"\\u043C\\u0435\\u0446\\u044C"},set:{unit:{one:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442",few:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u044B",many:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430\\u045E"},verb:"\\u043C\\u0435\\u0446\\u044C"},file:{unit:{one:"\\u0431\\u0430\\u0439\\u0442",few:"\\u0431\\u0430\\u0439\\u0442\\u044B",many:"\\u0431\\u0430\\u0439\\u0442\\u0430\\u045E"},verb:"\\u043C\\u0435\\u0446\\u044C"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0443\\u0432\\u043E\\u0434",email:"email \\u0430\\u0434\\u0440\\u0430\\u0441",url:"URL",emoji:"\\u044D\\u043C\\u043E\\u0434\\u0437\\u0456",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0434\\u0430\\u0442\\u0430 \\u0456 \\u0447\\u0430\\u0441",date:"ISO \\u0434\\u0430\\u0442\\u0430",time:"ISO \\u0447\\u0430\\u0441",duration:"ISO \\u043F\\u0440\\u0430\\u0446\\u044F\\u0433\\u043B\\u0430\\u0441\\u0446\\u044C",ipv4:"IPv4 \\u0430\\u0434\\u0440\\u0430\\u0441",ipv6:"IPv6 \\u0430\\u0434\\u0440\\u0430\\u0441",cidrv4:"IPv4 \\u0434\\u044B\\u044F\\u043F\\u0430\\u0437\\u043E\\u043D",cidrv6:"IPv6 \\u0434\\u044B\\u044F\\u043F\\u0430\\u0437\\u043E\\u043D",base64:"\\u0440\\u0430\\u0434\\u043E\\u043A \\u0443 \\u0444\\u0430\\u0440\\u043C\\u0430\\u0446\\u0435 base64",base64url:"\\u0440\\u0430\\u0434\\u043E\\u043A \\u0443 \\u0444\\u0430\\u0440\\u043C\\u0430\\u0446\\u0435 base64url",json_string:"JSON \\u0440\\u0430\\u0434\\u043E\\u043A",e164:"\\u043D\\u0443\\u043C\\u0430\\u0440 E.164",jwt:"JWT",template_literal:"\\u0443\\u0432\\u043E\\u0434"},o={nan:"NaN",number:"\\u043B\\u0456\\u043A",array:"\\u043C\\u0430\\u0441\\u0456\\u045E"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u045E\\u0432\\u043E\\u0434: \\u0447\\u0430\\u043A\\u0430\\u045E\\u0441\\u044F instanceof ${t.expected}, \\u0430\\u0442\\u0440\\u044B\\u043C\\u0430\\u043D\\u0430 ${l}`:`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u045E\\u0432\\u043E\\u0434: \\u0447\\u0430\\u043A\\u0430\\u045E\\u0441\\u044F ${d}, \\u0430\\u0442\\u0440\\u044B\\u043C\\u0430\\u043D\\u0430 ${l}`}case"invalid_value":return t.values.length===1?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u045E\\u0432\\u043E\\u0434: \\u0447\\u0430\\u043A\\u0430\\u043B\\u0430\\u0441\\u044F ${$(t.values[0])}`:`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u0432\\u0430\\u0440\\u044B\\u044F\\u043D\\u0442: \\u0447\\u0430\\u043A\\u0430\\u045E\\u0441\\u044F \\u0430\\u0434\\u0437\\u0456\\u043D \\u0437 ${h(t.values,"|")}`;case"too_big":{let d=t.inclusive?"<=":"<",i=r(t.origin);if(i){let l=Number(t.maximum),p=Bu(l,i.unit.one,i.unit.few,i.unit.many);return`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u0430 \\u0432\\u044F\\u043B\\u0456\\u043A\\u0456: \\u0447\\u0430\\u043A\\u0430\\u043B\\u0430\\u0441\\u044F, \\u0448\\u0442\\u043E ${(m=t.origin)!=null?m:"\\u0437\\u043D\\u0430\\u0447\\u044D\\u043D\\u043D\\u0435"} \\u043F\\u0430\\u0432\\u0456\\u043D\\u043D\\u0430 ${i.verb} ${d}${t.maximum.toString()} ${p}`}return`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u0430 \\u0432\\u044F\\u043B\\u0456\\u043A\\u0456: \\u0447\\u0430\\u043A\\u0430\\u043B\\u0430\\u0441\\u044F, \\u0448\\u0442\\u043E ${(s=t.origin)!=null?s:"\\u0437\\u043D\\u0430\\u0447\\u044D\\u043D\\u043D\\u0435"} \\u043F\\u0430\\u0432\\u0456\\u043D\\u043D\\u0430 \\u0431\\u044B\\u0446\\u044C ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?">=":">",i=r(t.origin);if(i){let l=Number(t.minimum),p=Bu(l,i.unit.one,i.unit.few,i.unit.many);return`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u0430 \\u043C\\u0430\\u043B\\u044B: \\u0447\\u0430\\u043A\\u0430\\u043B\\u0430\\u0441\\u044F, \\u0448\\u0442\\u043E ${t.origin} \\u043F\\u0430\\u0432\\u0456\\u043D\\u043D\\u0430 ${i.verb} ${d}${t.minimum.toString()} ${p}`}return`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u0430 \\u043C\\u0430\\u043B\\u044B: \\u0447\\u0430\\u043A\\u0430\\u043B\\u0430\\u0441\\u044F, \\u0448\\u0442\\u043E ${t.origin} \\u043F\\u0430\\u0432\\u0456\\u043D\\u043D\\u0430 \\u0431\\u044B\\u0446\\u044C ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u0440\\u0430\\u0434\\u043E\\u043A: \\u043F\\u0430\\u0432\\u0456\\u043D\\u0435\\u043D \\u043F\\u0430\\u0447\\u044B\\u043D\\u0430\\u0446\\u0446\\u0430 \\u0437 "${d.prefix}"`:d.format==="ends_with"?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u0440\\u0430\\u0434\\u043E\\u043A: \\u043F\\u0430\\u0432\\u0456\\u043D\\u0435\\u043D \\u0437\\u0430\\u043A\\u0430\\u043D\\u0447\\u0432\\u0430\\u0446\\u0446\\u0430 \\u043D\\u0430 "${d.suffix}"`:d.format==="includes"?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u0440\\u0430\\u0434\\u043E\\u043A: \\u043F\\u0430\\u0432\\u0456\\u043D\\u0435\\u043D \\u0437\\u043C\\u044F\\u0448\\u0447\\u0430\\u0446\\u044C "${d.includes}"`:d.format==="regex"?`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u0440\\u0430\\u0434\\u043E\\u043A: \\u043F\\u0430\\u0432\\u0456\\u043D\\u0435\\u043D \\u0430\\u0434\\u043F\\u0430\\u0432\\u044F\\u0434\\u0430\\u0446\\u044C \\u0448\\u0430\\u0431\\u043B\\u043E\\u043D\\u0443 ${d.pattern}`:`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B ${(u=n[d.format])!=null?u:t.format}`}case"not_multiple_of":return`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u043B\\u0456\\u043A: \\u043F\\u0430\\u0432\\u0456\\u043D\\u0435\\u043D \\u0431\\u044B\\u0446\\u044C \\u043A\\u0440\\u0430\\u0442\\u043D\\u044B\\u043C ${t.divisor}`;case"unrecognized_keys":return`\\u041D\\u0435\\u0440\\u0430\\u0441\\u043F\\u0430\\u0437\\u043D\\u0430\\u043D\\u044B ${t.keys.length>1?"\\u043A\\u043B\\u044E\\u0447\\u044B":"\\u043A\\u043B\\u044E\\u0447"}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u043A\\u043B\\u044E\\u0447 \\u0443 ${t.origin}`;case"invalid_union":return"\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u045E\\u0432\\u043E\\u0434";case"invalid_element":return`\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u0430\\u0435 \\u0437\\u043D\\u0430\\u0447\\u044D\\u043D\\u043D\\u0435 \\u045E ${t.origin}`;default:return"\\u041D\\u044F\\u043F\\u0440\\u0430\\u0432\\u0456\\u043B\\u044C\\u043D\\u044B \\u045E\\u0432\\u043E\\u0434"}}};function Gu(){return{localeError:Ym()}}var Hm=()=>{let e={string:{unit:"\\u0441\\u0438\\u043C\\u0432\\u043E\\u043B\\u0430",verb:"\\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430"},file:{unit:"\\u0431\\u0430\\u0439\\u0442\\u0430",verb:"\\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430"},array:{unit:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430",verb:"\\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430"},set:{unit:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430",verb:"\\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0432\\u0445\\u043E\\u0434",email:"\\u0438\\u043C\\u0435\\u0439\\u043B \\u0430\\u0434\\u0440\\u0435\\u0441",url:"URL",emoji:"\\u0435\\u043C\\u043E\\u0434\\u0436\\u0438",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0432\\u0440\\u0435\\u043C\\u0435",date:"ISO \\u0434\\u0430\\u0442\\u0430",time:"ISO \\u0432\\u0440\\u0435\\u043C\\u0435",duration:"ISO \\u043F\\u0440\\u043E\\u0434\\u044A\\u043B\\u0436\\u0438\\u0442\\u0435\\u043B\\u043D\\u043E\\u0441\\u0442",ipv4:"IPv4 \\u0430\\u0434\\u0440\\u0435\\u0441",ipv6:"IPv6 \\u0430\\u0434\\u0440\\u0435\\u0441",cidrv4:"IPv4 \\u0434\\u0438\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D",cidrv6:"IPv6 \\u0434\\u0438\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D",base64:"base64-\\u043A\\u043E\\u0434\\u0438\\u0440\\u0430\\u043D \\u043D\\u0438\\u0437",base64url:"base64url-\\u043A\\u043E\\u0434\\u0438\\u0440\\u0430\\u043D \\u043D\\u0438\\u0437",json_string:"JSON \\u043D\\u0438\\u0437",e164:"E.164 \\u043D\\u043E\\u043C\\u0435\\u0440",jwt:"JWT",template_literal:"\\u0432\\u0445\\u043E\\u0434"},o={nan:"NaN",number:"\\u0447\\u0438\\u0441\\u043B\\u043E",array:"\\u043C\\u0430\\u0441\\u0438\\u0432"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u0432\\u0445\\u043E\\u0434: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430\\u043D instanceof ${t.expected}, \\u043F\\u043E\\u043B\\u0443\\u0447\\u0435\\u043D ${p}`:`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u0432\\u0445\\u043E\\u0434: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430\\u043D ${i}, \\u043F\\u043E\\u043B\\u0443\\u0447\\u0435\\u043D ${p}`}case"invalid_value":return t.values.length===1?`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u0432\\u0445\\u043E\\u0434: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430\\u043D ${$(t.values[0])}`:`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u0430 \\u043E\\u043F\\u0446\\u0438\\u044F: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430\\u043D\\u043E \\u0435\\u0434\\u043D\\u043E \\u043E\\u0442 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u0422\\u0432\\u044A\\u0440\\u0434\\u0435 \\u0433\\u043E\\u043B\\u044F\\u043C\\u043E: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430 \\u0441\\u0435 ${(m=t.origin)!=null?m:"\\u0441\\u0442\\u043E\\u0439\\u043D\\u043E\\u0441\\u0442"} \\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430 ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430"}`:`\\u0422\\u0432\\u044A\\u0440\\u0434\\u0435 \\u0433\\u043E\\u043B\\u044F\\u043C\\u043E: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430 \\u0441\\u0435 ${(u=t.origin)!=null?u:"\\u0441\\u0442\\u043E\\u0439\\u043D\\u043E\\u0441\\u0442"} \\u0434\\u0430 \\u0431\\u044A\\u0434\\u0435 ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0422\\u0432\\u044A\\u0440\\u0434\\u0435 \\u043C\\u0430\\u043B\\u043A\\u043E: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430 \\u0441\\u0435 ${t.origin} \\u0434\\u0430 \\u0441\\u044A\\u0434\\u044A\\u0440\\u0436\\u0430 ${i}${t.minimum.toString()} ${l.unit}`:`\\u0422\\u0432\\u044A\\u0440\\u0434\\u0435 \\u043C\\u0430\\u043B\\u043A\\u043E: \\u043E\\u0447\\u0430\\u043A\\u0432\\u0430 \\u0441\\u0435 ${t.origin} \\u0434\\u0430 \\u0431\\u044A\\u0434\\u0435 ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;if(i.format==="starts_with")return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u043D\\u0438\\u0437: \\u0442\\u0440\\u044F\\u0431\\u0432\\u0430 \\u0434\\u0430 \\u0437\\u0430\\u043F\\u043E\\u0447\\u0432\\u0430 \\u0441 "${i.prefix}"`;if(i.format==="ends_with")return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u043D\\u0438\\u0437: \\u0442\\u0440\\u044F\\u0431\\u0432\\u0430 \\u0434\\u0430 \\u0437\\u0430\\u0432\\u044A\\u0440\\u0448\\u0432\\u0430 \\u0441 "${i.suffix}"`;if(i.format==="includes")return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u043D\\u0438\\u0437: \\u0442\\u0440\\u044F\\u0431\\u0432\\u0430 \\u0434\\u0430 \\u0432\\u043A\\u043B\\u044E\\u0447\\u0432\\u0430 "${i.includes}"`;if(i.format==="regex")return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u043D\\u0438\\u0437: \\u0442\\u0440\\u044F\\u0431\\u0432\\u0430 \\u0434\\u0430 \\u0441\\u044A\\u0432\\u043F\\u0430\\u0434\\u0430 \\u0441 ${i.pattern}`;let l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D";return i.format==="emoji"&&(l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u043E"),i.format==="datetime"&&(l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u043E"),i.format==="date"&&(l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u0430"),i.format==="time"&&(l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u043E"),i.format==="duration"&&(l="\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u0430"),`${l} ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u043E \\u0447\\u0438\\u0441\\u043B\\u043E: \\u0442\\u0440\\u044F\\u0431\\u0432\\u0430 \\u0434\\u0430 \\u0431\\u044A\\u0434\\u0435 \\u043A\\u0440\\u0430\\u0442\\u043D\\u043E \\u043D\\u0430 ${t.divisor}`;case"unrecognized_keys":return`\\u041D\\u0435\\u0440\\u0430\\u0437\\u043F\\u043E\\u0437\\u043D\\u0430\\u0442${t.keys.length>1?"\\u0438":""} \\u043A\\u043B\\u044E\\u0447${t.keys.length>1?"\\u043E\\u0432\\u0435":""}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u043A\\u043B\\u044E\\u0447 \\u0432 ${t.origin}`;case"invalid_union":return"\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u0432\\u0445\\u043E\\u0434";case"invalid_element":return`\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u043D\\u0430 \\u0441\\u0442\\u043E\\u0439\\u043D\\u043E\\u0441\\u0442 \\u0432 ${t.origin}`;default:return"\\u041D\\u0435\\u0432\\u0430\\u043B\\u0438\\u0434\\u0435\\u043D \\u0432\\u0445\\u043E\\u0434"}}};function Wu(){return{localeError:Hm()}}var ep=()=>{let e={string:{unit:"car\\xE0cters",verb:"contenir"},file:{unit:"bytes",verb:"contenir"},array:{unit:"elements",verb:"contenir"},set:{unit:"elements",verb:"contenir"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"entrada",email:"adre\\xE7a electr\\xF2nica",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"data i hora ISO",date:"data ISO",time:"hora ISO",duration:"durada ISO",ipv4:"adre\\xE7a IPv4",ipv6:"adre\\xE7a IPv6",cidrv4:"rang IPv4",cidrv6:"rang IPv6",base64:"cadena codificada en base64",base64url:"cadena codificada en base64url",json_string:"cadena JSON",e164:"n\\xFAmero E.164",jwt:"JWT",template_literal:"entrada"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Tipus inv\\xE0lid: s\'esperava instanceof ${t.expected}, s\'ha rebut ${p}`:`Tipus inv\\xE0lid: s\'esperava ${i}, s\'ha rebut ${p}`}case"invalid_value":return t.values.length===1?`Valor inv\\xE0lid: s\'esperava ${$(t.values[0])}`:`Opci\\xF3 inv\\xE0lida: s\'esperava una de ${h(t.values," o ")}`;case"too_big":{let i=t.inclusive?"com a m\\xE0xim":"menys de",l=r(t.origin);return l?`Massa gran: s\'esperava que ${(m=t.origin)!=null?m:"el valor"} contingu\\xE9s ${i} ${t.maximum.toString()} ${(s=l.unit)!=null?s:"elements"}`:`Massa gran: s\'esperava que ${(u=t.origin)!=null?u:"el valor"} fos ${i} ${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?"com a m\\xEDnim":"m\\xE9s de",l=r(t.origin);return l?`Massa petit: s\'esperava que ${t.origin} contingu\\xE9s ${i} ${t.minimum.toString()} ${l.unit}`:`Massa petit: s\'esperava que ${t.origin} fos ${i} ${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Format inv\\xE0lid: ha de comen\\xE7ar amb "${i.prefix}"`:i.format==="ends_with"?`Format inv\\xE0lid: ha d\'acabar amb "${i.suffix}"`:i.format==="includes"?`Format inv\\xE0lid: ha d\'incloure "${i.includes}"`:i.format==="regex"?`Format inv\\xE0lid: ha de coincidir amb el patr\\xF3 ${i.pattern}`:`Format inv\\xE0lid per a ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`N\\xFAmero inv\\xE0lid: ha de ser m\\xFAltiple de ${t.divisor}`;case"unrecognized_keys":return`Clau${t.keys.length>1?"s":""} no reconeguda${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Clau inv\\xE0lida a ${t.origin}`;case"invalid_union":return"Entrada inv\\xE0lida";case"invalid_element":return`Element inv\\xE0lid a ${t.origin}`;default:return"Entrada inv\\xE0lida"}}};function qu(){return{localeError:ep()}}var tp=()=>{let e={string:{unit:"znak\\u016F",verb:"m\\xEDt"},file:{unit:"bajt\\u016F",verb:"m\\xEDt"},array:{unit:"prvk\\u016F",verb:"m\\xEDt"},set:{unit:"prvk\\u016F",verb:"m\\xEDt"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"regul\\xE1rn\\xED v\\xFDraz",email:"e-mailov\\xE1 adresa",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"datum a \\u010Das ve form\\xE1tu ISO",date:"datum ve form\\xE1tu ISO",time:"\\u010Das ve form\\xE1tu ISO",duration:"doba trv\\xE1n\\xED ISO",ipv4:"IPv4 adresa",ipv6:"IPv6 adresa",cidrv4:"rozsah IPv4",cidrv6:"rozsah IPv6",base64:"\\u0159et\\u011Bzec zak\\xF3dovan\\xFD ve form\\xE1tu base64",base64url:"\\u0159et\\u011Bzec zak\\xF3dovan\\xFD ve form\\xE1tu base64url",json_string:"\\u0159et\\u011Bzec ve form\\xE1tu JSON",e164:"\\u010D\\xEDslo E.164",jwt:"JWT",template_literal:"vstup"},o={nan:"NaN",number:"\\u010D\\xEDslo",string:"\\u0159et\\u011Bzec",function:"funkce",array:"pole"};return t=>{var a,c,m,s,u,d,i,l,p;switch(t.code){case"invalid_type":{let v=(a=o[t.expected])!=null?a:t.expected,y=b(t.input),S=(c=o[y])!=null?c:y;return/^[A-Z]/.test(t.expected)?`Neplatn\\xFD vstup: o\\u010Dek\\xE1v\\xE1no instanceof ${t.expected}, obdr\\u017Eeno ${S}`:`Neplatn\\xFD vstup: o\\u010Dek\\xE1v\\xE1no ${v}, obdr\\u017Eeno ${S}`}case"invalid_value":return t.values.length===1?`Neplatn\\xFD vstup: o\\u010Dek\\xE1v\\xE1no ${$(t.values[0])}`:`Neplatn\\xE1 mo\\u017Enost: o\\u010Dek\\xE1v\\xE1na jedna z hodnot ${h(t.values,"|")}`;case"too_big":{let v=t.inclusive?"<=":"<",y=r(t.origin);return y?`Hodnota je p\\u0159\\xEDli\\u0161 velk\\xE1: ${(m=t.origin)!=null?m:"hodnota"} mus\\xED m\\xEDt ${v}${t.maximum.toString()} ${(s=y.unit)!=null?s:"prvk\\u016F"}`:`Hodnota je p\\u0159\\xEDli\\u0161 velk\\xE1: ${(u=t.origin)!=null?u:"hodnota"} mus\\xED b\\xFDt ${v}${t.maximum.toString()}`}case"too_small":{let v=t.inclusive?">=":">",y=r(t.origin);return y?`Hodnota je p\\u0159\\xEDli\\u0161 mal\\xE1: ${(d=t.origin)!=null?d:"hodnota"} mus\\xED m\\xEDt ${v}${t.minimum.toString()} ${(i=y.unit)!=null?i:"prvk\\u016F"}`:`Hodnota je p\\u0159\\xEDli\\u0161 mal\\xE1: ${(l=t.origin)!=null?l:"hodnota"} mus\\xED b\\xFDt ${v}${t.minimum.toString()}`}case"invalid_format":{let v=t;return v.format==="starts_with"?`Neplatn\\xFD \\u0159et\\u011Bzec: mus\\xED za\\u010D\\xEDnat na "${v.prefix}"`:v.format==="ends_with"?`Neplatn\\xFD \\u0159et\\u011Bzec: mus\\xED kon\\u010Dit na "${v.suffix}"`:v.format==="includes"?`Neplatn\\xFD \\u0159et\\u011Bzec: mus\\xED obsahovat "${v.includes}"`:v.format==="regex"?`Neplatn\\xFD \\u0159et\\u011Bzec: mus\\xED odpov\\xEDdat vzoru ${v.pattern}`:`Neplatn\\xFD form\\xE1t ${(p=n[v.format])!=null?p:t.format}`}case"not_multiple_of":return`Neplatn\\xE9 \\u010D\\xEDslo: mus\\xED b\\xFDt n\\xE1sobkem ${t.divisor}`;case"unrecognized_keys":return`Nezn\\xE1m\\xE9 kl\\xED\\u010De: ${h(t.keys,", ")}`;case"invalid_key":return`Neplatn\\xFD kl\\xED\\u010D v ${t.origin}`;case"invalid_union":return"Neplatn\\xFD vstup";case"invalid_element":return`Neplatn\\xE1 hodnota v ${t.origin}`;default:return"Neplatn\\xFD vstup"}}};function Xu(){return{localeError:tp()}}var rp=()=>{let e={string:{unit:"tegn",verb:"havde"},file:{unit:"bytes",verb:"havde"},array:{unit:"elementer",verb:"indeholdt"},set:{unit:"elementer",verb:"indeholdt"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"e-mailadresse",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO dato- og klokkesl\\xE6t",date:"ISO-dato",time:"ISO-klokkesl\\xE6t",duration:"ISO-varighed",ipv4:"IPv4-omr\\xE5de",ipv6:"IPv6-omr\\xE5de",cidrv4:"IPv4-spektrum",cidrv6:"IPv6-spektrum",base64:"base64-kodet streng",base64url:"base64url-kodet streng",json_string:"JSON-streng",e164:"E.164-nummer",jwt:"JWT",template_literal:"input"},o={nan:"NaN",string:"streng",number:"tal",boolean:"boolean",array:"liste",object:"objekt",set:"s\\xE6t",file:"fil"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Ugyldigt input: forventede instanceof ${t.expected}, fik ${p}`:`Ugyldigt input: forventede ${i}, fik ${p}`}case"invalid_value":return t.values.length===1?`Ugyldig v\\xE6rdi: forventede ${$(t.values[0])}`:`Ugyldigt valg: forventede en af f\\xF8lgende ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin),p=(m=o[t.origin])!=null?m:t.origin;return l?`For stor: forventede ${p!=null?p:"value"} ${l.verb} ${i} ${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementer"}`:`For stor: forventede ${p!=null?p:"value"} havde ${i} ${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin),p=(u=o[t.origin])!=null?u:t.origin;return l?`For lille: forventede ${p} ${l.verb} ${i} ${t.minimum.toString()} ${l.unit}`:`For lille: forventede ${p} havde ${i} ${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Ugyldig streng: skal starte med "${i.prefix}"`:i.format==="ends_with"?`Ugyldig streng: skal ende med "${i.suffix}"`:i.format==="includes"?`Ugyldig streng: skal indeholde "${i.includes}"`:i.format==="regex"?`Ugyldig streng: skal matche m\\xF8nsteret ${i.pattern}`:`Ugyldig ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Ugyldigt tal: skal v\\xE6re deleligt med ${t.divisor}`;case"unrecognized_keys":return`${t.keys.length>1?"Ukendte n\\xF8gler":"Ukendt n\\xF8gle"}: ${h(t.keys,", ")}`;case"invalid_key":return`Ugyldig n\\xF8gle i ${t.origin}`;case"invalid_union":return"Ugyldigt input: matcher ingen af de tilladte typer";case"invalid_element":return`Ugyldig v\\xE6rdi i ${t.origin}`;default:return"Ugyldigt input"}}};function Qu(){return{localeError:rp()}}var np=()=>{let e={string:{unit:"Zeichen",verb:"zu haben"},file:{unit:"Bytes",verb:"zu haben"},array:{unit:"Elemente",verb:"zu haben"},set:{unit:"Elemente",verb:"zu haben"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"Eingabe",email:"E-Mail-Adresse",url:"URL",emoji:"Emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO-Datum und -Uhrzeit",date:"ISO-Datum",time:"ISO-Uhrzeit",duration:"ISO-Dauer",ipv4:"IPv4-Adresse",ipv6:"IPv6-Adresse",cidrv4:"IPv4-Bereich",cidrv6:"IPv6-Bereich",base64:"Base64-codierter String",base64url:"Base64-URL-codierter String",json_string:"JSON-String",e164:"E.164-Nummer",jwt:"JWT",template_literal:"Eingabe"},o={nan:"NaN",number:"Zahl",array:"Array"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Ung\\xFCltige Eingabe: erwartet instanceof ${t.expected}, erhalten ${p}`:`Ung\\xFCltige Eingabe: erwartet ${i}, erhalten ${p}`}case"invalid_value":return t.values.length===1?`Ung\\xFCltige Eingabe: erwartet ${$(t.values[0])}`:`Ung\\xFCltige Option: erwartet eine von ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Zu gro\\xDF: erwartet, dass ${(m=t.origin)!=null?m:"Wert"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"Elemente"} hat`:`Zu gro\\xDF: erwartet, dass ${(u=t.origin)!=null?u:"Wert"} ${i}${t.maximum.toString()} ist`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Zu klein: erwartet, dass ${t.origin} ${i}${t.minimum.toString()} ${l.unit} hat`:`Zu klein: erwartet, dass ${t.origin} ${i}${t.minimum.toString()} ist`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Ung\\xFCltiger String: muss mit "${i.prefix}" beginnen`:i.format==="ends_with"?`Ung\\xFCltiger String: muss mit "${i.suffix}" enden`:i.format==="includes"?`Ung\\xFCltiger String: muss "${i.includes}" enthalten`:i.format==="regex"?`Ung\\xFCltiger String: muss dem Muster ${i.pattern} entsprechen`:`Ung\\xFCltig: ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Ung\\xFCltige Zahl: muss ein Vielfaches von ${t.divisor} sein`;case"unrecognized_keys":return`${t.keys.length>1?"Unbekannte Schl\\xFCssel":"Unbekannter Schl\\xFCssel"}: ${h(t.keys,", ")}`;case"invalid_key":return`Ung\\xFCltiger Schl\\xFCssel in ${t.origin}`;case"invalid_union":return"Ung\\xFCltige Eingabe";case"invalid_element":return`Ung\\xFCltiger Wert in ${t.origin}`;default:return"Ung\\xFCltige Eingabe"}}};function Yu(){return{localeError:np()}}var op=()=>{let e={string:{unit:"characters",verb:"to have"},file:{unit:"bytes",verb:"to have"},array:{unit:"items",verb:"to have"},set:{unit:"items",verb:"to have"},map:{unit:"entries",verb:"to have"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"email address",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO datetime",date:"ISO date",time:"ISO time",duration:"ISO duration",ipv4:"IPv4 address",ipv6:"IPv6 address",mac:"MAC address",cidrv4:"IPv4 range",cidrv6:"IPv6 range",base64:"base64-encoded string",base64url:"base64url-encoded string",json_string:"JSON string",e164:"E.164 number",jwt:"JWT",template_literal:"input"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return`Invalid input: expected ${i}, received ${p}`}case"invalid_value":return t.values.length===1?`Invalid input: expected ${$(t.values[0])}`:`Invalid option: expected one of ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Too big: expected ${(m=t.origin)!=null?m:"value"} to have ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elements"}`:`Too big: expected ${(u=t.origin)!=null?u:"value"} to be ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Too small: expected ${t.origin} to have ${i}${t.minimum.toString()} ${l.unit}`:`Too small: expected ${t.origin} to be ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Invalid string: must start with "${i.prefix}"`:i.format==="ends_with"?`Invalid string: must end with "${i.suffix}"`:i.format==="includes"?`Invalid string: must include "${i.includes}"`:i.format==="regex"?`Invalid string: must match pattern ${i.pattern}`:`Invalid ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Invalid number: must be a multiple of ${t.divisor}`;case"unrecognized_keys":return`Unrecognized key${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Invalid key in ${t.origin}`;case"invalid_union":return"Invalid input";case"invalid_element":return`Invalid value in ${t.origin}`;default:return"Invalid input"}}};function hr(){return{localeError:op()}}var ip=()=>{let e={string:{unit:"karaktrojn",verb:"havi"},file:{unit:"bajtojn",verb:"havi"},array:{unit:"elementojn",verb:"havi"},set:{unit:"elementojn",verb:"havi"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"enigo",email:"retadreso",url:"URL",emoji:"emo\\u011Dio",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO-datotempo",date:"ISO-dato",time:"ISO-tempo",duration:"ISO-da\\u016Dro",ipv4:"IPv4-adreso",ipv6:"IPv6-adreso",cidrv4:"IPv4-rango",cidrv6:"IPv6-rango",base64:"64-ume kodita karaktraro",base64url:"URL-64-ume kodita karaktraro",json_string:"JSON-karaktraro",e164:"E.164-nombro",jwt:"JWT",template_literal:"enigo"},o={nan:"NaN",number:"nombro",array:"tabelo",null:"senvalora"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Nevalida enigo: atendi\\u011Dis instanceof ${t.expected}, ricevi\\u011Dis ${p}`:`Nevalida enigo: atendi\\u011Dis ${i}, ricevi\\u011Dis ${p}`}case"invalid_value":return t.values.length===1?`Nevalida enigo: atendi\\u011Dis ${$(t.values[0])}`:`Nevalida opcio: atendi\\u011Dis unu el ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Tro granda: atendi\\u011Dis ke ${(m=t.origin)!=null?m:"valoro"} havu ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementojn"}`:`Tro granda: atendi\\u011Dis ke ${(u=t.origin)!=null?u:"valoro"} havu ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Tro malgranda: atendi\\u011Dis ke ${t.origin} havu ${i}${t.minimum.toString()} ${l.unit}`:`Tro malgranda: atendi\\u011Dis ke ${t.origin} estu ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Nevalida karaktraro: devas komenci\\u011Di per "${i.prefix}"`:i.format==="ends_with"?`Nevalida karaktraro: devas fini\\u011Di per "${i.suffix}"`:i.format==="includes"?`Nevalida karaktraro: devas inkluzivi "${i.includes}"`:i.format==="regex"?`Nevalida karaktraro: devas kongrui kun la modelo ${i.pattern}`:`Nevalida ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Nevalida nombro: devas esti oblo de ${t.divisor}`;case"unrecognized_keys":return`Nekonata${t.keys.length>1?"j":""} \\u015Dlosilo${t.keys.length>1?"j":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Nevalida \\u015Dlosilo en ${t.origin}`;case"invalid_union":return"Nevalida enigo";case"invalid_element":return`Nevalida valoro en ${t.origin}`;default:return"Nevalida enigo"}}};function Hu(){return{localeError:ip()}}var ap=()=>{let e={string:{unit:"caracteres",verb:"tener"},file:{unit:"bytes",verb:"tener"},array:{unit:"elementos",verb:"tener"},set:{unit:"elementos",verb:"tener"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"entrada",email:"direcci\\xF3n de correo electr\\xF3nico",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"fecha y hora ISO",date:"fecha ISO",time:"hora ISO",duration:"duraci\\xF3n ISO",ipv4:"direcci\\xF3n IPv4",ipv6:"direcci\\xF3n IPv6",cidrv4:"rango IPv4",cidrv6:"rango IPv6",base64:"cadena codificada en base64",base64url:"URL codificada en base64",json_string:"cadena JSON",e164:"n\\xFAmero E.164",jwt:"JWT",template_literal:"entrada"},o={nan:"NaN",string:"texto",number:"n\\xFAmero",boolean:"booleano",array:"arreglo",object:"objeto",set:"conjunto",file:"archivo",date:"fecha",bigint:"n\\xFAmero grande",symbol:"s\\xEDmbolo",undefined:"indefinido",null:"nulo",function:"funci\\xF3n",map:"mapa",record:"registro",tuple:"tupla",enum:"enumeraci\\xF3n",union:"uni\\xF3n",literal:"literal",promise:"promesa",void:"vac\\xEDo",never:"nunca",unknown:"desconocido",any:"cualquiera"};return t=>{var a,c,m,s,u,d,i,l;switch(t.code){case"invalid_type":{let p=(a=o[t.expected])!=null?a:t.expected,v=b(t.input),y=(c=o[v])!=null?c:v;return/^[A-Z]/.test(t.expected)?`Entrada inv\\xE1lida: se esperaba instanceof ${t.expected}, recibido ${y}`:`Entrada inv\\xE1lida: se esperaba ${p}, recibido ${y}`}case"invalid_value":return t.values.length===1?`Entrada inv\\xE1lida: se esperaba ${$(t.values[0])}`:`Opci\\xF3n inv\\xE1lida: se esperaba una de ${h(t.values,"|")}`;case"too_big":{let p=t.inclusive?"<=":"<",v=r(t.origin),y=(m=o[t.origin])!=null?m:t.origin;return v?`Demasiado grande: se esperaba que ${y!=null?y:"valor"} tuviera ${p}${t.maximum.toString()} ${(s=v.unit)!=null?s:"elementos"}`:`Demasiado grande: se esperaba que ${y!=null?y:"valor"} fuera ${p}${t.maximum.toString()}`}case"too_small":{let p=t.inclusive?">=":">",v=r(t.origin),y=(u=o[t.origin])!=null?u:t.origin;return v?`Demasiado peque\\xF1o: se esperaba que ${y} tuviera ${p}${t.minimum.toString()} ${v.unit}`:`Demasiado peque\\xF1o: se esperaba que ${y} fuera ${p}${t.minimum.toString()}`}case"invalid_format":{let p=t;return p.format==="starts_with"?`Cadena inv\\xE1lida: debe comenzar con "${p.prefix}"`:p.format==="ends_with"?`Cadena inv\\xE1lida: debe terminar en "${p.suffix}"`:p.format==="includes"?`Cadena inv\\xE1lida: debe incluir "${p.includes}"`:p.format==="regex"?`Cadena inv\\xE1lida: debe coincidir con el patr\\xF3n ${p.pattern}`:`Inv\\xE1lido ${(d=n[p.format])!=null?d:t.format}`}case"not_multiple_of":return`N\\xFAmero inv\\xE1lido: debe ser m\\xFAltiplo de ${t.divisor}`;case"unrecognized_keys":return`Llave${t.keys.length>1?"s":""} desconocida${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Llave inv\\xE1lida en ${(i=o[t.origin])!=null?i:t.origin}`;case"invalid_union":return"Entrada inv\\xE1lida";case"invalid_element":return`Valor inv\\xE1lido en ${(l=o[t.origin])!=null?l:t.origin}`;default:return"Entrada inv\\xE1lida"}}};function el(){return{localeError:ap()}}var cp=()=>{let e={string:{unit:"\\u06A9\\u0627\\u0631\\u0627\\u06A9\\u062A\\u0631",verb:"\\u062F\\u0627\\u0634\\u062A\\u0647 \\u0628\\u0627\\u0634\\u062F"},file:{unit:"\\u0628\\u0627\\u06CC\\u062A",verb:"\\u062F\\u0627\\u0634\\u062A\\u0647 \\u0628\\u0627\\u0634\\u062F"},array:{unit:"\\u0622\\u06CC\\u062A\\u0645",verb:"\\u062F\\u0627\\u0634\\u062A\\u0647 \\u0628\\u0627\\u0634\\u062F"},set:{unit:"\\u0622\\u06CC\\u062A\\u0645",verb:"\\u062F\\u0627\\u0634\\u062A\\u0647 \\u0628\\u0627\\u0634\\u062F"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0648\\u0631\\u0648\\u062F\\u06CC",email:"\\u0622\\u062F\\u0631\\u0633 \\u0627\\u06CC\\u0645\\u06CC\\u0644",url:"URL",emoji:"\\u0627\\u06CC\\u0645\\u0648\\u062C\\u06CC",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u062A\\u0627\\u0631\\u06CC\\u062E \\u0648 \\u0632\\u0645\\u0627\\u0646 \\u0627\\u06CC\\u0632\\u0648",date:"\\u062A\\u0627\\u0631\\u06CC\\u062E \\u0627\\u06CC\\u0632\\u0648",time:"\\u0632\\u0645\\u0627\\u0646 \\u0627\\u06CC\\u0632\\u0648",duration:"\\u0645\\u062F\\u062A \\u0632\\u0645\\u0627\\u0646 \\u0627\\u06CC\\u0632\\u0648",ipv4:"IPv4 \\u0622\\u062F\\u0631\\u0633",ipv6:"IPv6 \\u0622\\u062F\\u0631\\u0633",cidrv4:"IPv4 \\u062F\\u0627\\u0645\\u0646\\u0647",cidrv6:"IPv6 \\u062F\\u0627\\u0645\\u0646\\u0647",base64:"base64-encoded \\u0631\\u0634\\u062A\\u0647",base64url:"base64url-encoded \\u0631\\u0634\\u062A\\u0647",json_string:"JSON \\u0631\\u0634\\u062A\\u0647",e164:"E.164 \\u0639\\u062F\\u062F",jwt:"JWT",template_literal:"\\u0648\\u0631\\u0648\\u062F\\u06CC"},o={nan:"NaN",number:"\\u0639\\u062F\\u062F",array:"\\u0622\\u0631\\u0627\\u06CC\\u0647"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0648\\u0631\\u0648\\u062F\\u06CC \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0645\\u06CC\\u200C\\u0628\\u0627\\u06CC\\u0633\\u062A instanceof ${t.expected} \\u0645\\u06CC\\u200C\\u0628\\u0648\\u062F\\u060C ${p} \\u062F\\u0631\\u06CC\\u0627\\u0641\\u062A \\u0634\\u062F`:`\\u0648\\u0631\\u0648\\u062F\\u06CC \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0645\\u06CC\\u200C\\u0628\\u0627\\u06CC\\u0633\\u062A ${i} \\u0645\\u06CC\\u200C\\u0628\\u0648\\u062F\\u060C ${p} \\u062F\\u0631\\u06CC\\u0627\\u0641\\u062A \\u0634\\u062F`}case"invalid_value":return t.values.length===1?`\\u0648\\u0631\\u0648\\u062F\\u06CC \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0645\\u06CC\\u200C\\u0628\\u0627\\u06CC\\u0633\\u062A ${$(t.values[0])} \\u0645\\u06CC\\u200C\\u0628\\u0648\\u062F`:`\\u06AF\\u0632\\u06CC\\u0646\\u0647 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0645\\u06CC\\u200C\\u0628\\u0627\\u06CC\\u0633\\u062A \\u06CC\\u06A9\\u06CC \\u0627\\u0632 ${h(t.values,"|")} \\u0645\\u06CC\\u200C\\u0628\\u0648\\u062F`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u062E\\u06CC\\u0644\\u06CC \\u0628\\u0632\\u0631\\u06AF: ${(m=t.origin)!=null?m:"\\u0645\\u0642\\u062F\\u0627\\u0631"} \\u0628\\u0627\\u06CC\\u062F ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0639\\u0646\\u0635\\u0631"} \\u0628\\u0627\\u0634\\u062F`:`\\u062E\\u06CC\\u0644\\u06CC \\u0628\\u0632\\u0631\\u06AF: ${(u=t.origin)!=null?u:"\\u0645\\u0642\\u062F\\u0627\\u0631"} \\u0628\\u0627\\u06CC\\u062F ${i}${t.maximum.toString()} \\u0628\\u0627\\u0634\\u062F`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u062E\\u06CC\\u0644\\u06CC \\u06A9\\u0648\\u0686\\u06A9: ${t.origin} \\u0628\\u0627\\u06CC\\u062F ${i}${t.minimum.toString()} ${l.unit} \\u0628\\u0627\\u0634\\u062F`:`\\u062E\\u06CC\\u0644\\u06CC \\u06A9\\u0648\\u0686\\u06A9: ${t.origin} \\u0628\\u0627\\u06CC\\u062F ${i}${t.minimum.toString()} \\u0628\\u0627\\u0634\\u062F`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u0631\\u0634\\u062A\\u0647 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0628\\u0627\\u06CC\\u062F \\u0628\\u0627 "${i.prefix}" \\u0634\\u0631\\u0648\\u0639 \\u0634\\u0648\\u062F`:i.format==="ends_with"?`\\u0631\\u0634\\u062A\\u0647 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0628\\u0627\\u06CC\\u062F \\u0628\\u0627 "${i.suffix}" \\u062A\\u0645\\u0627\\u0645 \\u0634\\u0648\\u062F`:i.format==="includes"?`\\u0631\\u0634\\u062A\\u0647 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0628\\u0627\\u06CC\\u062F \\u0634\\u0627\\u0645\\u0644 "${i.includes}" \\u0628\\u0627\\u0634\\u062F`:i.format==="regex"?`\\u0631\\u0634\\u062A\\u0647 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0628\\u0627\\u06CC\\u062F \\u0628\\u0627 \\u0627\\u0644\\u06AF\\u0648\\u06CC ${i.pattern} \\u0645\\u0637\\u0627\\u0628\\u0642\\u062A \\u062F\\u0627\\u0634\\u062A\\u0647 \\u0628\\u0627\\u0634\\u062F`:`${(d=n[i.format])!=null?d:t.format} \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631`}case"not_multiple_of":return`\\u0639\\u062F\\u062F \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631: \\u0628\\u0627\\u06CC\\u062F \\u0645\\u0636\\u0631\\u0628 ${t.divisor} \\u0628\\u0627\\u0634\\u062F`;case"unrecognized_keys":return`\\u06A9\\u0644\\u06CC\\u062F${t.keys.length>1?"\\u0647\\u0627\\u06CC":""} \\u0646\\u0627\\u0634\\u0646\\u0627\\u0633: ${h(t.keys,", ")}`;case"invalid_key":return`\\u06A9\\u0644\\u06CC\\u062F \\u0646\\u0627\\u0634\\u0646\\u0627\\u0633 \\u062F\\u0631 ${t.origin}`;case"invalid_union":return"\\u0648\\u0631\\u0648\\u062F\\u06CC \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631";case"invalid_element":return`\\u0645\\u0642\\u062F\\u0627\\u0631 \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631 \\u062F\\u0631 ${t.origin}`;default:return"\\u0648\\u0631\\u0648\\u062F\\u06CC \\u0646\\u0627\\u0645\\u0639\\u062A\\u0628\\u0631"}}};function tl(){return{localeError:cp()}}var up=()=>{let e={string:{unit:"merkki\\xE4",subject:"merkkijonon"},file:{unit:"tavua",subject:"tiedoston"},array:{unit:"alkiota",subject:"listan"},set:{unit:"alkiota",subject:"joukon"},number:{unit:"",subject:"luvun"},bigint:{unit:"",subject:"suuren kokonaisluvun"},int:{unit:"",subject:"kokonaisluvun"},date:{unit:"",subject:"p\\xE4iv\\xE4m\\xE4\\xE4r\\xE4n"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"s\\xE4\\xE4nn\\xF6llinen lauseke",email:"s\\xE4hk\\xF6postiosoite",url:"URL-osoite",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO-aikaleima",date:"ISO-p\\xE4iv\\xE4m\\xE4\\xE4r\\xE4",time:"ISO-aika",duration:"ISO-kesto",ipv4:"IPv4-osoite",ipv6:"IPv6-osoite",cidrv4:"IPv4-alue",cidrv6:"IPv6-alue",base64:"base64-koodattu merkkijono",base64url:"base64url-koodattu merkkijono",json_string:"JSON-merkkijono",e164:"E.164-luku",jwt:"JWT",template_literal:"templaattimerkkijono"},o={nan:"NaN"};return t=>{var a,c,m;switch(t.code){case"invalid_type":{let s=(a=o[t.expected])!=null?a:t.expected,u=b(t.input),d=(c=o[u])!=null?c:u;return/^[A-Z]/.test(t.expected)?`Virheellinen tyyppi: odotettiin instanceof ${t.expected}, oli ${d}`:`Virheellinen tyyppi: odotettiin ${s}, oli ${d}`}case"invalid_value":return t.values.length===1?`Virheellinen sy\\xF6te: t\\xE4ytyy olla ${$(t.values[0])}`:`Virheellinen valinta: t\\xE4ytyy olla yksi seuraavista: ${h(t.values,"|")}`;case"too_big":{let s=t.inclusive?"<=":"<",u=r(t.origin);return u?`Liian suuri: ${u.subject} t\\xE4ytyy olla ${s}${t.maximum.toString()} ${u.unit}`.trim():`Liian suuri: arvon t\\xE4ytyy olla ${s}${t.maximum.toString()}`}case"too_small":{let s=t.inclusive?">=":">",u=r(t.origin);return u?`Liian pieni: ${u.subject} t\\xE4ytyy olla ${s}${t.minimum.toString()} ${u.unit}`.trim():`Liian pieni: arvon t\\xE4ytyy olla ${s}${t.minimum.toString()}`}case"invalid_format":{let s=t;return s.format==="starts_with"?`Virheellinen sy\\xF6te: t\\xE4ytyy alkaa "${s.prefix}"`:s.format==="ends_with"?`Virheellinen sy\\xF6te: t\\xE4ytyy loppua "${s.suffix}"`:s.format==="includes"?`Virheellinen sy\\xF6te: t\\xE4ytyy sis\\xE4lt\\xE4\\xE4 "${s.includes}"`:s.format==="regex"?`Virheellinen sy\\xF6te: t\\xE4ytyy vastata s\\xE4\\xE4nn\\xF6llist\\xE4 lauseketta ${s.pattern}`:`Virheellinen ${(m=n[s.format])!=null?m:t.format}`}case"not_multiple_of":return`Virheellinen luku: t\\xE4ytyy olla luvun ${t.divisor} monikerta`;case"unrecognized_keys":return`${t.keys.length>1?"Tuntemattomat avaimet":"Tuntematon avain"}: ${h(t.keys,", ")}`;case"invalid_key":return"Virheellinen avain tietueessa";case"invalid_union":return"Virheellinen unioni";case"invalid_element":return"Virheellinen arvo joukossa";default:return"Virheellinen sy\\xF6te"}}};function rl(){return{localeError:up()}}var lp=()=>{let e={string:{unit:"caract\\xE8res",verb:"avoir"},file:{unit:"octets",verb:"avoir"},array:{unit:"\\xE9l\\xE9ments",verb:"avoir"},set:{unit:"\\xE9l\\xE9ments",verb:"avoir"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"entr\\xE9e",email:"adresse e-mail",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"date et heure ISO",date:"date ISO",time:"heure ISO",duration:"dur\\xE9e ISO",ipv4:"adresse IPv4",ipv6:"adresse IPv6",cidrv4:"plage IPv4",cidrv6:"plage IPv6",base64:"cha\\xEEne encod\\xE9e en base64",base64url:"cha\\xEEne encod\\xE9e en base64url",json_string:"cha\\xEEne JSON",e164:"num\\xE9ro E.164",jwt:"JWT",template_literal:"entr\\xE9e"},o={nan:"NaN",number:"nombre",array:"tableau"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Entr\\xE9e invalide : instanceof ${t.expected} attendu, ${p} re\\xE7u`:`Entr\\xE9e invalide : ${i} attendu, ${p} re\\xE7u`}case"invalid_value":return t.values.length===1?`Entr\\xE9e invalide : ${$(t.values[0])} attendu`:`Option invalide : une valeur parmi ${h(t.values,"|")} attendue`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Trop grand : ${(m=t.origin)!=null?m:"valeur"} doit ${l.verb} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\xE9l\\xE9ment(s)"}`:`Trop grand : ${(u=t.origin)!=null?u:"valeur"} doit \\xEAtre ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Trop petit : ${t.origin} doit ${l.verb} ${i}${t.minimum.toString()} ${l.unit}`:`Trop petit : ${t.origin} doit \\xEAtre ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Cha\\xEEne invalide : doit commencer par "${i.prefix}"`:i.format==="ends_with"?`Cha\\xEEne invalide : doit se terminer par "${i.suffix}"`:i.format==="includes"?`Cha\\xEEne invalide : doit inclure "${i.includes}"`:i.format==="regex"?`Cha\\xEEne invalide : doit correspondre au mod\\xE8le ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} invalide`}case"not_multiple_of":return`Nombre invalide : doit \\xEAtre un multiple de ${t.divisor}`;case"unrecognized_keys":return`Cl\\xE9${t.keys.length>1?"s":""} non reconnue${t.keys.length>1?"s":""} : ${h(t.keys,", ")}`;case"invalid_key":return`Cl\\xE9 invalide dans ${t.origin}`;case"invalid_union":return"Entr\\xE9e invalide";case"invalid_element":return`Valeur invalide dans ${t.origin}`;default:return"Entr\\xE9e invalide"}}};function nl(){return{localeError:lp()}}var sp=()=>{let e={string:{unit:"caract\\xE8res",verb:"avoir"},file:{unit:"octets",verb:"avoir"},array:{unit:"\\xE9l\\xE9ments",verb:"avoir"},set:{unit:"\\xE9l\\xE9ments",verb:"avoir"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"entr\\xE9e",email:"adresse courriel",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"date-heure ISO",date:"date ISO",time:"heure ISO",duration:"dur\\xE9e ISO",ipv4:"adresse IPv4",ipv6:"adresse IPv6",cidrv4:"plage IPv4",cidrv6:"plage IPv6",base64:"cha\\xEEne encod\\xE9e en base64",base64url:"cha\\xEEne encod\\xE9e en base64url",json_string:"cha\\xEEne JSON",e164:"num\\xE9ro E.164",jwt:"JWT",template_literal:"entr\\xE9e"},o={nan:"NaN"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`Entr\\xE9e invalide : attendu instanceof ${t.expected}, re\\xE7u ${l}`:`Entr\\xE9e invalide : attendu ${d}, re\\xE7u ${l}`}case"invalid_value":return t.values.length===1?`Entr\\xE9e invalide : attendu ${$(t.values[0])}`:`Option invalide : attendu l\'une des valeurs suivantes ${h(t.values,"|")}`;case"too_big":{let d=t.inclusive?"\\u2264":"<",i=r(t.origin);return i?`Trop grand : attendu que ${(m=t.origin)!=null?m:"la valeur"} ait ${d}${t.maximum.toString()} ${i.unit}`:`Trop grand : attendu que ${(s=t.origin)!=null?s:"la valeur"} soit ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?"\\u2265":">",i=r(t.origin);return i?`Trop petit : attendu que ${t.origin} ait ${d}${t.minimum.toString()} ${i.unit}`:`Trop petit : attendu que ${t.origin} soit ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`Cha\\xEEne invalide : doit commencer par "${d.prefix}"`:d.format==="ends_with"?`Cha\\xEEne invalide : doit se terminer par "${d.suffix}"`:d.format==="includes"?`Cha\\xEEne invalide : doit inclure "${d.includes}"`:d.format==="regex"?`Cha\\xEEne invalide : doit correspondre au motif ${d.pattern}`:`${(u=n[d.format])!=null?u:t.format} invalide`}case"not_multiple_of":return`Nombre invalide : doit \\xEAtre un multiple de ${t.divisor}`;case"unrecognized_keys":return`Cl\\xE9${t.keys.length>1?"s":""} non reconnue${t.keys.length>1?"s":""} : ${h(t.keys,", ")}`;case"invalid_key":return`Cl\\xE9 invalide dans ${t.origin}`;case"invalid_union":return"Entr\\xE9e invalide";case"invalid_element":return`Valeur invalide dans ${t.origin}`;default:return"Entr\\xE9e invalide"}}};function ol(){return{localeError:sp()}}var dp=()=>{let e={string:{label:"\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA",gender:"f"},number:{label:"\\u05DE\\u05E1\\u05E4\\u05E8",gender:"m"},boolean:{label:"\\u05E2\\u05E8\\u05DA \\u05D1\\u05D5\\u05DC\\u05D9\\u05D0\\u05E0\\u05D9",gender:"m"},bigint:{label:"BigInt",gender:"m"},date:{label:"\\u05EA\\u05D0\\u05E8\\u05D9\\u05DA",gender:"m"},array:{label:"\\u05DE\\u05E2\\u05E8\\u05DA",gender:"m"},object:{label:"\\u05D0\\u05D5\\u05D1\\u05D9\\u05D9\\u05E7\\u05D8",gender:"m"},null:{label:"\\u05E2\\u05E8\\u05DA \\u05E8\\u05D9\\u05E7 (null)",gender:"m"},undefined:{label:"\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05DE\\u05D5\\u05D2\\u05D3\\u05E8 (undefined)",gender:"m"},symbol:{label:"\\u05E1\\u05D9\\u05DE\\u05D1\\u05D5\\u05DC (Symbol)",gender:"m"},function:{label:"\\u05E4\\u05D5\\u05E0\\u05E7\\u05E6\\u05D9\\u05D4",gender:"f"},map:{label:"\\u05DE\\u05E4\\u05D4 (Map)",gender:"f"},set:{label:"\\u05E7\\u05D1\\u05D5\\u05E6\\u05D4 (Set)",gender:"f"},file:{label:"\\u05E7\\u05D5\\u05D1\\u05E5",gender:"m"},promise:{label:"Promise",gender:"m"},NaN:{label:"NaN",gender:"m"},unknown:{label:"\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05D9\\u05D3\\u05D5\\u05E2",gender:"m"},value:{label:"\\u05E2\\u05E8\\u05DA",gender:"m"}},r={string:{unit:"\\u05EA\\u05D5\\u05D5\\u05D9\\u05DD",shortLabel:"\\u05E7\\u05E6\\u05E8",longLabel:"\\u05D0\\u05E8\\u05D5\\u05DA"},file:{unit:"\\u05D1\\u05D9\\u05D9\\u05D8\\u05D9\\u05DD",shortLabel:"\\u05E7\\u05D8\\u05DF",longLabel:"\\u05D2\\u05D3\\u05D5\\u05DC"},array:{unit:"\\u05E4\\u05E8\\u05D9\\u05D8\\u05D9\\u05DD",shortLabel:"\\u05E7\\u05D8\\u05DF",longLabel:"\\u05D2\\u05D3\\u05D5\\u05DC"},set:{unit:"\\u05E4\\u05E8\\u05D9\\u05D8\\u05D9\\u05DD",shortLabel:"\\u05E7\\u05D8\\u05DF",longLabel:"\\u05D2\\u05D3\\u05D5\\u05DC"},number:{unit:"",shortLabel:"\\u05E7\\u05D8\\u05DF",longLabel:"\\u05D2\\u05D3\\u05D5\\u05DC"}},n=u=>u?e[u]:void 0,o=u=>{let d=n(u);return d?d.label:u!=null?u:e.unknown.label},t=u=>`\\u05D4${o(u)}`,a=u=>{var l;let d=n(u);return((l=d==null?void 0:d.gender)!=null?l:"m")==="f"?"\\u05E6\\u05E8\\u05D9\\u05DB\\u05D4 \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA":"\\u05E6\\u05E8\\u05D9\\u05DA \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA"},c=u=>{var d;return u&&(d=r[u])!=null?d:null},m={regex:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"},email:{label:"\\u05DB\\u05EA\\u05D5\\u05D1\\u05EA \\u05D0\\u05D9\\u05DE\\u05D9\\u05D9\\u05DC",gender:"f"},url:{label:"\\u05DB\\u05EA\\u05D5\\u05D1\\u05EA \\u05E8\\u05E9\\u05EA",gender:"f"},emoji:{label:"\\u05D0\\u05D9\\u05DE\\u05D5\\u05D2\'\\u05D9",gender:"m"},uuid:{label:"UUID",gender:"m"},nanoid:{label:"nanoid",gender:"m"},guid:{label:"GUID",gender:"m"},cuid:{label:"cuid",gender:"m"},cuid2:{label:"cuid2",gender:"m"},ulid:{label:"ULID",gender:"m"},xid:{label:"XID",gender:"m"},ksuid:{label:"KSUID",gender:"m"},datetime:{label:"\\u05EA\\u05D0\\u05E8\\u05D9\\u05DA \\u05D5\\u05D6\\u05DE\\u05DF ISO",gender:"m"},date:{label:"\\u05EA\\u05D0\\u05E8\\u05D9\\u05DA ISO",gender:"m"},time:{label:"\\u05D6\\u05DE\\u05DF ISO",gender:"m"},duration:{label:"\\u05DE\\u05E9\\u05DA \\u05D6\\u05DE\\u05DF ISO",gender:"m"},ipv4:{label:"\\u05DB\\u05EA\\u05D5\\u05D1\\u05EA IPv4",gender:"f"},ipv6:{label:"\\u05DB\\u05EA\\u05D5\\u05D1\\u05EA IPv6",gender:"f"},cidrv4:{label:"\\u05D8\\u05D5\\u05D5\\u05D7 IPv4",gender:"m"},cidrv6:{label:"\\u05D8\\u05D5\\u05D5\\u05D7 IPv6",gender:"m"},base64:{label:"\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D1\\u05D1\\u05E1\\u05D9\\u05E1 64",gender:"f"},base64url:{label:"\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D1\\u05D1\\u05E1\\u05D9\\u05E1 64 \\u05DC\\u05DB\\u05EA\\u05D5\\u05D1\\u05D5\\u05EA \\u05E8\\u05E9\\u05EA",gender:"f"},json_string:{label:"\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA JSON",gender:"f"},e164:{label:"\\u05DE\\u05E1\\u05E4\\u05E8 E.164",gender:"m"},jwt:{label:"JWT",gender:"m"},ends_with:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"},includes:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"},lowercase:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"},starts_with:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"},uppercase:{label:"\\u05E7\\u05DC\\u05D8",gender:"m"}},s={nan:"NaN"};return u=>{var d,i,l,p,v,y,S,w,j,N,k,T,U,R,Ne,Wc,qc,Xc,Qc,Yc,Hc;switch(u.code){case"invalid_type":{let z=u.expected,A=(d=s[z!=null?z:""])!=null?d:o(z),Y=b(u.input),re=(p=(l=s[Y])!=null?l:(i=e[Y])==null?void 0:i.label)!=null?p:Y;return/^[A-Z]/.test(u.expected)?`\\u05E7\\u05DC\\u05D8 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05E6\\u05E8\\u05D9\\u05DA \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA instanceof ${u.expected}, \\u05D4\\u05EA\\u05E7\\u05D1\\u05DC ${re}`:`\\u05E7\\u05DC\\u05D8 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05E6\\u05E8\\u05D9\\u05DA \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA ${A}, \\u05D4\\u05EA\\u05E7\\u05D1\\u05DC ${re}`}case"invalid_value":{if(u.values.length===1)return`\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05D4\\u05E2\\u05E8\\u05DA \\u05D7\\u05D9\\u05D9\\u05D1 \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA ${$(u.values[0])}`;let z=u.values.map(re=>$(re));if(u.values.length===2)return`\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05D4\\u05D0\\u05E4\\u05E9\\u05E8\\u05D5\\u05D9\\u05D5\\u05EA \\u05D4\\u05DE\\u05EA\\u05D0\\u05D9\\u05DE\\u05D5\\u05EA \\u05D4\\u05DF ${z[0]} \\u05D0\\u05D5 ${z[1]}`;let A=z[z.length-1];return`\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05D4\\u05D0\\u05E4\\u05E9\\u05E8\\u05D5\\u05D9\\u05D5\\u05EA \\u05D4\\u05DE\\u05EA\\u05D0\\u05D9\\u05DE\\u05D5\\u05EA \\u05D4\\u05DF ${z.slice(0,-1).join(", ")} \\u05D0\\u05D5 ${A}`}case"too_big":{let z=c(u.origin),A=t((v=u.origin)!=null?v:"value");if(u.origin==="string")return`${(y=z==null?void 0:z.longLabel)!=null?y:"\\u05D0\\u05E8\\u05D5\\u05DA"} \\u05DE\\u05D3\\u05D9: ${A} \\u05E6\\u05E8\\u05D9\\u05DB\\u05D4 \\u05DC\\u05D4\\u05DB\\u05D9\\u05DC ${u.maximum.toString()} ${(S=z==null?void 0:z.unit)!=null?S:""} ${u.inclusive?"\\u05D0\\u05D5 \\u05E4\\u05D7\\u05D5\\u05EA":"\\u05DC\\u05DB\\u05DC \\u05D4\\u05D9\\u05D5\\u05EA\\u05E8"}`.trim();if(u.origin==="number"){let oe=u.inclusive?`\\u05E7\\u05D8\\u05DF \\u05D0\\u05D5 \\u05E9\\u05D5\\u05D5\\u05D4 \\u05DC-${u.maximum}`:`\\u05E7\\u05D8\\u05DF \\u05DE-${u.maximum}`;return`\\u05D2\\u05D3\\u05D5\\u05DC \\u05DE\\u05D3\\u05D9: ${A} \\u05E6\\u05E8\\u05D9\\u05DA \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA ${oe}`}if(u.origin==="array"||u.origin==="set"){let oe=u.origin==="set"?"\\u05E6\\u05E8\\u05D9\\u05DB\\u05D4":"\\u05E6\\u05E8\\u05D9\\u05DA",un=u.inclusive?`${u.maximum} ${(w=z==null?void 0:z.unit)!=null?w:""} \\u05D0\\u05D5 \\u05E4\\u05D7\\u05D5\\u05EA`:`\\u05E4\\u05D7\\u05D5\\u05EA \\u05DE-${u.maximum} ${(j=z==null?void 0:z.unit)!=null?j:""}`;return`\\u05D2\\u05D3\\u05D5\\u05DC \\u05DE\\u05D3\\u05D9: ${A} ${oe} \\u05DC\\u05D4\\u05DB\\u05D9\\u05DC ${un}`.trim()}let Y=u.inclusive?"<=":"<",re=a((N=u.origin)!=null?N:"value");return z!=null&&z.unit?`${z.longLabel} \\u05DE\\u05D3\\u05D9: ${A} ${re} ${Y}${u.maximum.toString()} ${z.unit}`:`${(k=z==null?void 0:z.longLabel)!=null?k:"\\u05D2\\u05D3\\u05D5\\u05DC"} \\u05DE\\u05D3\\u05D9: ${A} ${re} ${Y}${u.maximum.toString()}`}case"too_small":{let z=c(u.origin),A=t((T=u.origin)!=null?T:"value");if(u.origin==="string")return`${(U=z==null?void 0:z.shortLabel)!=null?U:"\\u05E7\\u05E6\\u05E8"} \\u05DE\\u05D3\\u05D9: ${A} \\u05E6\\u05E8\\u05D9\\u05DB\\u05D4 \\u05DC\\u05D4\\u05DB\\u05D9\\u05DC ${u.minimum.toString()} ${(R=z==null?void 0:z.unit)!=null?R:""} ${u.inclusive?"\\u05D0\\u05D5 \\u05D9\\u05D5\\u05EA\\u05E8":"\\u05DC\\u05E4\\u05D7\\u05D5\\u05EA"}`.trim();if(u.origin==="number"){let oe=u.inclusive?`\\u05D2\\u05D3\\u05D5\\u05DC \\u05D0\\u05D5 \\u05E9\\u05D5\\u05D5\\u05D4 \\u05DC-${u.minimum}`:`\\u05D2\\u05D3\\u05D5\\u05DC \\u05DE-${u.minimum}`;return`\\u05E7\\u05D8\\u05DF \\u05DE\\u05D3\\u05D9: ${A} \\u05E6\\u05E8\\u05D9\\u05DA \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA ${oe}`}if(u.origin==="array"||u.origin==="set"){let oe=u.origin==="set"?"\\u05E6\\u05E8\\u05D9\\u05DB\\u05D4":"\\u05E6\\u05E8\\u05D9\\u05DA";if(u.minimum===1&&u.inclusive){let _d=(u.origin==="set","\\u05DC\\u05E4\\u05D7\\u05D5\\u05EA \\u05E4\\u05E8\\u05D9\\u05D8 \\u05D0\\u05D7\\u05D3");return`\\u05E7\\u05D8\\u05DF \\u05DE\\u05D3\\u05D9: ${A} ${oe} \\u05DC\\u05D4\\u05DB\\u05D9\\u05DC ${_d}`}let un=u.inclusive?`${u.minimum} ${(Ne=z==null?void 0:z.unit)!=null?Ne:""} \\u05D0\\u05D5 \\u05D9\\u05D5\\u05EA\\u05E8`:`\\u05D9\\u05D5\\u05EA\\u05E8 \\u05DE-${u.minimum} ${(Wc=z==null?void 0:z.unit)!=null?Wc:""}`;return`\\u05E7\\u05D8\\u05DF \\u05DE\\u05D3\\u05D9: ${A} ${oe} \\u05DC\\u05D4\\u05DB\\u05D9\\u05DC ${un}`.trim()}let Y=u.inclusive?">=":">",re=a((qc=u.origin)!=null?qc:"value");return z!=null&&z.unit?`${z.shortLabel} \\u05DE\\u05D3\\u05D9: ${A} ${re} ${Y}${u.minimum.toString()} ${z.unit}`:`${(Xc=z==null?void 0:z.shortLabel)!=null?Xc:"\\u05E7\\u05D8\\u05DF"} \\u05DE\\u05D3\\u05D9: ${A} ${re} ${Y}${u.minimum.toString()}`}case"invalid_format":{let z=u;if(z.format==="starts_with")return`\\u05D4\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D7\\u05D9\\u05D9\\u05D1\\u05EA \\u05DC\\u05D4\\u05EA\\u05D7\\u05D9\\u05DC \\u05D1 "${z.prefix}"`;if(z.format==="ends_with")return`\\u05D4\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D7\\u05D9\\u05D9\\u05D1\\u05EA \\u05DC\\u05D4\\u05E1\\u05EA\\u05D9\\u05D9\\u05DD \\u05D1 "${z.suffix}"`;if(z.format==="includes")return`\\u05D4\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D7\\u05D9\\u05D9\\u05D1\\u05EA \\u05DC\\u05DB\\u05DC\\u05D5\\u05DC "${z.includes}"`;if(z.format==="regex")return`\\u05D4\\u05DE\\u05D7\\u05E8\\u05D5\\u05D6\\u05EA \\u05D7\\u05D9\\u05D9\\u05D1\\u05EA \\u05DC\\u05D4\\u05EA\\u05D0\\u05D9\\u05DD \\u05DC\\u05EA\\u05D1\\u05E0\\u05D9\\u05EA ${z.pattern}`;let A=m[z.format],Y=(Qc=A==null?void 0:A.label)!=null?Qc:z.format,oe=((Yc=A==null?void 0:A.gender)!=null?Yc:"m")==="f"?"\\u05EA\\u05E7\\u05D9\\u05E0\\u05D4":"\\u05EA\\u05E7\\u05D9\\u05DF";return`${Y} \\u05DC\\u05D0 ${oe}`}case"not_multiple_of":return`\\u05DE\\u05E1\\u05E4\\u05E8 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF: \\u05D7\\u05D9\\u05D9\\u05D1 \\u05DC\\u05D4\\u05D9\\u05D5\\u05EA \\u05DE\\u05DB\\u05E4\\u05DC\\u05D4 \\u05E9\\u05DC ${u.divisor}`;case"unrecognized_keys":return`\\u05DE\\u05E4\\u05EA\\u05D7${u.keys.length>1?"\\u05D5\\u05EA":""} \\u05DC\\u05D0 \\u05DE\\u05D6\\u05D5\\u05D4${u.keys.length>1?"\\u05D9\\u05DD":"\\u05D4"}: ${h(u.keys,", ")}`;case"invalid_key":return"\\u05E9\\u05D3\\u05D4 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF \\u05D1\\u05D0\\u05D5\\u05D1\\u05D9\\u05D9\\u05E7\\u05D8";case"invalid_union":return"\\u05E7\\u05DC\\u05D8 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF";case"invalid_element":return`\\u05E2\\u05E8\\u05DA \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF \\u05D1${t((Hc=u.origin)!=null?Hc:"array")}`;default:return"\\u05E7\\u05DC\\u05D8 \\u05DC\\u05D0 \\u05EA\\u05E7\\u05D9\\u05DF"}}};function il(){return{localeError:dp()}}var mp=()=>{let e={string:{unit:"karakter",verb:"legyen"},file:{unit:"byte",verb:"legyen"},array:{unit:"elem",verb:"legyen"},set:{unit:"elem",verb:"legyen"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"bemenet",email:"email c\\xEDm",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO id\\u0151b\\xE9lyeg",date:"ISO d\\xE1tum",time:"ISO id\\u0151",duration:"ISO id\\u0151intervallum",ipv4:"IPv4 c\\xEDm",ipv6:"IPv6 c\\xEDm",cidrv4:"IPv4 tartom\\xE1ny",cidrv6:"IPv6 tartom\\xE1ny",base64:"base64-k\\xF3dolt string",base64url:"base64url-k\\xF3dolt string",json_string:"JSON string",e164:"E.164 sz\\xE1m",jwt:"JWT",template_literal:"bemenet"},o={nan:"NaN",number:"sz\\xE1m",array:"t\\xF6mb"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\xC9rv\\xE9nytelen bemenet: a v\\xE1rt \\xE9rt\\xE9k instanceof ${t.expected}, a kapott \\xE9rt\\xE9k ${p}`:`\\xC9rv\\xE9nytelen bemenet: a v\\xE1rt \\xE9rt\\xE9k ${i}, a kapott \\xE9rt\\xE9k ${p}`}case"invalid_value":return t.values.length===1?`\\xC9rv\\xE9nytelen bemenet: a v\\xE1rt \\xE9rt\\xE9k ${$(t.values[0])}`:`\\xC9rv\\xE9nytelen opci\\xF3: valamelyik \\xE9rt\\xE9k v\\xE1rt ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`T\\xFAl nagy: ${(m=t.origin)!=null?m:"\\xE9rt\\xE9k"} m\\xE9rete t\\xFAl nagy ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elem"}`:`T\\xFAl nagy: a bemeneti \\xE9rt\\xE9k ${(u=t.origin)!=null?u:"\\xE9rt\\xE9k"} t\\xFAl nagy: ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`T\\xFAl kicsi: a bemeneti \\xE9rt\\xE9k ${t.origin} m\\xE9rete t\\xFAl kicsi ${i}${t.minimum.toString()} ${l.unit}`:`T\\xFAl kicsi: a bemeneti \\xE9rt\\xE9k ${t.origin} t\\xFAl kicsi ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\xC9rv\\xE9nytelen string: "${i.prefix}" \\xE9rt\\xE9kkel kell kezd\\u0151dnie`:i.format==="ends_with"?`\\xC9rv\\xE9nytelen string: "${i.suffix}" \\xE9rt\\xE9kkel kell v\\xE9gz\\u0151dnie`:i.format==="includes"?`\\xC9rv\\xE9nytelen string: "${i.includes}" \\xE9rt\\xE9ket kell tartalmaznia`:i.format==="regex"?`\\xC9rv\\xE9nytelen string: ${i.pattern} mint\\xE1nak kell megfelelnie`:`\\xC9rv\\xE9nytelen ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\xC9rv\\xE9nytelen sz\\xE1m: ${t.divisor} t\\xF6bbsz\\xF6r\\xF6s\\xE9nek kell lennie`;case"unrecognized_keys":return`Ismeretlen kulcs${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`\\xC9rv\\xE9nytelen kulcs ${t.origin}`;case"invalid_union":return"\\xC9rv\\xE9nytelen bemenet";case"invalid_element":return`\\xC9rv\\xE9nytelen \\xE9rt\\xE9k: ${t.origin}`;default:return"\\xC9rv\\xE9nytelen bemenet"}}};function al(){return{localeError:mp()}}function cl(e,r,n){return Math.abs(e)===1?r:n}function Ke(e){if(!e)return"";let r=["\\u0561","\\u0565","\\u0568","\\u056B","\\u0578","\\u0578\\u0582","\\u0585"],n=e[e.length-1];return e+(r.includes(n)?"\\u0576":"\\u0568")}var pp=()=>{let e={string:{unit:{one:"\\u0576\\u0577\\u0561\\u0576",many:"\\u0576\\u0577\\u0561\\u0576\\u0576\\u0565\\u0580"},verb:"\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561\\u056C"},file:{unit:{one:"\\u0562\\u0561\\u0575\\u0569",many:"\\u0562\\u0561\\u0575\\u0569\\u0565\\u0580"},verb:"\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561\\u056C"},array:{unit:{one:"\\u057F\\u0561\\u0580\\u0580",many:"\\u057F\\u0561\\u0580\\u0580\\u0565\\u0580"},verb:"\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561\\u056C"},set:{unit:{one:"\\u057F\\u0561\\u0580\\u0580",many:"\\u057F\\u0561\\u0580\\u0580\\u0565\\u0580"},verb:"\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561\\u056C"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0574\\u0578\\u0582\\u057F\\u0584",email:"\\u0567\\u056C. \\u0570\\u0561\\u057D\\u0581\\u0565",url:"URL",emoji:"\\u0567\\u0574\\u0578\\u057B\\u056B",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0561\\u0574\\u057D\\u0561\\u0569\\u056B\\u057E \\u0587 \\u056A\\u0561\\u0574",date:"ISO \\u0561\\u0574\\u057D\\u0561\\u0569\\u056B\\u057E",time:"ISO \\u056A\\u0561\\u0574",duration:"ISO \\u057F\\u0587\\u0578\\u0572\\u0578\\u0582\\u0569\\u0575\\u0578\\u0582\\u0576",ipv4:"IPv4 \\u0570\\u0561\\u057D\\u0581\\u0565",ipv6:"IPv6 \\u0570\\u0561\\u057D\\u0581\\u0565",cidrv4:"IPv4 \\u0574\\u056B\\u057B\\u0561\\u056F\\u0561\\u0575\\u0584",cidrv6:"IPv6 \\u0574\\u056B\\u057B\\u0561\\u056F\\u0561\\u0575\\u0584",base64:"base64 \\u0571\\u0587\\u0561\\u0579\\u0561\\u0583\\u0578\\u057E \\u057F\\u0578\\u0572",base64url:"base64url \\u0571\\u0587\\u0561\\u0579\\u0561\\u0583\\u0578\\u057E \\u057F\\u0578\\u0572",json_string:"JSON \\u057F\\u0578\\u0572",e164:"E.164 \\u0570\\u0561\\u0574\\u0561\\u0580",jwt:"JWT",template_literal:"\\u0574\\u0578\\u0582\\u057F\\u0584"},o={nan:"NaN",number:"\\u0569\\u056B\\u057E",array:"\\u0566\\u0561\\u0576\\u0563\\u057E\\u0561\\u056E"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`\\u054D\\u056D\\u0561\\u056C \\u0574\\u0578\\u0582\\u057F\\u0584\\u0561\\u0563\\u0580\\u0578\\u0582\\u0574\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567\\u0580 instanceof ${t.expected}, \\u057D\\u057F\\u0561\\u0581\\u057E\\u0565\\u056C \\u0567 ${l}`:`\\u054D\\u056D\\u0561\\u056C \\u0574\\u0578\\u0582\\u057F\\u0584\\u0561\\u0563\\u0580\\u0578\\u0582\\u0574\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567\\u0580 ${d}, \\u057D\\u057F\\u0561\\u0581\\u057E\\u0565\\u056C \\u0567 ${l}`}case"invalid_value":return t.values.length===1?`\\u054D\\u056D\\u0561\\u056C \\u0574\\u0578\\u0582\\u057F\\u0584\\u0561\\u0563\\u0580\\u0578\\u0582\\u0574\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567\\u0580 ${$(t.values[1])}`:`\\u054D\\u056D\\u0561\\u056C \\u057F\\u0561\\u0580\\u0562\\u0565\\u0580\\u0561\\u056F\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567\\u0580 \\u0570\\u0565\\u057F\\u0587\\u0575\\u0561\\u056C\\u0576\\u0565\\u0580\\u056B\\u0581 \\u0574\\u0565\\u056F\\u0568\\u055D ${h(t.values,"|")}`;case"too_big":{let d=t.inclusive?"<=":"<",i=r(t.origin);if(i){let l=Number(t.maximum),p=cl(l,i.unit.one,i.unit.many);return`\\u0549\\u0561\\u0583\\u0561\\u0566\\u0561\\u0576\\u0581 \\u0574\\u0565\\u056E \\u0561\\u0580\\u056A\\u0565\\u0584\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567, \\u0578\\u0580 ${Ke((m=t.origin)!=null?m:"\\u0561\\u0580\\u056A\\u0565\\u0584")} \\u056F\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561 ${d}${t.maximum.toString()} ${p}`}return`\\u0549\\u0561\\u0583\\u0561\\u0566\\u0561\\u0576\\u0581 \\u0574\\u0565\\u056E \\u0561\\u0580\\u056A\\u0565\\u0584\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567, \\u0578\\u0580 ${Ke((s=t.origin)!=null?s:"\\u0561\\u0580\\u056A\\u0565\\u0584")} \\u056C\\u056B\\u0576\\u056B ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?">=":">",i=r(t.origin);if(i){let l=Number(t.minimum),p=cl(l,i.unit.one,i.unit.many);return`\\u0549\\u0561\\u0583\\u0561\\u0566\\u0561\\u0576\\u0581 \\u0583\\u0578\\u0584\\u0580 \\u0561\\u0580\\u056A\\u0565\\u0584\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567, \\u0578\\u0580 ${Ke(t.origin)} \\u056F\\u0578\\u0582\\u0576\\u0565\\u0576\\u0561 ${d}${t.minimum.toString()} ${p}`}return`\\u0549\\u0561\\u0583\\u0561\\u0566\\u0561\\u0576\\u0581 \\u0583\\u0578\\u0584\\u0580 \\u0561\\u0580\\u056A\\u0565\\u0584\\u2024 \\u057D\\u057A\\u0561\\u057D\\u057E\\u0578\\u0582\\u0574 \\u0567, \\u0578\\u0580 ${Ke(t.origin)} \\u056C\\u056B\\u0576\\u056B ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`\\u054D\\u056D\\u0561\\u056C \\u057F\\u0578\\u0572\\u2024 \\u057A\\u0565\\u057F\\u0584 \\u0567 \\u057D\\u056F\\u057D\\u057E\\u056B "${d.prefix}"-\\u0578\\u057E`:d.format==="ends_with"?`\\u054D\\u056D\\u0561\\u056C \\u057F\\u0578\\u0572\\u2024 \\u057A\\u0565\\u057F\\u0584 \\u0567 \\u0561\\u057E\\u0561\\u0580\\u057F\\u057E\\u056B "${d.suffix}"-\\u0578\\u057E`:d.format==="includes"?`\\u054D\\u056D\\u0561\\u056C \\u057F\\u0578\\u0572\\u2024 \\u057A\\u0565\\u057F\\u0584 \\u0567 \\u057A\\u0561\\u0580\\u0578\\u0582\\u0576\\u0561\\u056F\\u056B "${d.includes}"`:d.format==="regex"?`\\u054D\\u056D\\u0561\\u056C \\u057F\\u0578\\u0572\\u2024 \\u057A\\u0565\\u057F\\u0584 \\u0567 \\u0570\\u0561\\u0574\\u0561\\u057A\\u0561\\u057F\\u0561\\u057D\\u056D\\u0561\\u0576\\u056B ${d.pattern} \\u0571\\u0587\\u0561\\u0579\\u0561\\u0583\\u056B\\u0576`:`\\u054D\\u056D\\u0561\\u056C ${(u=n[d.format])!=null?u:t.format}`}case"not_multiple_of":return`\\u054D\\u056D\\u0561\\u056C \\u0569\\u056B\\u057E\\u2024 \\u057A\\u0565\\u057F\\u0584 \\u0567 \\u0562\\u0561\\u0566\\u0574\\u0561\\u057A\\u0561\\u057F\\u056B\\u056F \\u056C\\u056B\\u0576\\u056B ${t.divisor}-\\u056B`;case"unrecognized_keys":return`\\u0549\\u0573\\u0561\\u0576\\u0561\\u0579\\u057E\\u0561\\u056E \\u0562\\u0561\\u0576\\u0561\\u056C\\u056B${t.keys.length>1?"\\u0576\\u0565\\u0580":""}. ${h(t.keys,", ")}`;case"invalid_key":return`\\u054D\\u056D\\u0561\\u056C \\u0562\\u0561\\u0576\\u0561\\u056C\\u056B ${Ke(t.origin)}-\\u0578\\u0582\\u0574`;case"invalid_union":return"\\u054D\\u056D\\u0561\\u056C \\u0574\\u0578\\u0582\\u057F\\u0584\\u0561\\u0563\\u0580\\u0578\\u0582\\u0574";case"invalid_element":return`\\u054D\\u056D\\u0561\\u056C \\u0561\\u0580\\u056A\\u0565\\u0584 ${Ke(t.origin)}-\\u0578\\u0582\\u0574`;default:return"\\u054D\\u056D\\u0561\\u056C \\u0574\\u0578\\u0582\\u057F\\u0584\\u0561\\u0563\\u0580\\u0578\\u0582\\u0574"}}};function ul(){return{localeError:pp()}}var fp=()=>{let e={string:{unit:"karakter",verb:"memiliki"},file:{unit:"byte",verb:"memiliki"},array:{unit:"item",verb:"memiliki"},set:{unit:"item",verb:"memiliki"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"alamat email",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"tanggal dan waktu format ISO",date:"tanggal format ISO",time:"jam format ISO",duration:"durasi format ISO",ipv4:"alamat IPv4",ipv6:"alamat IPv6",cidrv4:"rentang alamat IPv4",cidrv6:"rentang alamat IPv6",base64:"string dengan enkode base64",base64url:"string dengan enkode base64url",json_string:"string JSON",e164:"angka E.164",jwt:"JWT",template_literal:"input"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Input tidak valid: diharapkan instanceof ${t.expected}, diterima ${p}`:`Input tidak valid: diharapkan ${i}, diterima ${p}`}case"invalid_value":return t.values.length===1?`Input tidak valid: diharapkan ${$(t.values[0])}`:`Pilihan tidak valid: diharapkan salah satu dari ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Terlalu besar: diharapkan ${(m=t.origin)!=null?m:"value"} memiliki ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elemen"}`:`Terlalu besar: diharapkan ${(u=t.origin)!=null?u:"value"} menjadi ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Terlalu kecil: diharapkan ${t.origin} memiliki ${i}${t.minimum.toString()} ${l.unit}`:`Terlalu kecil: diharapkan ${t.origin} menjadi ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`String tidak valid: harus dimulai dengan "${i.prefix}"`:i.format==="ends_with"?`String tidak valid: harus berakhir dengan "${i.suffix}"`:i.format==="includes"?`String tidak valid: harus menyertakan "${i.includes}"`:i.format==="regex"?`String tidak valid: harus sesuai pola ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} tidak valid`}case"not_multiple_of":return`Angka tidak valid: harus kelipatan dari ${t.divisor}`;case"unrecognized_keys":return`Kunci tidak dikenali ${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Kunci tidak valid di ${t.origin}`;case"invalid_union":return"Input tidak valid";case"invalid_element":return`Nilai tidak valid di ${t.origin}`;default:return"Input tidak valid"}}};function ll(){return{localeError:fp()}}var gp=()=>{let e={string:{unit:"stafi",verb:"a\\xF0 hafa"},file:{unit:"b\\xE6ti",verb:"a\\xF0 hafa"},array:{unit:"hluti",verb:"a\\xF0 hafa"},set:{unit:"hluti",verb:"a\\xF0 hafa"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"gildi",email:"netfang",url:"vefsl\\xF3\\xF0",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO dagsetning og t\\xEDmi",date:"ISO dagsetning",time:"ISO t\\xEDmi",duration:"ISO t\\xEDmalengd",ipv4:"IPv4 address",ipv6:"IPv6 address",cidrv4:"IPv4 range",cidrv6:"IPv6 range",base64:"base64-encoded strengur",base64url:"base64url-encoded strengur",json_string:"JSON strengur",e164:"E.164 t\\xF6lugildi",jwt:"JWT",template_literal:"gildi"},o={nan:"NaN",number:"n\\xFAmer",array:"fylki"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Rangt gildi: \\xDE\\xFA sl\\xF3st inn ${p} \\xFEar sem \\xE1 a\\xF0 vera instanceof ${t.expected}`:`Rangt gildi: \\xDE\\xFA sl\\xF3st inn ${p} \\xFEar sem \\xE1 a\\xF0 vera ${i}`}case"invalid_value":return t.values.length===1?`Rangt gildi: gert r\\xE1\\xF0 fyrir ${$(t.values[0])}`:`\\xD3gilt val: m\\xE1 vera eitt af eftirfarandi ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Of st\\xF3rt: gert er r\\xE1\\xF0 fyrir a\\xF0 ${(m=t.origin)!=null?m:"gildi"} hafi ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"hluti"}`:`Of st\\xF3rt: gert er r\\xE1\\xF0 fyrir a\\xF0 ${(u=t.origin)!=null?u:"gildi"} s\\xE9 ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Of l\\xEDti\\xF0: gert er r\\xE1\\xF0 fyrir a\\xF0 ${t.origin} hafi ${i}${t.minimum.toString()} ${l.unit}`:`Of l\\xEDti\\xF0: gert er r\\xE1\\xF0 fyrir a\\xF0 ${t.origin} s\\xE9 ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\xD3gildur strengur: ver\\xF0ur a\\xF0 byrja \\xE1 "${i.prefix}"`:i.format==="ends_with"?`\\xD3gildur strengur: ver\\xF0ur a\\xF0 enda \\xE1 "${i.suffix}"`:i.format==="includes"?`\\xD3gildur strengur: ver\\xF0ur a\\xF0 innihalda "${i.includes}"`:i.format==="regex"?`\\xD3gildur strengur: ver\\xF0ur a\\xF0 fylgja mynstri ${i.pattern}`:`Rangt ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`R\\xF6ng tala: ver\\xF0ur a\\xF0 vera margfeldi af ${t.divisor}`;case"unrecognized_keys":return`\\xD3\\xFEekkt ${t.keys.length>1?"ir lyklar":"ur lykill"}: ${h(t.keys,", ")}`;case"invalid_key":return`Rangur lykill \\xED ${t.origin}`;case"invalid_union":return"Rangt gildi";case"invalid_element":return`Rangt gildi \\xED ${t.origin}`;default:return"Rangt gildi"}}};function sl(){return{localeError:gp()}}var vp=()=>{let e={string:{unit:"caratteri",verb:"avere"},file:{unit:"byte",verb:"avere"},array:{unit:"elementi",verb:"avere"},set:{unit:"elementi",verb:"avere"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"indirizzo email",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"data e ora ISO",date:"data ISO",time:"ora ISO",duration:"durata ISO",ipv4:"indirizzo IPv4",ipv6:"indirizzo IPv6",cidrv4:"intervallo IPv4",cidrv6:"intervallo IPv6",base64:"stringa codificata in base64",base64url:"URL codificata in base64",json_string:"stringa JSON",e164:"numero E.164",jwt:"JWT",template_literal:"input"},o={nan:"NaN",number:"numero",array:"vettore"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Input non valido: atteso instanceof ${t.expected}, ricevuto ${p}`:`Input non valido: atteso ${i}, ricevuto ${p}`}case"invalid_value":return t.values.length===1?`Input non valido: atteso ${$(t.values[0])}`:`Opzione non valida: atteso uno tra ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Troppo grande: ${(m=t.origin)!=null?m:"valore"} deve avere ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementi"}`:`Troppo grande: ${(u=t.origin)!=null?u:"valore"} deve essere ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Troppo piccolo: ${t.origin} deve avere ${i}${t.minimum.toString()} ${l.unit}`:`Troppo piccolo: ${t.origin} deve essere ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Stringa non valida: deve iniziare con "${i.prefix}"`:i.format==="ends_with"?`Stringa non valida: deve terminare con "${i.suffix}"`:i.format==="includes"?`Stringa non valida: deve includere "${i.includes}"`:i.format==="regex"?`Stringa non valida: deve corrispondere al pattern ${i.pattern}`:`Invalid ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Numero non valido: deve essere un multiplo di ${t.divisor}`;case"unrecognized_keys":return`Chiav${t.keys.length>1?"i":"e"} non riconosciut${t.keys.length>1?"e":"a"}: ${h(t.keys,", ")}`;case"invalid_key":return`Chiave non valida in ${t.origin}`;case"invalid_union":return"Input non valido";case"invalid_element":return`Valore non valido in ${t.origin}`;default:return"Input non valido"}}};function dl(){return{localeError:vp()}}var hp=()=>{let e={string:{unit:"\\u6587\\u5B57",verb:"\\u3067\\u3042\\u308B"},file:{unit:"\\u30D0\\u30A4\\u30C8",verb:"\\u3067\\u3042\\u308B"},array:{unit:"\\u8981\\u7D20",verb:"\\u3067\\u3042\\u308B"},set:{unit:"\\u8981\\u7D20",verb:"\\u3067\\u3042\\u308B"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u5165\\u529B\\u5024",email:"\\u30E1\\u30FC\\u30EB\\u30A2\\u30C9\\u30EC\\u30B9",url:"URL",emoji:"\\u7D75\\u6587\\u5B57",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO\\u65E5\\u6642",date:"ISO\\u65E5\\u4ED8",time:"ISO\\u6642\\u523B",duration:"ISO\\u671F\\u9593",ipv4:"IPv4\\u30A2\\u30C9\\u30EC\\u30B9",ipv6:"IPv6\\u30A2\\u30C9\\u30EC\\u30B9",cidrv4:"IPv4\\u7BC4\\u56F2",cidrv6:"IPv6\\u7BC4\\u56F2",base64:"base64\\u30A8\\u30F3\\u30B3\\u30FC\\u30C9\\u6587\\u5B57\\u5217",base64url:"base64url\\u30A8\\u30F3\\u30B3\\u30FC\\u30C9\\u6587\\u5B57\\u5217",json_string:"JSON\\u6587\\u5B57\\u5217",e164:"E.164\\u756A\\u53F7",jwt:"JWT",template_literal:"\\u5165\\u529B\\u5024"},o={nan:"NaN",number:"\\u6570\\u5024",array:"\\u914D\\u5217"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u7121\\u52B9\\u306A\\u5165\\u529B: instanceof ${t.expected}\\u304C\\u671F\\u5F85\\u3055\\u308C\\u307E\\u3057\\u305F\\u304C\\u3001${p}\\u304C\\u5165\\u529B\\u3055\\u308C\\u307E\\u3057\\u305F`:`\\u7121\\u52B9\\u306A\\u5165\\u529B: ${i}\\u304C\\u671F\\u5F85\\u3055\\u308C\\u307E\\u3057\\u305F\\u304C\\u3001${p}\\u304C\\u5165\\u529B\\u3055\\u308C\\u307E\\u3057\\u305F`}case"invalid_value":return t.values.length===1?`\\u7121\\u52B9\\u306A\\u5165\\u529B: ${$(t.values[0])}\\u304C\\u671F\\u5F85\\u3055\\u308C\\u307E\\u3057\\u305F`:`\\u7121\\u52B9\\u306A\\u9078\\u629E: ${h(t.values,"\\u3001")}\\u306E\\u3044\\u305A\\u308C\\u304B\\u3067\\u3042\\u308B\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`;case"too_big":{let i=t.inclusive?"\\u4EE5\\u4E0B\\u3067\\u3042\\u308B":"\\u3088\\u308A\\u5C0F\\u3055\\u3044",l=r(t.origin);return l?`\\u5927\\u304D\\u3059\\u304E\\u308B\\u5024: ${(m=t.origin)!=null?m:"\\u5024"}\\u306F${t.maximum.toString()}${(s=l.unit)!=null?s:"\\u8981\\u7D20"}${i}\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:`\\u5927\\u304D\\u3059\\u304E\\u308B\\u5024: ${(u=t.origin)!=null?u:"\\u5024"}\\u306F${t.maximum.toString()}${i}\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`}case"too_small":{let i=t.inclusive?"\\u4EE5\\u4E0A\\u3067\\u3042\\u308B":"\\u3088\\u308A\\u5927\\u304D\\u3044",l=r(t.origin);return l?`\\u5C0F\\u3055\\u3059\\u304E\\u308B\\u5024: ${t.origin}\\u306F${t.minimum.toString()}${l.unit}${i}\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:`\\u5C0F\\u3055\\u3059\\u304E\\u308B\\u5024: ${t.origin}\\u306F${t.minimum.toString()}${i}\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u7121\\u52B9\\u306A\\u6587\\u5B57\\u5217: "${i.prefix}"\\u3067\\u59CB\\u307E\\u308B\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:i.format==="ends_with"?`\\u7121\\u52B9\\u306A\\u6587\\u5B57\\u5217: "${i.suffix}"\\u3067\\u7D42\\u308F\\u308B\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:i.format==="includes"?`\\u7121\\u52B9\\u306A\\u6587\\u5B57\\u5217: "${i.includes}"\\u3092\\u542B\\u3080\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:i.format==="regex"?`\\u7121\\u52B9\\u306A\\u6587\\u5B57\\u5217: \\u30D1\\u30BF\\u30FC\\u30F3${i.pattern}\\u306B\\u4E00\\u81F4\\u3059\\u308B\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`:`\\u7121\\u52B9\\u306A${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u7121\\u52B9\\u306A\\u6570\\u5024: ${t.divisor}\\u306E\\u500D\\u6570\\u3067\\u3042\\u308B\\u5FC5\\u8981\\u304C\\u3042\\u308A\\u307E\\u3059`;case"unrecognized_keys":return`\\u8A8D\\u8B58\\u3055\\u308C\\u3066\\u3044\\u306A\\u3044\\u30AD\\u30FC${t.keys.length>1?"\\u7FA4":""}: ${h(t.keys,"\\u3001")}`;case"invalid_key":return`${t.origin}\\u5185\\u306E\\u7121\\u52B9\\u306A\\u30AD\\u30FC`;case"invalid_union":return"\\u7121\\u52B9\\u306A\\u5165\\u529B";case"invalid_element":return`${t.origin}\\u5185\\u306E\\u7121\\u52B9\\u306A\\u5024`;default:return"\\u7121\\u52B9\\u306A\\u5165\\u529B"}}};function ml(){return{localeError:hp()}}var yp=()=>{let e={string:{unit:"\\u10E1\\u10D8\\u10DB\\u10D1\\u10DD\\u10DA\\u10DD",verb:"\\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D8\\u10EA\\u10D0\\u10D5\\u10D3\\u10D4\\u10E1"},file:{unit:"\\u10D1\\u10D0\\u10D8\\u10E2\\u10D8",verb:"\\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D8\\u10EA\\u10D0\\u10D5\\u10D3\\u10D4\\u10E1"},array:{unit:"\\u10D4\\u10DA\\u10D4\\u10DB\\u10D4\\u10DC\\u10E2\\u10D8",verb:"\\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D8\\u10EA\\u10D0\\u10D5\\u10D3\\u10D4\\u10E1"},set:{unit:"\\u10D4\\u10DA\\u10D4\\u10DB\\u10D4\\u10DC\\u10E2\\u10D8",verb:"\\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D8\\u10EA\\u10D0\\u10D5\\u10D3\\u10D4\\u10E1"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0",email:"\\u10D4\\u10DA-\\u10E4\\u10DD\\u10E1\\u10E2\\u10D8\\u10E1 \\u10DB\\u10D8\\u10E1\\u10D0\\u10DB\\u10D0\\u10E0\\u10D7\\u10D8",url:"URL",emoji:"\\u10D4\\u10DB\\u10DD\\u10EF\\u10D8",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u10D7\\u10D0\\u10E0\\u10D8\\u10E6\\u10D8-\\u10D3\\u10E0\\u10DD",date:"\\u10D7\\u10D0\\u10E0\\u10D8\\u10E6\\u10D8",time:"\\u10D3\\u10E0\\u10DD",duration:"\\u10EE\\u10D0\\u10DC\\u10D2\\u10E0\\u10EB\\u10DA\\u10D8\\u10D5\\u10DD\\u10D1\\u10D0",ipv4:"IPv4 \\u10DB\\u10D8\\u10E1\\u10D0\\u10DB\\u10D0\\u10E0\\u10D7\\u10D8",ipv6:"IPv6 \\u10DB\\u10D8\\u10E1\\u10D0\\u10DB\\u10D0\\u10E0\\u10D7\\u10D8",cidrv4:"IPv4 \\u10D3\\u10D8\\u10D0\\u10DE\\u10D0\\u10D6\\u10DD\\u10DC\\u10D8",cidrv6:"IPv6 \\u10D3\\u10D8\\u10D0\\u10DE\\u10D0\\u10D6\\u10DD\\u10DC\\u10D8",base64:"base64-\\u10D9\\u10DD\\u10D3\\u10D8\\u10E0\\u10D4\\u10D1\\u10E3\\u10DA\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8",base64url:"base64url-\\u10D9\\u10DD\\u10D3\\u10D8\\u10E0\\u10D4\\u10D1\\u10E3\\u10DA\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8",json_string:"JSON \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8",e164:"E.164 \\u10DC\\u10DD\\u10DB\\u10D4\\u10E0\\u10D8",jwt:"JWT",template_literal:"\\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0"},o={nan:"NaN",number:"\\u10E0\\u10D8\\u10EA\\u10EE\\u10D5\\u10D8",string:"\\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8",boolean:"\\u10D1\\u10E3\\u10DA\\u10D4\\u10D0\\u10DC\\u10D8",function:"\\u10E4\\u10E3\\u10DC\\u10E5\\u10EA\\u10D8\\u10D0",array:"\\u10DB\\u10D0\\u10E1\\u10D8\\u10D5\\u10D8"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 instanceof ${t.expected}, \\u10DB\\u10D8\\u10E6\\u10D4\\u10D1\\u10E3\\u10DA\\u10D8 ${l}`:`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${d}, \\u10DB\\u10D8\\u10E6\\u10D4\\u10D1\\u10E3\\u10DA\\u10D8 ${l}`}case"invalid_value":return t.values.length===1?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${$(t.values[0])}`:`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10D5\\u10D0\\u10E0\\u10D8\\u10D0\\u10DC\\u10E2\\u10D8: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8\\u10D0 \\u10D4\\u10E0\\u10D7-\\u10D4\\u10E0\\u10D7\\u10D8 ${h(t.values,"|")}-\\u10D3\\u10D0\\u10DC`;case"too_big":{let d=t.inclusive?"<=":"<",i=r(t.origin);return i?`\\u10D6\\u10D4\\u10D3\\u10DB\\u10D4\\u10E2\\u10D0\\u10D3 \\u10D3\\u10D8\\u10D3\\u10D8: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${(m=t.origin)!=null?m:"\\u10DB\\u10DC\\u10D8\\u10E8\\u10D5\\u10DC\\u10D4\\u10DA\\u10DD\\u10D1\\u10D0"} ${i.verb} ${d}${t.maximum.toString()} ${i.unit}`:`\\u10D6\\u10D4\\u10D3\\u10DB\\u10D4\\u10E2\\u10D0\\u10D3 \\u10D3\\u10D8\\u10D3\\u10D8: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${(s=t.origin)!=null?s:"\\u10DB\\u10DC\\u10D8\\u10E8\\u10D5\\u10DC\\u10D4\\u10DA\\u10DD\\u10D1\\u10D0"} \\u10D8\\u10E7\\u10DD\\u10E1 ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?">=":">",i=r(t.origin);return i?`\\u10D6\\u10D4\\u10D3\\u10DB\\u10D4\\u10E2\\u10D0\\u10D3 \\u10DE\\u10D0\\u10E2\\u10D0\\u10E0\\u10D0: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${t.origin} ${i.verb} ${d}${t.minimum.toString()} ${i.unit}`:`\\u10D6\\u10D4\\u10D3\\u10DB\\u10D4\\u10E2\\u10D0\\u10D3 \\u10DE\\u10D0\\u10E2\\u10D0\\u10E0\\u10D0: \\u10DB\\u10DD\\u10E1\\u10D0\\u10DA\\u10DD\\u10D3\\u10DC\\u10D4\\u10DA\\u10D8 ${t.origin} \\u10D8\\u10E7\\u10DD\\u10E1 ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8: \\u10E3\\u10DC\\u10D3\\u10D0 \\u10D8\\u10EC\\u10E7\\u10D4\\u10D1\\u10DD\\u10D3\\u10D4\\u10E1 "${d.prefix}"-\\u10D8\\u10D7`:d.format==="ends_with"?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8: \\u10E3\\u10DC\\u10D3\\u10D0 \\u10DB\\u10D7\\u10D0\\u10D5\\u10E0\\u10D3\\u10D4\\u10D1\\u10DD\\u10D3\\u10D4\\u10E1 "${d.suffix}"-\\u10D8\\u10D7`:d.format==="includes"?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8: \\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D8\\u10EA\\u10D0\\u10D5\\u10D3\\u10D4\\u10E1 "${d.includes}"-\\u10E1`:d.format==="regex"?`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E1\\u10E2\\u10E0\\u10D8\\u10DC\\u10D2\\u10D8: \\u10E3\\u10DC\\u10D3\\u10D0 \\u10E8\\u10D4\\u10D4\\u10E1\\u10D0\\u10D1\\u10D0\\u10DB\\u10D4\\u10D1\\u10DD\\u10D3\\u10D4\\u10E1 \\u10E8\\u10D0\\u10D1\\u10DA\\u10DD\\u10DC\\u10E1 ${d.pattern}`:`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 ${(u=n[d.format])!=null?u:t.format}`}case"not_multiple_of":return`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E0\\u10D8\\u10EA\\u10EE\\u10D5\\u10D8: \\u10E3\\u10DC\\u10D3\\u10D0 \\u10D8\\u10E7\\u10DD\\u10E1 ${t.divisor}-\\u10D8\\u10E1 \\u10EF\\u10D4\\u10E0\\u10D0\\u10D3\\u10D8`;case"unrecognized_keys":return`\\u10E3\\u10EA\\u10DC\\u10DD\\u10D1\\u10D8 \\u10D2\\u10D0\\u10E1\\u10D0\\u10E6\\u10D4\\u10D1${t.keys.length>1?"\\u10D4\\u10D1\\u10D8":"\\u10D8"}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10D2\\u10D0\\u10E1\\u10D0\\u10E6\\u10D4\\u10D1\\u10D8 ${t.origin}-\\u10E8\\u10D8`;case"invalid_union":return"\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0";case"invalid_element":return`\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10DB\\u10DC\\u10D8\\u10E8\\u10D5\\u10DC\\u10D4\\u10DA\\u10DD\\u10D1\\u10D0 ${t.origin}-\\u10E8\\u10D8`;default:return"\\u10D0\\u10E0\\u10D0\\u10E1\\u10EC\\u10DD\\u10E0\\u10D8 \\u10E8\\u10D4\\u10E7\\u10D5\\u10D0\\u10DC\\u10D0"}}};function pl(){return{localeError:yp()}}var $p=()=>{let e={string:{unit:"\\u178F\\u17BD\\u17A2\\u1780\\u17D2\\u179F\\u179A",verb:"\\u1782\\u17BD\\u179A\\u1798\\u17B6\\u1793"},file:{unit:"\\u1794\\u17C3",verb:"\\u1782\\u17BD\\u179A\\u1798\\u17B6\\u1793"},array:{unit:"\\u1792\\u17B6\\u178F\\u17BB",verb:"\\u1782\\u17BD\\u179A\\u1798\\u17B6\\u1793"},set:{unit:"\\u1792\\u17B6\\u178F\\u17BB",verb:"\\u1782\\u17BD\\u179A\\u1798\\u17B6\\u1793"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1794\\u1789\\u17D2\\u1785\\u17BC\\u179B",email:"\\u17A2\\u17B6\\u179F\\u1799\\u178A\\u17D2\\u178B\\u17B6\\u1793\\u17A2\\u17CA\\u17B8\\u1798\\u17C2\\u179B",url:"URL",emoji:"\\u179F\\u1789\\u17D2\\u1789\\u17B6\\u17A2\\u17B6\\u179A\\u1798\\u17D2\\u1798\\u178E\\u17CD",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u1780\\u17B6\\u179B\\u1794\\u179A\\u17B7\\u1785\\u17D2\\u1786\\u17C1\\u1791 \\u1793\\u17B7\\u1784\\u1798\\u17C9\\u17C4\\u1784 ISO",date:"\\u1780\\u17B6\\u179B\\u1794\\u179A\\u17B7\\u1785\\u17D2\\u1786\\u17C1\\u1791 ISO",time:"\\u1798\\u17C9\\u17C4\\u1784 ISO",duration:"\\u179A\\u1799\\u17C8\\u1796\\u17C1\\u179B ISO",ipv4:"\\u17A2\\u17B6\\u179F\\u1799\\u178A\\u17D2\\u178B\\u17B6\\u1793 IPv4",ipv6:"\\u17A2\\u17B6\\u179F\\u1799\\u178A\\u17D2\\u178B\\u17B6\\u1793 IPv6",cidrv4:"\\u178A\\u17C2\\u1793\\u17A2\\u17B6\\u179F\\u1799\\u178A\\u17D2\\u178B\\u17B6\\u1793 IPv4",cidrv6:"\\u178A\\u17C2\\u1793\\u17A2\\u17B6\\u179F\\u1799\\u178A\\u17D2\\u178B\\u17B6\\u1793 IPv6",base64:"\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u17A2\\u17CA\\u17B7\\u1780\\u17BC\\u178A base64",base64url:"\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u17A2\\u17CA\\u17B7\\u1780\\u17BC\\u178A base64url",json_string:"\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A JSON",e164:"\\u179B\\u17C1\\u1781 E.164",jwt:"JWT",template_literal:"\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1794\\u1789\\u17D2\\u1785\\u17BC\\u179B"},o={nan:"NaN",number:"\\u179B\\u17C1\\u1781",array:"\\u17A2\\u17B6\\u179A\\u17C1 (Array)",null:"\\u1782\\u17D2\\u1798\\u17B6\\u1793\\u178F\\u1798\\u17D2\\u179B\\u17C3 (null)"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1794\\u1789\\u17D2\\u1785\\u17BC\\u179B\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A instanceof ${t.expected} \\u1794\\u17C9\\u17BB\\u1793\\u17D2\\u178F\\u17C2\\u1791\\u1791\\u17BD\\u179B\\u1794\\u17B6\\u1793 ${p}`:`\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1794\\u1789\\u17D2\\u1785\\u17BC\\u179B\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${i} \\u1794\\u17C9\\u17BB\\u1793\\u17D2\\u178F\\u17C2\\u1791\\u1791\\u17BD\\u179B\\u1794\\u17B6\\u1793 ${p}`}case"invalid_value":return t.values.length===1?`\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1794\\u1789\\u17D2\\u1785\\u17BC\\u179B\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${$(t.values[0])}`:`\\u1787\\u1798\\u17D2\\u179A\\u17BE\\u179F\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1787\\u17B6\\u1798\\u17BD\\u1799\\u1780\\u17D2\\u1793\\u17BB\\u1784\\u1785\\u17C6\\u178E\\u17C4\\u1798 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u1792\\u17C6\\u1796\\u17C1\\u1780\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${(m=t.origin)!=null?m:"\\u178F\\u1798\\u17D2\\u179B\\u17C3"} ${i} ${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u1792\\u17B6\\u178F\\u17BB"}`:`\\u1792\\u17C6\\u1796\\u17C1\\u1780\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${(u=t.origin)!=null?u:"\\u178F\\u1798\\u17D2\\u179B\\u17C3"} ${i} ${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u178F\\u17BC\\u1785\\u1796\\u17C1\\u1780\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${t.origin} ${i} ${t.minimum.toString()} ${l.unit}`:`\\u178F\\u17BC\\u1785\\u1796\\u17C1\\u1780\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1780\\u17B6\\u179A ${t.origin} ${i} ${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1785\\u17B6\\u1794\\u17CB\\u1795\\u17D2\\u178F\\u17BE\\u1798\\u178A\\u17C4\\u1799 "${i.prefix}"`:i.format==="ends_with"?`\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1794\\u1789\\u17D2\\u1785\\u1794\\u17CB\\u178A\\u17C4\\u1799 "${i.suffix}"`:i.format==="includes"?`\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1798\\u17B6\\u1793 "${i.includes}"`:i.format==="regex"?`\\u1781\\u17D2\\u179F\\u17C2\\u17A2\\u1780\\u17D2\\u179F\\u179A\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u178F\\u17C2\\u1795\\u17D2\\u1782\\u17BC\\u1795\\u17D2\\u1782\\u1784\\u1793\\u17B9\\u1784\\u1791\\u1798\\u17D2\\u179A\\u1784\\u17CB\\u178A\\u17C2\\u179B\\u1794\\u17B6\\u1793\\u1780\\u17C6\\u178E\\u178F\\u17CB ${i.pattern}`:`\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u179B\\u17C1\\u1781\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u17D6 \\u178F\\u17D2\\u179A\\u17BC\\u179C\\u178F\\u17C2\\u1787\\u17B6\\u1796\\u17A0\\u17BB\\u1782\\u17BB\\u178E\\u1793\\u17C3 ${t.divisor}`;case"unrecognized_keys":return`\\u179A\\u1780\\u1783\\u17BE\\u1789\\u179F\\u17C4\\u1798\\u17B7\\u1793\\u179F\\u17D2\\u1782\\u17B6\\u179B\\u17CB\\u17D6 ${h(t.keys,", ")}`;case"invalid_key":return`\\u179F\\u17C4\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1793\\u17C5\\u1780\\u17D2\\u1793\\u17BB\\u1784 ${t.origin}`;case"invalid_union":return"\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C";case"invalid_element":return`\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C\\u1793\\u17C5\\u1780\\u17D2\\u1793\\u17BB\\u1784 ${t.origin}`;default:return"\\u1791\\u17B7\\u1793\\u17D2\\u1793\\u1793\\u17D0\\u1799\\u1798\\u17B7\\u1793\\u178F\\u17D2\\u179A\\u17B9\\u1798\\u178F\\u17D2\\u179A\\u17BC\\u179C"}}};function yr(){return{localeError:$p()}}function fl(){return yr()}var bp=()=>{let e={string:{unit:"\\uBB38\\uC790",verb:"to have"},file:{unit:"\\uBC14\\uC774\\uD2B8",verb:"to have"},array:{unit:"\\uAC1C",verb:"to have"},set:{unit:"\\uAC1C",verb:"to have"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\uC785\\uB825",email:"\\uC774\\uBA54\\uC77C \\uC8FC\\uC18C",url:"URL",emoji:"\\uC774\\uBAA8\\uC9C0",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\uB0A0\\uC9DC\\uC2DC\\uAC04",date:"ISO \\uB0A0\\uC9DC",time:"ISO \\uC2DC\\uAC04",duration:"ISO \\uAE30\\uAC04",ipv4:"IPv4 \\uC8FC\\uC18C",ipv6:"IPv6 \\uC8FC\\uC18C",cidrv4:"IPv4 \\uBC94\\uC704",cidrv6:"IPv6 \\uBC94\\uC704",base64:"base64 \\uC778\\uCF54\\uB529 \\uBB38\\uC790\\uC5F4",base64url:"base64url \\uC778\\uCF54\\uB529 \\uBB38\\uC790\\uC5F4",json_string:"JSON \\uBB38\\uC790\\uC5F4",e164:"E.164 \\uBC88\\uD638",jwt:"JWT",template_literal:"\\uC785\\uB825"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d,i,l,p;switch(t.code){case"invalid_type":{let v=(a=o[t.expected])!=null?a:t.expected,y=b(t.input),S=(c=o[y])!=null?c:y;return/^[A-Z]/.test(t.expected)?`\\uC798\\uBABB\\uB41C \\uC785\\uB825: \\uC608\\uC0C1 \\uD0C0\\uC785\\uC740 instanceof ${t.expected}, \\uBC1B\\uC740 \\uD0C0\\uC785\\uC740 ${S}\\uC785\\uB2C8\\uB2E4`:`\\uC798\\uBABB\\uB41C \\uC785\\uB825: \\uC608\\uC0C1 \\uD0C0\\uC785\\uC740 ${v}, \\uBC1B\\uC740 \\uD0C0\\uC785\\uC740 ${S}\\uC785\\uB2C8\\uB2E4`}case"invalid_value":return t.values.length===1?`\\uC798\\uBABB\\uB41C \\uC785\\uB825: \\uAC12\\uC740 ${$(t.values[0])} \\uC774\\uC5B4\\uC57C \\uD569\\uB2C8\\uB2E4`:`\\uC798\\uBABB\\uB41C \\uC635\\uC158: ${h(t.values,"\\uB610\\uB294 ")} \\uC911 \\uD558\\uB098\\uC5EC\\uC57C \\uD569\\uB2C8\\uB2E4`;case"too_big":{let v=t.inclusive?"\\uC774\\uD558":"\\uBBF8\\uB9CC",y=v==="\\uBBF8\\uB9CC"?"\\uC774\\uC5B4\\uC57C \\uD569\\uB2C8\\uB2E4":"\\uC5EC\\uC57C \\uD569\\uB2C8\\uB2E4",S=r(t.origin),w=(m=S==null?void 0:S.unit)!=null?m:"\\uC694\\uC18C";return S?`${(s=t.origin)!=null?s:"\\uAC12"}\\uC774 \\uB108\\uBB34 \\uD07D\\uB2C8\\uB2E4: ${t.maximum.toString()}${w} ${v}${y}`:`${(u=t.origin)!=null?u:"\\uAC12"}\\uC774 \\uB108\\uBB34 \\uD07D\\uB2C8\\uB2E4: ${t.maximum.toString()} ${v}${y}`}case"too_small":{let v=t.inclusive?"\\uC774\\uC0C1":"\\uCD08\\uACFC",y=v==="\\uC774\\uC0C1"?"\\uC774\\uC5B4\\uC57C \\uD569\\uB2C8\\uB2E4":"\\uC5EC\\uC57C \\uD569\\uB2C8\\uB2E4",S=r(t.origin),w=(d=S==null?void 0:S.unit)!=null?d:"\\uC694\\uC18C";return S?`${(i=t.origin)!=null?i:"\\uAC12"}\\uC774 \\uB108\\uBB34 \\uC791\\uC2B5\\uB2C8\\uB2E4: ${t.minimum.toString()}${w} ${v}${y}`:`${(l=t.origin)!=null?l:"\\uAC12"}\\uC774 \\uB108\\uBB34 \\uC791\\uC2B5\\uB2C8\\uB2E4: ${t.minimum.toString()} ${v}${y}`}case"invalid_format":{let v=t;return v.format==="starts_with"?`\\uC798\\uBABB\\uB41C \\uBB38\\uC790\\uC5F4: "${v.prefix}"(\\uC73C)\\uB85C \\uC2DC\\uC791\\uD574\\uC57C \\uD569\\uB2C8\\uB2E4`:v.format==="ends_with"?`\\uC798\\uBABB\\uB41C \\uBB38\\uC790\\uC5F4: "${v.suffix}"(\\uC73C)\\uB85C \\uB05D\\uB098\\uC57C \\uD569\\uB2C8\\uB2E4`:v.format==="includes"?`\\uC798\\uBABB\\uB41C \\uBB38\\uC790\\uC5F4: "${v.includes}"\\uC744(\\uB97C) \\uD3EC\\uD568\\uD574\\uC57C \\uD569\\uB2C8\\uB2E4`:v.format==="regex"?`\\uC798\\uBABB\\uB41C \\uBB38\\uC790\\uC5F4: \\uC815\\uADDC\\uC2DD ${v.pattern} \\uD328\\uD134\\uACFC \\uC77C\\uCE58\\uD574\\uC57C \\uD569\\uB2C8\\uB2E4`:`\\uC798\\uBABB\\uB41C ${(p=n[v.format])!=null?p:t.format}`}case"not_multiple_of":return`\\uC798\\uBABB\\uB41C \\uC22B\\uC790: ${t.divisor}\\uC758 \\uBC30\\uC218\\uC5EC\\uC57C \\uD569\\uB2C8\\uB2E4`;case"unrecognized_keys":return`\\uC778\\uC2DD\\uD560 \\uC218 \\uC5C6\\uB294 \\uD0A4: ${h(t.keys,", ")}`;case"invalid_key":return`\\uC798\\uBABB\\uB41C \\uD0A4: ${t.origin}`;case"invalid_union":return"\\uC798\\uBABB\\uB41C \\uC785\\uB825";case"invalid_element":return`\\uC798\\uBABB\\uB41C \\uAC12: ${t.origin}`;default:return"\\uC798\\uBABB\\uB41C \\uC785\\uB825"}}};function gl(){return{localeError:bp()}}var pt=e=>e.charAt(0).toUpperCase()+e.slice(1);function vl(e){let r=Math.abs(e),n=r%10,o=r%100;return o>=11&&o<=19||n===0?"many":n===1?"one":"few"}var xp=()=>{let e={string:{unit:{one:"simbolis",few:"simboliai",many:"simboli\\u0173"},verb:{smaller:{inclusive:"turi b\\u016Bti ne ilgesn\\u0117 kaip",notInclusive:"turi b\\u016Bti trumpesn\\u0117 kaip"},bigger:{inclusive:"turi b\\u016Bti ne trumpesn\\u0117 kaip",notInclusive:"turi b\\u016Bti ilgesn\\u0117 kaip"}}},file:{unit:{one:"baitas",few:"baitai",many:"bait\\u0173"},verb:{smaller:{inclusive:"turi b\\u016Bti ne didesnis kaip",notInclusive:"turi b\\u016Bti ma\\u017Eesnis kaip"},bigger:{inclusive:"turi b\\u016Bti ne ma\\u017Eesnis kaip",notInclusive:"turi b\\u016Bti didesnis kaip"}}},array:{unit:{one:"element\\u0105",few:"elementus",many:"element\\u0173"},verb:{smaller:{inclusive:"turi tur\\u0117ti ne daugiau kaip",notInclusive:"turi tur\\u0117ti ma\\u017Eiau kaip"},bigger:{inclusive:"turi tur\\u0117ti ne ma\\u017Eiau kaip",notInclusive:"turi tur\\u0117ti daugiau kaip"}}},set:{unit:{one:"element\\u0105",few:"elementus",many:"element\\u0173"},verb:{smaller:{inclusive:"turi tur\\u0117ti ne daugiau kaip",notInclusive:"turi tur\\u0117ti ma\\u017Eiau kaip"},bigger:{inclusive:"turi tur\\u0117ti ne ma\\u017Eiau kaip",notInclusive:"turi tur\\u0117ti daugiau kaip"}}}};function r(t,a,c,m){var u;let s=(u=e[t])!=null?u:null;return s===null?s:{unit:s.unit[a],verb:s.verb[m][c?"inclusive":"notInclusive"]}}let n={regex:"\\u012Fvestis",email:"el. pa\\u0161to adresas",url:"URL",emoji:"jaustukas",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO data ir laikas",date:"ISO data",time:"ISO laikas",duration:"ISO trukm\\u0117",ipv4:"IPv4 adresas",ipv6:"IPv6 adresas",cidrv4:"IPv4 tinklo prefiksas (CIDR)",cidrv6:"IPv6 tinklo prefiksas (CIDR)",base64:"base64 u\\u017Ekoduota eilut\\u0117",base64url:"base64url u\\u017Ekoduota eilut\\u0117",json_string:"JSON eilut\\u0117",e164:"E.164 numeris",jwt:"JWT",template_literal:"\\u012Fvestis"},o={nan:"NaN",number:"skai\\u010Dius",bigint:"sveikasis skai\\u010Dius",string:"eilut\\u0117",boolean:"login\\u0117 reik\\u0161m\\u0117",undefined:"neapibr\\u0117\\u017Eta reik\\u0161m\\u0117",function:"funkcija",symbol:"simbolis",array:"masyvas",object:"objektas",null:"nulin\\u0117 reik\\u0161m\\u0117"};return t=>{var a,c,m,s,u,d,i,l,p,v,y,S,w,j,N;switch(t.code){case"invalid_type":{let k=(a=o[t.expected])!=null?a:t.expected,T=b(t.input),U=(c=o[T])!=null?c:T;return/^[A-Z]/.test(t.expected)?`Gautas tipas ${U}, o tik\\u0117tasi - instanceof ${t.expected}`:`Gautas tipas ${U}, o tik\\u0117tasi - ${k}`}case"invalid_value":return t.values.length===1?`Privalo b\\u016Bti ${$(t.values[0])}`:`Privalo b\\u016Bti vienas i\\u0161 ${h(t.values,"|")} pasirinkim\\u0173`;case"too_big":{let k=(m=o[t.origin])!=null?m:t.origin,T=r(t.origin,vl(Number(t.maximum)),(s=t.inclusive)!=null?s:!1,"smaller");if(T!=null&&T.verb)return`${pt((u=k!=null?k:t.origin)!=null?u:"reik\\u0161m\\u0117")} ${T.verb} ${t.maximum.toString()} ${(d=T.unit)!=null?d:"element\\u0173"}`;let U=t.inclusive?"ne didesnis kaip":"ma\\u017Eesnis kaip";return`${pt((i=k!=null?k:t.origin)!=null?i:"reik\\u0161m\\u0117")} turi b\\u016Bti ${U} ${t.maximum.toString()} ${T==null?void 0:T.unit}`}case"too_small":{let k=(l=o[t.origin])!=null?l:t.origin,T=r(t.origin,vl(Number(t.minimum)),(p=t.inclusive)!=null?p:!1,"bigger");if(T!=null&&T.verb)return`${pt((v=k!=null?k:t.origin)!=null?v:"reik\\u0161m\\u0117")} ${T.verb} ${t.minimum.toString()} ${(y=T.unit)!=null?y:"element\\u0173"}`;let U=t.inclusive?"ne ma\\u017Eesnis kaip":"didesnis kaip";return`${pt((S=k!=null?k:t.origin)!=null?S:"reik\\u0161m\\u0117")} turi b\\u016Bti ${U} ${t.minimum.toString()} ${T==null?void 0:T.unit}`}case"invalid_format":{let k=t;return k.format==="starts_with"?`Eilut\\u0117 privalo prasid\\u0117ti "${k.prefix}"`:k.format==="ends_with"?`Eilut\\u0117 privalo pasibaigti "${k.suffix}"`:k.format==="includes"?`Eilut\\u0117 privalo \\u012Ftraukti "${k.includes}"`:k.format==="regex"?`Eilut\\u0117 privalo atitikti ${k.pattern}`:`Neteisingas ${(w=n[k.format])!=null?w:t.format}`}case"not_multiple_of":return`Skai\\u010Dius privalo b\\u016Bti ${t.divisor} kartotinis.`;case"unrecognized_keys":return`Neatpa\\u017Eint${t.keys.length>1?"i":"as"} rakt${t.keys.length>1?"ai":"as"}: ${h(t.keys,", ")}`;case"invalid_key":return"Rastas klaidingas raktas";case"invalid_union":return"Klaidinga \\u012Fvestis";case"invalid_element":{let k=(j=o[t.origin])!=null?j:t.origin;return`${pt((N=k!=null?k:t.origin)!=null?N:"reik\\u0161m\\u0117")} turi klaiding\\u0105 \\u012Fvest\\u012F`}default:return"Klaidinga \\u012Fvestis"}}};function hl(){return{localeError:xp()}}var _p=()=>{let e={string:{unit:"\\u0437\\u043D\\u0430\\u0446\\u0438",verb:"\\u0434\\u0430 \\u0438\\u043C\\u0430\\u0430\\u0442"},file:{unit:"\\u0431\\u0430\\u0458\\u0442\\u0438",verb:"\\u0434\\u0430 \\u0438\\u043C\\u0430\\u0430\\u0442"},array:{unit:"\\u0441\\u0442\\u0430\\u0432\\u043A\\u0438",verb:"\\u0434\\u0430 \\u0438\\u043C\\u0430\\u0430\\u0442"},set:{unit:"\\u0441\\u0442\\u0430\\u0432\\u043A\\u0438",verb:"\\u0434\\u0430 \\u0438\\u043C\\u0430\\u0430\\u0442"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0432\\u043D\\u0435\\u0441",email:"\\u0430\\u0434\\u0440\\u0435\\u0441\\u0430 \\u043D\\u0430 \\u0435-\\u043F\\u043E\\u0448\\u0442\\u0430",url:"URL",emoji:"\\u0435\\u043C\\u043E\\u045F\\u0438",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0434\\u0430\\u0442\\u0443\\u043C \\u0438 \\u0432\\u0440\\u0435\\u043C\\u0435",date:"ISO \\u0434\\u0430\\u0442\\u0443\\u043C",time:"ISO \\u0432\\u0440\\u0435\\u043C\\u0435",duration:"ISO \\u0432\\u0440\\u0435\\u043C\\u0435\\u0442\\u0440\\u0430\\u0435\\u045A\\u0435",ipv4:"IPv4 \\u0430\\u0434\\u0440\\u0435\\u0441\\u0430",ipv6:"IPv6 \\u0430\\u0434\\u0440\\u0435\\u0441\\u0430",cidrv4:"IPv4 \\u043E\\u043F\\u0441\\u0435\\u0433",cidrv6:"IPv6 \\u043E\\u043F\\u0441\\u0435\\u0433",base64:"base64-\\u0435\\u043D\\u043A\\u043E\\u0434\\u0438\\u0440\\u0430\\u043D\\u0430 \\u043D\\u0438\\u0437\\u0430",base64url:"base64url-\\u0435\\u043D\\u043A\\u043E\\u0434\\u0438\\u0440\\u0430\\u043D\\u0430 \\u043D\\u0438\\u0437\\u0430",json_string:"JSON \\u043D\\u0438\\u0437\\u0430",e164:"E.164 \\u0431\\u0440\\u043E\\u0458",jwt:"JWT",template_literal:"\\u0432\\u043D\\u0435\\u0441"},o={nan:"NaN",number:"\\u0431\\u0440\\u043E\\u0458",array:"\\u043D\\u0438\\u0437\\u0430"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u0432\\u043D\\u0435\\u0441: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 instanceof ${t.expected}, \\u043F\\u0440\\u0438\\u043C\\u0435\\u043D\\u043E ${p}`:`\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u0432\\u043D\\u0435\\u0441: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 ${i}, \\u043F\\u0440\\u0438\\u043C\\u0435\\u043D\\u043E ${p}`}case"invalid_value":return t.values.length===1?`Invalid input: expected ${$(t.values[0])}`:`\\u0413\\u0440\\u0435\\u0448\\u0430\\u043D\\u0430 \\u043E\\u043F\\u0446\\u0438\\u0458\\u0430: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 \\u0435\\u0434\\u043D\\u0430 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u041F\\u0440\\u0435\\u043C\\u043D\\u043E\\u0433\\u0443 \\u0433\\u043E\\u043B\\u0435\\u043C: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 ${(m=t.origin)!=null?m:"\\u0432\\u0440\\u0435\\u0434\\u043D\\u043E\\u0441\\u0442\\u0430"} \\u0434\\u0430 \\u0438\\u043C\\u0430 ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0438"}`:`\\u041F\\u0440\\u0435\\u043C\\u043D\\u043E\\u0433\\u0443 \\u0433\\u043E\\u043B\\u0435\\u043C: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 ${(u=t.origin)!=null?u:"\\u0432\\u0440\\u0435\\u0434\\u043D\\u043E\\u0441\\u0442\\u0430"} \\u0434\\u0430 \\u0431\\u0438\\u0434\\u0435 ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u041F\\u0440\\u0435\\u043C\\u043D\\u043E\\u0433\\u0443 \\u043C\\u0430\\u043B: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 ${t.origin} \\u0434\\u0430 \\u0438\\u043C\\u0430 ${i}${t.minimum.toString()} ${l.unit}`:`\\u041F\\u0440\\u0435\\u043C\\u043D\\u043E\\u0433\\u0443 \\u043C\\u0430\\u043B: \\u0441\\u0435 \\u043E\\u0447\\u0435\\u043A\\u0443\\u0432\\u0430 ${t.origin} \\u0434\\u0430 \\u0431\\u0438\\u0434\\u0435 ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u041D\\u0435\\u0432\\u0430\\u0436\\u0435\\u0447\\u043A\\u0430 \\u043D\\u0438\\u0437\\u0430: \\u043C\\u043E\\u0440\\u0430 \\u0434\\u0430 \\u0437\\u0430\\u043F\\u043E\\u0447\\u043D\\u0443\\u0432\\u0430 \\u0441\\u043E "${i.prefix}"`:i.format==="ends_with"?`\\u041D\\u0435\\u0432\\u0430\\u0436\\u0435\\u0447\\u043A\\u0430 \\u043D\\u0438\\u0437\\u0430: \\u043C\\u043E\\u0440\\u0430 \\u0434\\u0430 \\u0437\\u0430\\u0432\\u0440\\u0448\\u0443\\u0432\\u0430 \\u0441\\u043E "${i.suffix}"`:i.format==="includes"?`\\u041D\\u0435\\u0432\\u0430\\u0436\\u0435\\u0447\\u043A\\u0430 \\u043D\\u0438\\u0437\\u0430: \\u043C\\u043E\\u0440\\u0430 \\u0434\\u0430 \\u0432\\u043A\\u043B\\u0443\\u0447\\u0443\\u0432\\u0430 "${i.includes}"`:i.format==="regex"?`\\u041D\\u0435\\u0432\\u0430\\u0436\\u0435\\u0447\\u043A\\u0430 \\u043D\\u0438\\u0437\\u0430: \\u043C\\u043E\\u0440\\u0430 \\u0434\\u0430 \\u043E\\u0434\\u0433\\u043E\\u0430\\u0440\\u0430 \\u043D\\u0430 \\u043F\\u0430\\u0442\\u0435\\u0440\\u043D\\u043E\\u0442 ${i.pattern}`:`Invalid ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u0431\\u0440\\u043E\\u0458: \\u043C\\u043E\\u0440\\u0430 \\u0434\\u0430 \\u0431\\u0438\\u0434\\u0435 \\u0434\\u0435\\u043B\\u0438\\u0432 \\u0441\\u043E ${t.divisor}`;case"unrecognized_keys":return`${t.keys.length>1?"\\u041D\\u0435\\u043F\\u0440\\u0435\\u043F\\u043E\\u0437\\u043D\\u0430\\u0435\\u043D\\u0438 \\u043A\\u043B\\u0443\\u0447\\u0435\\u0432\\u0438":"\\u041D\\u0435\\u043F\\u0440\\u0435\\u043F\\u043E\\u0437\\u043D\\u0430\\u0435\\u043D \\u043A\\u043B\\u0443\\u0447"}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u043A\\u043B\\u0443\\u0447 \\u0432\\u043E ${t.origin}`;case"invalid_union":return"\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u0432\\u043D\\u0435\\u0441";case"invalid_element":return`\\u0413\\u0440\\u0435\\u0448\\u043D\\u0430 \\u0432\\u0440\\u0435\\u0434\\u043D\\u043E\\u0441\\u0442 \\u0432\\u043E ${t.origin}`;default:return"\\u0413\\u0440\\u0435\\u0448\\u0435\\u043D \\u0432\\u043D\\u0435\\u0441"}}};function yl(){return{localeError:_p()}}var Sp=()=>{let e={string:{unit:"aksara",verb:"mempunyai"},file:{unit:"bait",verb:"mempunyai"},array:{unit:"elemen",verb:"mempunyai"},set:{unit:"elemen",verb:"mempunyai"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"alamat e-mel",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"tarikh masa ISO",date:"tarikh ISO",time:"masa ISO",duration:"tempoh ISO",ipv4:"alamat IPv4",ipv6:"alamat IPv6",cidrv4:"julat IPv4",cidrv6:"julat IPv6",base64:"string dikodkan base64",base64url:"string dikodkan base64url",json_string:"string JSON",e164:"nombor E.164",jwt:"JWT",template_literal:"input"},o={nan:"NaN",number:"nombor"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Input tidak sah: dijangka instanceof ${t.expected}, diterima ${p}`:`Input tidak sah: dijangka ${i}, diterima ${p}`}case"invalid_value":return t.values.length===1?`Input tidak sah: dijangka ${$(t.values[0])}`:`Pilihan tidak sah: dijangka salah satu daripada ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Terlalu besar: dijangka ${(m=t.origin)!=null?m:"nilai"} ${l.verb} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elemen"}`:`Terlalu besar: dijangka ${(u=t.origin)!=null?u:"nilai"} adalah ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Terlalu kecil: dijangka ${t.origin} ${l.verb} ${i}${t.minimum.toString()} ${l.unit}`:`Terlalu kecil: dijangka ${t.origin} adalah ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`String tidak sah: mesti bermula dengan "${i.prefix}"`:i.format==="ends_with"?`String tidak sah: mesti berakhir dengan "${i.suffix}"`:i.format==="includes"?`String tidak sah: mesti mengandungi "${i.includes}"`:i.format==="regex"?`String tidak sah: mesti sepadan dengan corak ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} tidak sah`}case"not_multiple_of":return`Nombor tidak sah: perlu gandaan ${t.divisor}`;case"unrecognized_keys":return`Kunci tidak dikenali: ${h(t.keys,", ")}`;case"invalid_key":return`Kunci tidak sah dalam ${t.origin}`;case"invalid_union":return"Input tidak sah";case"invalid_element":return`Nilai tidak sah dalam ${t.origin}`;default:return"Input tidak sah"}}};function $l(){return{localeError:Sp()}}var kp=()=>{let e={string:{unit:"tekens",verb:"heeft"},file:{unit:"bytes",verb:"heeft"},array:{unit:"elementen",verb:"heeft"},set:{unit:"elementen",verb:"heeft"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"invoer",email:"emailadres",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO datum en tijd",date:"ISO datum",time:"ISO tijd",duration:"ISO duur",ipv4:"IPv4-adres",ipv6:"IPv6-adres",cidrv4:"IPv4-bereik",cidrv6:"IPv6-bereik",base64:"base64-gecodeerde tekst",base64url:"base64 URL-gecodeerde tekst",json_string:"JSON string",e164:"E.164-nummer",jwt:"JWT",template_literal:"invoer"},o={nan:"NaN",number:"getal"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Ongeldige invoer: verwacht instanceof ${t.expected}, ontving ${p}`:`Ongeldige invoer: verwacht ${i}, ontving ${p}`}case"invalid_value":return t.values.length===1?`Ongeldige invoer: verwacht ${$(t.values[0])}`:`Ongeldige optie: verwacht \\xE9\\xE9n van ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin),p=t.origin==="date"?"laat":t.origin==="string"?"lang":"groot";return l?`Te ${p}: verwacht dat ${(m=t.origin)!=null?m:"waarde"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementen"} ${l.verb}`:`Te ${p}: verwacht dat ${(u=t.origin)!=null?u:"waarde"} ${i}${t.maximum.toString()} is`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin),p=t.origin==="date"?"vroeg":t.origin==="string"?"kort":"klein";return l?`Te ${p}: verwacht dat ${t.origin} ${i}${t.minimum.toString()} ${l.unit} ${l.verb}`:`Te ${p}: verwacht dat ${t.origin} ${i}${t.minimum.toString()} is`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Ongeldige tekst: moet met "${i.prefix}" beginnen`:i.format==="ends_with"?`Ongeldige tekst: moet op "${i.suffix}" eindigen`:i.format==="includes"?`Ongeldige tekst: moet "${i.includes}" bevatten`:i.format==="regex"?`Ongeldige tekst: moet overeenkomen met patroon ${i.pattern}`:`Ongeldig: ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Ongeldig getal: moet een veelvoud van ${t.divisor} zijn`;case"unrecognized_keys":return`Onbekende key${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Ongeldige key in ${t.origin}`;case"invalid_union":return"Ongeldige invoer";case"invalid_element":return`Ongeldige waarde in ${t.origin}`;default:return"Ongeldige invoer"}}};function bl(){return{localeError:kp()}}var Ip=()=>{let e={string:{unit:"tegn",verb:"\\xE5 ha"},file:{unit:"bytes",verb:"\\xE5 ha"},array:{unit:"elementer",verb:"\\xE5 inneholde"},set:{unit:"elementer",verb:"\\xE5 inneholde"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"input",email:"e-postadresse",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO dato- og klokkeslett",date:"ISO-dato",time:"ISO-klokkeslett",duration:"ISO-varighet",ipv4:"IPv4-omr\\xE5de",ipv6:"IPv6-omr\\xE5de",cidrv4:"IPv4-spekter",cidrv6:"IPv6-spekter",base64:"base64-enkodet streng",base64url:"base64url-enkodet streng",json_string:"JSON-streng",e164:"E.164-nummer",jwt:"JWT",template_literal:"input"},o={nan:"NaN",number:"tall",array:"liste"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Ugyldig input: forventet instanceof ${t.expected}, fikk ${p}`:`Ugyldig input: forventet ${i}, fikk ${p}`}case"invalid_value":return t.values.length===1?`Ugyldig verdi: forventet ${$(t.values[0])}`:`Ugyldig valg: forventet en av ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`For stor(t): forventet ${(m=t.origin)!=null?m:"value"} til \\xE5 ha ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementer"}`:`For stor(t): forventet ${(u=t.origin)!=null?u:"value"} til \\xE5 ha ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`For lite(n): forventet ${t.origin} til \\xE5 ha ${i}${t.minimum.toString()} ${l.unit}`:`For lite(n): forventet ${t.origin} til \\xE5 ha ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Ugyldig streng: m\\xE5 starte med "${i.prefix}"`:i.format==="ends_with"?`Ugyldig streng: m\\xE5 ende med "${i.suffix}"`:i.format==="includes"?`Ugyldig streng: m\\xE5 inneholde "${i.includes}"`:i.format==="regex"?`Ugyldig streng: m\\xE5 matche m\\xF8nsteret ${i.pattern}`:`Ugyldig ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Ugyldig tall: m\\xE5 v\\xE6re et multiplum av ${t.divisor}`;case"unrecognized_keys":return`${t.keys.length>1?"Ukjente n\\xF8kler":"Ukjent n\\xF8kkel"}: ${h(t.keys,", ")}`;case"invalid_key":return`Ugyldig n\\xF8kkel i ${t.origin}`;case"invalid_union":return"Ugyldig input";case"invalid_element":return`Ugyldig verdi i ${t.origin}`;default:return"Ugyldig input"}}};function xl(){return{localeError:Ip()}}var zp=()=>{let e={string:{unit:"harf",verb:"olmal\\u0131d\\u0131r"},file:{unit:"bayt",verb:"olmal\\u0131d\\u0131r"},array:{unit:"unsur",verb:"olmal\\u0131d\\u0131r"},set:{unit:"unsur",verb:"olmal\\u0131d\\u0131r"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"giren",email:"epostag\\xE2h",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO heng\\xE2m\\u0131",date:"ISO tarihi",time:"ISO zaman\\u0131",duration:"ISO m\\xFCddeti",ipv4:"IPv4 ni\\u015F\\xE2n\\u0131",ipv6:"IPv6 ni\\u015F\\xE2n\\u0131",cidrv4:"IPv4 menzili",cidrv6:"IPv6 menzili",base64:"base64-\\u015Fifreli metin",base64url:"base64url-\\u015Fifreli metin",json_string:"JSON metin",e164:"E.164 say\\u0131s\\u0131",jwt:"JWT",template_literal:"giren"},o={nan:"NaN",number:"numara",array:"saf",null:"gayb"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`F\\xE2sit giren: umulan instanceof ${t.expected}, al\\u0131nan ${p}`:`F\\xE2sit giren: umulan ${i}, al\\u0131nan ${p}`}case"invalid_value":return t.values.length===1?`F\\xE2sit giren: umulan ${$(t.values[0])}`:`F\\xE2sit tercih: m\\xFBteberler ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Fazla b\\xFCy\\xFCk: ${(m=t.origin)!=null?m:"value"}, ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elements"} sahip olmal\\u0131yd\\u0131.`:`Fazla b\\xFCy\\xFCk: ${(u=t.origin)!=null?u:"value"}, ${i}${t.maximum.toString()} olmal\\u0131yd\\u0131.`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Fazla k\\xFC\\xE7\\xFCk: ${t.origin}, ${i}${t.minimum.toString()} ${l.unit} sahip olmal\\u0131yd\\u0131.`:`Fazla k\\xFC\\xE7\\xFCk: ${t.origin}, ${i}${t.minimum.toString()} olmal\\u0131yd\\u0131.`}case"invalid_format":{let i=t;return i.format==="starts_with"?`F\\xE2sit metin: "${i.prefix}" ile ba\\u015Flamal\\u0131.`:i.format==="ends_with"?`F\\xE2sit metin: "${i.suffix}" ile bitmeli.`:i.format==="includes"?`F\\xE2sit metin: "${i.includes}" ihtiv\\xE2 etmeli.`:i.format==="regex"?`F\\xE2sit metin: ${i.pattern} nak\\u015F\\u0131na uymal\\u0131.`:`F\\xE2sit ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`F\\xE2sit say\\u0131: ${t.divisor} kat\\u0131 olmal\\u0131yd\\u0131.`;case"unrecognized_keys":return`Tan\\u0131nmayan anahtar ${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} i\\xE7in tan\\u0131nmayan anahtar var.`;case"invalid_union":return"Giren tan\\u0131namad\\u0131.";case"invalid_element":return`${t.origin} i\\xE7in tan\\u0131nmayan k\\u0131ymet var.`;default:return"K\\u0131ymet tan\\u0131namad\\u0131."}}};function _l(){return{localeError:zp()}}var Tp=()=>{let e={string:{unit:"\\u062A\\u0648\\u06A9\\u064A",verb:"\\u0648\\u0644\\u0631\\u064A"},file:{unit:"\\u0628\\u0627\\u06CC\\u067C\\u0633",verb:"\\u0648\\u0644\\u0631\\u064A"},array:{unit:"\\u062A\\u0648\\u06A9\\u064A",verb:"\\u0648\\u0644\\u0631\\u064A"},set:{unit:"\\u062A\\u0648\\u06A9\\u064A",verb:"\\u0648\\u0644\\u0631\\u064A"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0648\\u0631\\u0648\\u062F\\u064A",email:"\\u0628\\u0631\\u06CC\\u069A\\u0646\\u0627\\u0644\\u06CC\\u06A9",url:"\\u06CC\\u0648 \\u0622\\u0631 \\u0627\\u0644",emoji:"\\u0627\\u06CC\\u0645\\u0648\\u062C\\u064A",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u0646\\u06CC\\u067C\\u0647 \\u0627\\u0648 \\u0648\\u062E\\u062A",date:"\\u0646\\u06D0\\u067C\\u0647",time:"\\u0648\\u062E\\u062A",duration:"\\u0645\\u0648\\u062F\\u0647",ipv4:"\\u062F IPv4 \\u067E\\u062A\\u0647",ipv6:"\\u062F IPv6 \\u067E\\u062A\\u0647",cidrv4:"\\u062F IPv4 \\u0633\\u0627\\u062D\\u0647",cidrv6:"\\u062F IPv6 \\u0633\\u0627\\u062D\\u0647",base64:"base64-encoded \\u0645\\u062A\\u0646",base64url:"base64url-encoded \\u0645\\u062A\\u0646",json_string:"JSON \\u0645\\u062A\\u0646",e164:"\\u062F E.164 \\u0634\\u0645\\u06D0\\u0631\\u0647",jwt:"JWT",template_literal:"\\u0648\\u0631\\u0648\\u062F\\u064A"},o={nan:"NaN",number:"\\u0639\\u062F\\u062F",array:"\\u0627\\u0631\\u06D0"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0646\\u0627\\u0633\\u0645 \\u0648\\u0631\\u0648\\u062F\\u064A: \\u0628\\u0627\\u06CC\\u062F instanceof ${t.expected} \\u0648\\u0627\\u06CC, \\u0645\\u06AB\\u0631 ${p} \\u062A\\u0631\\u0644\\u0627\\u0633\\u0647 \\u0634\\u0648`:`\\u0646\\u0627\\u0633\\u0645 \\u0648\\u0631\\u0648\\u062F\\u064A: \\u0628\\u0627\\u06CC\\u062F ${i} \\u0648\\u0627\\u06CC, \\u0645\\u06AB\\u0631 ${p} \\u062A\\u0631\\u0644\\u0627\\u0633\\u0647 \\u0634\\u0648`}case"invalid_value":return t.values.length===1?`\\u0646\\u0627\\u0633\\u0645 \\u0648\\u0631\\u0648\\u062F\\u064A: \\u0628\\u0627\\u06CC\\u062F ${$(t.values[0])} \\u0648\\u0627\\u06CC`:`\\u0646\\u0627\\u0633\\u0645 \\u0627\\u0646\\u062A\\u062E\\u0627\\u0628: \\u0628\\u0627\\u06CC\\u062F \\u06CC\\u0648 \\u0644\\u0647 ${h(t.values,"|")} \\u0685\\u062E\\u0647 \\u0648\\u0627\\u06CC`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u0689\\u06CC\\u0631 \\u0644\\u0648\\u06CC: ${(m=t.origin)!=null?m:"\\u0627\\u0631\\u0632\\u069A\\u062A"} \\u0628\\u0627\\u06CC\\u062F ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0639\\u0646\\u0635\\u0631\\u0648\\u0646\\u0647"} \\u0648\\u0644\\u0631\\u064A`:`\\u0689\\u06CC\\u0631 \\u0644\\u0648\\u06CC: ${(u=t.origin)!=null?u:"\\u0627\\u0631\\u0632\\u069A\\u062A"} \\u0628\\u0627\\u06CC\\u062F ${i}${t.maximum.toString()} \\u0648\\u064A`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0689\\u06CC\\u0631 \\u06A9\\u0648\\u0686\\u0646\\u06CC: ${t.origin} \\u0628\\u0627\\u06CC\\u062F ${i}${t.minimum.toString()} ${l.unit} \\u0648\\u0644\\u0631\\u064A`:`\\u0689\\u06CC\\u0631 \\u06A9\\u0648\\u0686\\u0646\\u06CC: ${t.origin} \\u0628\\u0627\\u06CC\\u062F ${i}${t.minimum.toString()} \\u0648\\u064A`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u0646\\u0627\\u0633\\u0645 \\u0645\\u062A\\u0646: \\u0628\\u0627\\u06CC\\u062F \\u062F "${i.prefix}" \\u0633\\u0631\\u0647 \\u067E\\u06CC\\u0644 \\u0634\\u064A`:i.format==="ends_with"?`\\u0646\\u0627\\u0633\\u0645 \\u0645\\u062A\\u0646: \\u0628\\u0627\\u06CC\\u062F \\u062F "${i.suffix}" \\u0633\\u0631\\u0647 \\u067E\\u0627\\u06CC \\u062A\\u0647 \\u0648\\u0631\\u0633\\u064A\\u0696\\u064A`:i.format==="includes"?`\\u0646\\u0627\\u0633\\u0645 \\u0645\\u062A\\u0646: \\u0628\\u0627\\u06CC\\u062F "${i.includes}" \\u0648\\u0644\\u0631\\u064A`:i.format==="regex"?`\\u0646\\u0627\\u0633\\u0645 \\u0645\\u062A\\u0646: \\u0628\\u0627\\u06CC\\u062F \\u062F ${i.pattern} \\u0633\\u0631\\u0647 \\u0645\\u0637\\u0627\\u0628\\u0642\\u062A \\u0648\\u0644\\u0631\\u064A`:`${(d=n[i.format])!=null?d:t.format} \\u0646\\u0627\\u0633\\u0645 \\u062F\\u06CC`}case"not_multiple_of":return`\\u0646\\u0627\\u0633\\u0645 \\u0639\\u062F\\u062F: \\u0628\\u0627\\u06CC\\u062F \\u062F ${t.divisor} \\u0645\\u0636\\u0631\\u0628 \\u0648\\u064A`;case"unrecognized_keys":return`\\u0646\\u0627\\u0633\\u0645 ${t.keys.length>1?"\\u06A9\\u0644\\u06CC\\u0689\\u0648\\u0646\\u0647":"\\u06A9\\u0644\\u06CC\\u0689"}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u0646\\u0627\\u0633\\u0645 \\u06A9\\u0644\\u06CC\\u0689 \\u067E\\u0647 ${t.origin} \\u06A9\\u06D0`;case"invalid_union":return"\\u0646\\u0627\\u0633\\u0645\\u0647 \\u0648\\u0631\\u0648\\u062F\\u064A";case"invalid_element":return`\\u0646\\u0627\\u0633\\u0645 \\u0639\\u0646\\u0635\\u0631 \\u067E\\u0647 ${t.origin} \\u06A9\\u06D0`;default:return"\\u0646\\u0627\\u0633\\u0645\\u0647 \\u0648\\u0631\\u0648\\u062F\\u064A"}}};function Sl(){return{localeError:Tp()}}var wp=()=>{let e={string:{unit:"znak\\xF3w",verb:"mie\\u0107"},file:{unit:"bajt\\xF3w",verb:"mie\\u0107"},array:{unit:"element\\xF3w",verb:"mie\\u0107"},set:{unit:"element\\xF3w",verb:"mie\\u0107"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"wyra\\u017Cenie",email:"adres email",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"data i godzina w formacie ISO",date:"data w formacie ISO",time:"godzina w formacie ISO",duration:"czas trwania ISO",ipv4:"adres IPv4",ipv6:"adres IPv6",cidrv4:"zakres IPv4",cidrv6:"zakres IPv6",base64:"ci\\u0105g znak\\xF3w zakodowany w formacie base64",base64url:"ci\\u0105g znak\\xF3w zakodowany w formacie base64url",json_string:"ci\\u0105g znak\\xF3w w formacie JSON",e164:"liczba E.164",jwt:"JWT",template_literal:"wej\\u015Bcie"},o={nan:"NaN",number:"liczba",array:"tablica"};return t=>{var a,c,m,s,u,d,i,l,p;switch(t.code){case"invalid_type":{let v=(a=o[t.expected])!=null?a:t.expected,y=b(t.input),S=(c=o[y])!=null?c:y;return/^[A-Z]/.test(t.expected)?`Nieprawid\\u0142owe dane wej\\u015Bciowe: oczekiwano instanceof ${t.expected}, otrzymano ${S}`:`Nieprawid\\u0142owe dane wej\\u015Bciowe: oczekiwano ${v}, otrzymano ${S}`}case"invalid_value":return t.values.length===1?`Nieprawid\\u0142owe dane wej\\u015Bciowe: oczekiwano ${$(t.values[0])}`:`Nieprawid\\u0142owa opcja: oczekiwano jednej z warto\\u015Bci ${h(t.values,"|")}`;case"too_big":{let v=t.inclusive?"<=":"<",y=r(t.origin);return y?`Za du\\u017Ca warto\\u015B\\u0107: oczekiwano, \\u017Ce ${(m=t.origin)!=null?m:"warto\\u015B\\u0107"} b\\u0119dzie mie\\u0107 ${v}${t.maximum.toString()} ${(s=y.unit)!=null?s:"element\\xF3w"}`:`Zbyt du\\u017C(y/a/e): oczekiwano, \\u017Ce ${(u=t.origin)!=null?u:"warto\\u015B\\u0107"} b\\u0119dzie wynosi\\u0107 ${v}${t.maximum.toString()}`}case"too_small":{let v=t.inclusive?">=":">",y=r(t.origin);return y?`Za ma\\u0142a warto\\u015B\\u0107: oczekiwano, \\u017Ce ${(d=t.origin)!=null?d:"warto\\u015B\\u0107"} b\\u0119dzie mie\\u0107 ${v}${t.minimum.toString()} ${(i=y.unit)!=null?i:"element\\xF3w"}`:`Zbyt ma\\u0142(y/a/e): oczekiwano, \\u017Ce ${(l=t.origin)!=null?l:"warto\\u015B\\u0107"} b\\u0119dzie wynosi\\u0107 ${v}${t.minimum.toString()}`}case"invalid_format":{let v=t;return v.format==="starts_with"?`Nieprawid\\u0142owy ci\\u0105g znak\\xF3w: musi zaczyna\\u0107 si\\u0119 od "${v.prefix}"`:v.format==="ends_with"?`Nieprawid\\u0142owy ci\\u0105g znak\\xF3w: musi ko\\u0144czy\\u0107 si\\u0119 na "${v.suffix}"`:v.format==="includes"?`Nieprawid\\u0142owy ci\\u0105g znak\\xF3w: musi zawiera\\u0107 "${v.includes}"`:v.format==="regex"?`Nieprawid\\u0142owy ci\\u0105g znak\\xF3w: musi odpowiada\\u0107 wzorcowi ${v.pattern}`:`Nieprawid\\u0142ow(y/a/e) ${(p=n[v.format])!=null?p:t.format}`}case"not_multiple_of":return`Nieprawid\\u0142owa liczba: musi by\\u0107 wielokrotno\\u015Bci\\u0105 ${t.divisor}`;case"unrecognized_keys":return`Nierozpoznane klucze${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Nieprawid\\u0142owy klucz w ${t.origin}`;case"invalid_union":return"Nieprawid\\u0142owe dane wej\\u015Bciowe";case"invalid_element":return`Nieprawid\\u0142owa warto\\u015B\\u0107 w ${t.origin}`;default:return"Nieprawid\\u0142owe dane wej\\u015Bciowe"}}};function kl(){return{localeError:wp()}}var Pp=()=>{let e={string:{unit:"caracteres",verb:"ter"},file:{unit:"bytes",verb:"ter"},array:{unit:"itens",verb:"ter"},set:{unit:"itens",verb:"ter"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"padr\\xE3o",email:"endere\\xE7o de e-mail",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"data e hora ISO",date:"data ISO",time:"hora ISO",duration:"dura\\xE7\\xE3o ISO",ipv4:"endere\\xE7o IPv4",ipv6:"endere\\xE7o IPv6",cidrv4:"faixa de IPv4",cidrv6:"faixa de IPv6",base64:"texto codificado em base64",base64url:"URL codificada em base64",json_string:"texto JSON",e164:"n\\xFAmero E.164",jwt:"JWT",template_literal:"entrada"},o={nan:"NaN",number:"n\\xFAmero",null:"nulo"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Tipo inv\\xE1lido: esperado instanceof ${t.expected}, recebido ${p}`:`Tipo inv\\xE1lido: esperado ${i}, recebido ${p}`}case"invalid_value":return t.values.length===1?`Entrada inv\\xE1lida: esperado ${$(t.values[0])}`:`Op\\xE7\\xE3o inv\\xE1lida: esperada uma das ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Muito grande: esperado que ${(m=t.origin)!=null?m:"valor"} tivesse ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementos"}`:`Muito grande: esperado que ${(u=t.origin)!=null?u:"valor"} fosse ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Muito pequeno: esperado que ${t.origin} tivesse ${i}${t.minimum.toString()} ${l.unit}`:`Muito pequeno: esperado que ${t.origin} fosse ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Texto inv\\xE1lido: deve come\\xE7ar com "${i.prefix}"`:i.format==="ends_with"?`Texto inv\\xE1lido: deve terminar com "${i.suffix}"`:i.format==="includes"?`Texto inv\\xE1lido: deve incluir "${i.includes}"`:i.format==="regex"?`Texto inv\\xE1lido: deve corresponder ao padr\\xE3o ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} inv\\xE1lido`}case"not_multiple_of":return`N\\xFAmero inv\\xE1lido: deve ser m\\xFAltiplo de ${t.divisor}`;case"unrecognized_keys":return`Chave${t.keys.length>1?"s":""} desconhecida${t.keys.length>1?"s":""}: ${h(t.keys,", ")}`;case"invalid_key":return`Chave inv\\xE1lida em ${t.origin}`;case"invalid_union":return"Entrada inv\\xE1lida";case"invalid_element":return`Valor inv\\xE1lido em ${t.origin}`;default:return"Campo inv\\xE1lido"}}};function Il(){return{localeError:Pp()}}function zl(e,r,n,o){let t=Math.abs(e),a=t%10,c=t%100;return c>=11&&c<=19?o:a===1?r:a>=2&&a<=4?n:o}var jp=()=>{let e={string:{unit:{one:"\\u0441\\u0438\\u043C\\u0432\\u043E\\u043B",few:"\\u0441\\u0438\\u043C\\u0432\\u043E\\u043B\\u0430",many:"\\u0441\\u0438\\u043C\\u0432\\u043E\\u043B\\u043E\\u0432"},verb:"\\u0438\\u043C\\u0435\\u0442\\u044C"},file:{unit:{one:"\\u0431\\u0430\\u0439\\u0442",few:"\\u0431\\u0430\\u0439\\u0442\\u0430",many:"\\u0431\\u0430\\u0439\\u0442"},verb:"\\u0438\\u043C\\u0435\\u0442\\u044C"},array:{unit:{one:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442",few:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430",many:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u043E\\u0432"},verb:"\\u0438\\u043C\\u0435\\u0442\\u044C"},set:{unit:{one:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442",few:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0430",many:"\\u044D\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u043E\\u0432"},verb:"\\u0438\\u043C\\u0435\\u0442\\u044C"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0432\\u0432\\u043E\\u0434",email:"email \\u0430\\u0434\\u0440\\u0435\\u0441",url:"URL",emoji:"\\u044D\\u043C\\u043E\\u0434\\u0437\\u0438",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0434\\u0430\\u0442\\u0430 \\u0438 \\u0432\\u0440\\u0435\\u043C\\u044F",date:"ISO \\u0434\\u0430\\u0442\\u0430",time:"ISO \\u0432\\u0440\\u0435\\u043C\\u044F",duration:"ISO \\u0434\\u043B\\u0438\\u0442\\u0435\\u043B\\u044C\\u043D\\u043E\\u0441\\u0442\\u044C",ipv4:"IPv4 \\u0430\\u0434\\u0440\\u0435\\u0441",ipv6:"IPv6 \\u0430\\u0434\\u0440\\u0435\\u0441",cidrv4:"IPv4 \\u0434\\u0438\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D",cidrv6:"IPv6 \\u0434\\u0438\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D",base64:"\\u0441\\u0442\\u0440\\u043E\\u043A\\u0430 \\u0432 \\u0444\\u043E\\u0440\\u043C\\u0430\\u0442\\u0435 base64",base64url:"\\u0441\\u0442\\u0440\\u043E\\u043A\\u0430 \\u0432 \\u0444\\u043E\\u0440\\u043C\\u0430\\u0442\\u0435 base64url",json_string:"JSON \\u0441\\u0442\\u0440\\u043E\\u043A\\u0430",e164:"\\u043D\\u043E\\u043C\\u0435\\u0440 E.164",jwt:"JWT",template_literal:"\\u0432\\u0432\\u043E\\u0434"},o={nan:"NaN",number:"\\u0447\\u0438\\u0441\\u043B\\u043E",array:"\\u043C\\u0430\\u0441\\u0441\\u0438\\u0432"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 \\u0432\\u0432\\u043E\\u0434: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C instanceof ${t.expected}, \\u043F\\u043E\\u043B\\u0443\\u0447\\u0435\\u043D\\u043E ${l}`:`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 \\u0432\\u0432\\u043E\\u0434: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C ${d}, \\u043F\\u043E\\u043B\\u0443\\u0447\\u0435\\u043D\\u043E ${l}`}case"invalid_value":return t.values.length===1?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 \\u0432\\u0432\\u043E\\u0434: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C ${$(t.values[0])}`:`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 \\u0432\\u0430\\u0440\\u0438\\u0430\\u043D\\u0442: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C \\u043E\\u0434\\u043D\\u043E \\u0438\\u0437 ${h(t.values,"|")}`;case"too_big":{let d=t.inclusive?"<=":"<",i=r(t.origin);if(i){let l=Number(t.maximum),p=zl(l,i.unit.one,i.unit.few,i.unit.many);return`\\u0421\\u043B\\u0438\\u0448\\u043A\\u043E\\u043C \\u0431\\u043E\\u043B\\u044C\\u0448\\u043E\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C, \\u0447\\u0442\\u043E ${(m=t.origin)!=null?m:"\\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435"} \\u0431\\u0443\\u0434\\u0435\\u0442 \\u0438\\u043C\\u0435\\u0442\\u044C ${d}${t.maximum.toString()} ${p}`}return`\\u0421\\u043B\\u0438\\u0448\\u043A\\u043E\\u043C \\u0431\\u043E\\u043B\\u044C\\u0448\\u043E\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C, \\u0447\\u0442\\u043E ${(s=t.origin)!=null?s:"\\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435"} \\u0431\\u0443\\u0434\\u0435\\u0442 ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?">=":">",i=r(t.origin);if(i){let l=Number(t.minimum),p=zl(l,i.unit.one,i.unit.few,i.unit.many);return`\\u0421\\u043B\\u0438\\u0448\\u043A\\u043E\\u043C \\u043C\\u0430\\u043B\\u0435\\u043D\\u044C\\u043A\\u043E\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C, \\u0447\\u0442\\u043E ${t.origin} \\u0431\\u0443\\u0434\\u0435\\u0442 \\u0438\\u043C\\u0435\\u0442\\u044C ${d}${t.minimum.toString()} ${p}`}return`\\u0421\\u043B\\u0438\\u0448\\u043A\\u043E\\u043C \\u043C\\u0430\\u043B\\u0435\\u043D\\u044C\\u043A\\u043E\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435: \\u043E\\u0436\\u0438\\u0434\\u0430\\u043B\\u043E\\u0441\\u044C, \\u0447\\u0442\\u043E ${t.origin} \\u0431\\u0443\\u0434\\u0435\\u0442 ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u0430\\u044F \\u0441\\u0442\\u0440\\u043E\\u043A\\u0430: \\u0434\\u043E\\u043B\\u0436\\u043D\\u0430 \\u043D\\u0430\\u0447\\u0438\\u043D\\u0430\\u0442\\u044C\\u0441\\u044F \\u0441 "${d.prefix}"`:d.format==="ends_with"?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u0430\\u044F \\u0441\\u0442\\u0440\\u043E\\u043A\\u0430: \\u0434\\u043E\\u043B\\u0436\\u043D\\u0430 \\u0437\\u0430\\u043A\\u0430\\u043D\\u0447\\u0438\\u0432\\u0430\\u0442\\u044C\\u0441\\u044F \\u043D\\u0430 "${d.suffix}"`:d.format==="includes"?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u0430\\u044F \\u0441\\u0442\\u0440\\u043E\\u043A\\u0430: \\u0434\\u043E\\u043B\\u0436\\u043D\\u0430 \\u0441\\u043E\\u0434\\u0435\\u0440\\u0436\\u0430\\u0442\\u044C "${d.includes}"`:d.format==="regex"?`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u0430\\u044F \\u0441\\u0442\\u0440\\u043E\\u043A\\u0430: \\u0434\\u043E\\u043B\\u0436\\u043D\\u0430 \\u0441\\u043E\\u043E\\u0442\\u0432\\u0435\\u0442\\u0441\\u0442\\u0432\\u043E\\u0432\\u0430\\u0442\\u044C \\u0448\\u0430\\u0431\\u043B\\u043E\\u043D\\u0443 ${d.pattern}`:`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 ${(u=n[d.format])!=null?u:t.format}`}case"not_multiple_of":return`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u043E\\u0435 \\u0447\\u0438\\u0441\\u043B\\u043E: \\u0434\\u043E\\u043B\\u0436\\u043D\\u043E \\u0431\\u044B\\u0442\\u044C \\u043A\\u0440\\u0430\\u0442\\u043D\\u044B\\u043C ${t.divisor}`;case"unrecognized_keys":return`\\u041D\\u0435\\u0440\\u0430\\u0441\\u043F\\u043E\\u0437\\u043D\\u0430\\u043D\\u043D${t.keys.length>1?"\\u044B\\u0435":"\\u044B\\u0439"} \\u043A\\u043B\\u044E\\u0447${t.keys.length>1?"\\u0438":""}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0439 \\u043A\\u043B\\u044E\\u0447 \\u0432 ${t.origin}`;case"invalid_union":return"\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0435 \\u0432\\u0445\\u043E\\u0434\\u043D\\u044B\\u0435 \\u0434\\u0430\\u043D\\u043D\\u044B\\u0435";case"invalid_element":return`\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u043E\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u0438\\u0435 \\u0432 ${t.origin}`;default:return"\\u041D\\u0435\\u0432\\u0435\\u0440\\u043D\\u044B\\u0435 \\u0432\\u0445\\u043E\\u0434\\u043D\\u044B\\u0435 \\u0434\\u0430\\u043D\\u043D\\u044B\\u0435"}}};function Tl(){return{localeError:jp()}}var Dp=()=>{let e={string:{unit:"znakov",verb:"imeti"},file:{unit:"bajtov",verb:"imeti"},array:{unit:"elementov",verb:"imeti"},set:{unit:"elementov",verb:"imeti"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"vnos",email:"e-po\\u0161tni naslov",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO datum in \\u010Das",date:"ISO datum",time:"ISO \\u010Das",duration:"ISO trajanje",ipv4:"IPv4 naslov",ipv6:"IPv6 naslov",cidrv4:"obseg IPv4",cidrv6:"obseg IPv6",base64:"base64 kodiran niz",base64url:"base64url kodiran niz",json_string:"JSON niz",e164:"E.164 \\u0161tevilka",jwt:"JWT",template_literal:"vnos"},o={nan:"NaN",number:"\\u0161tevilo",array:"tabela"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Neveljaven vnos: pri\\u010Dakovano instanceof ${t.expected}, prejeto ${p}`:`Neveljaven vnos: pri\\u010Dakovano ${i}, prejeto ${p}`}case"invalid_value":return t.values.length===1?`Neveljaven vnos: pri\\u010Dakovano ${$(t.values[0])}`:`Neveljavna mo\\u017Enost: pri\\u010Dakovano eno izmed ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Preveliko: pri\\u010Dakovano, da bo ${(m=t.origin)!=null?m:"vrednost"} imelo ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"elementov"}`:`Preveliko: pri\\u010Dakovano, da bo ${(u=t.origin)!=null?u:"vrednost"} ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Premajhno: pri\\u010Dakovano, da bo ${t.origin} imelo ${i}${t.minimum.toString()} ${l.unit}`:`Premajhno: pri\\u010Dakovano, da bo ${t.origin} ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Neveljaven niz: mora se za\\u010Deti z "${i.prefix}"`:i.format==="ends_with"?`Neveljaven niz: mora se kon\\u010Dati z "${i.suffix}"`:i.format==="includes"?`Neveljaven niz: mora vsebovati "${i.includes}"`:i.format==="regex"?`Neveljaven niz: mora ustrezati vzorcu ${i.pattern}`:`Neveljaven ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Neveljavno \\u0161tevilo: mora biti ve\\u010Dkratnik ${t.divisor}`;case"unrecognized_keys":return`Neprepoznan${t.keys.length>1?"i klju\\u010Di":" klju\\u010D"}: ${h(t.keys,", ")}`;case"invalid_key":return`Neveljaven klju\\u010D v ${t.origin}`;case"invalid_union":return"Neveljaven vnos";case"invalid_element":return`Neveljavna vrednost v ${t.origin}`;default:return"Neveljaven vnos"}}};function wl(){return{localeError:Dp()}}var Op=()=>{let e={string:{unit:"tecken",verb:"att ha"},file:{unit:"bytes",verb:"att ha"},array:{unit:"objekt",verb:"att inneh\\xE5lla"},set:{unit:"objekt",verb:"att inneh\\xE5lla"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"regulj\\xE4rt uttryck",email:"e-postadress",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO-datum och tid",date:"ISO-datum",time:"ISO-tid",duration:"ISO-varaktighet",ipv4:"IPv4-intervall",ipv6:"IPv6-intervall",cidrv4:"IPv4-spektrum",cidrv6:"IPv6-spektrum",base64:"base64-kodad str\\xE4ng",base64url:"base64url-kodad str\\xE4ng",json_string:"JSON-str\\xE4ng",e164:"E.164-nummer",jwt:"JWT",template_literal:"mall-literal"},o={nan:"NaN",number:"antal",array:"lista"};return t=>{var a,c,m,s,u,d,i,l,p,v;switch(t.code){case"invalid_type":{let y=(a=o[t.expected])!=null?a:t.expected,S=b(t.input),w=(c=o[S])!=null?c:S;return/^[A-Z]/.test(t.expected)?`Ogiltig inmatning: f\\xF6rv\\xE4ntat instanceof ${t.expected}, fick ${w}`:`Ogiltig inmatning: f\\xF6rv\\xE4ntat ${y}, fick ${w}`}case"invalid_value":return t.values.length===1?`Ogiltig inmatning: f\\xF6rv\\xE4ntat ${$(t.values[0])}`:`Ogiltigt val: f\\xF6rv\\xE4ntade en av ${h(t.values,"|")}`;case"too_big":{let y=t.inclusive?"<=":"<",S=r(t.origin);return S?`F\\xF6r stor(t): f\\xF6rv\\xE4ntade ${(m=t.origin)!=null?m:"v\\xE4rdet"} att ha ${y}${t.maximum.toString()} ${(s=S.unit)!=null?s:"element"}`:`F\\xF6r stor(t): f\\xF6rv\\xE4ntat ${(u=t.origin)!=null?u:"v\\xE4rdet"} att ha ${y}${t.maximum.toString()}`}case"too_small":{let y=t.inclusive?">=":">",S=r(t.origin);return S?`F\\xF6r lite(t): f\\xF6rv\\xE4ntade ${(d=t.origin)!=null?d:"v\\xE4rdet"} att ha ${y}${t.minimum.toString()} ${S.unit}`:`F\\xF6r lite(t): f\\xF6rv\\xE4ntade ${(i=t.origin)!=null?i:"v\\xE4rdet"} att ha ${y}${t.minimum.toString()}`}case"invalid_format":{let y=t;return y.format==="starts_with"?`Ogiltig str\\xE4ng: m\\xE5ste b\\xF6rja med "${y.prefix}"`:y.format==="ends_with"?`Ogiltig str\\xE4ng: m\\xE5ste sluta med "${y.suffix}"`:y.format==="includes"?`Ogiltig str\\xE4ng: m\\xE5ste inneh\\xE5lla "${y.includes}"`:y.format==="regex"?`Ogiltig str\\xE4ng: m\\xE5ste matcha m\\xF6nstret "${y.pattern}"`:`Ogiltig(t) ${(l=n[y.format])!=null?l:t.format}`}case"not_multiple_of":return`Ogiltigt tal: m\\xE5ste vara en multipel av ${t.divisor}`;case"unrecognized_keys":return`${t.keys.length>1?"Ok\\xE4nda nycklar":"Ok\\xE4nd nyckel"}: ${h(t.keys,", ")}`;case"invalid_key":return`Ogiltig nyckel i ${(p=t.origin)!=null?p:"v\\xE4rdet"}`;case"invalid_union":return"Ogiltig input";case"invalid_element":return`Ogiltigt v\\xE4rde i ${(v=t.origin)!=null?v:"v\\xE4rdet"}`;default:return"Ogiltig input"}}};function Pl(){return{localeError:Op()}}var Up=()=>{let e={string:{unit:"\\u0B8E\\u0BB4\\u0BC1\\u0BA4\\u0BCD\\u0BA4\\u0BC1\\u0B95\\u0BCD\\u0B95\\u0BB3\\u0BCD",verb:"\\u0B95\\u0BCA\\u0BA3\\u0BCD\\u0B9F\\u0BBF\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD"},file:{unit:"\\u0BAA\\u0BC8\\u0B9F\\u0BCD\\u0B9F\\u0BC1\\u0B95\\u0BB3\\u0BCD",verb:"\\u0B95\\u0BCA\\u0BA3\\u0BCD\\u0B9F\\u0BBF\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD"},array:{unit:"\\u0B89\\u0BB1\\u0BC1\\u0BAA\\u0BCD\\u0BAA\\u0BC1\\u0B95\\u0BB3\\u0BCD",verb:"\\u0B95\\u0BCA\\u0BA3\\u0BCD\\u0B9F\\u0BBF\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD"},set:{unit:"\\u0B89\\u0BB1\\u0BC1\\u0BAA\\u0BCD\\u0BAA\\u0BC1\\u0B95\\u0BB3\\u0BCD",verb:"\\u0B95\\u0BCA\\u0BA3\\u0BCD\\u0B9F\\u0BBF\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1",email:"\\u0BAE\\u0BBF\\u0BA9\\u0BCD\\u0BA9\\u0B9E\\u0BCD\\u0B9A\\u0BB2\\u0BCD \\u0BAE\\u0BC1\\u0B95\\u0BB5\\u0BB0\\u0BBF",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u0BA4\\u0BC7\\u0BA4\\u0BBF \\u0BA8\\u0BC7\\u0BB0\\u0BAE\\u0BCD",date:"ISO \\u0BA4\\u0BC7\\u0BA4\\u0BBF",time:"ISO \\u0BA8\\u0BC7\\u0BB0\\u0BAE\\u0BCD",duration:"ISO \\u0B95\\u0BBE\\u0BB2 \\u0B85\\u0BB3\\u0BB5\\u0BC1",ipv4:"IPv4 \\u0BAE\\u0BC1\\u0B95\\u0BB5\\u0BB0\\u0BBF",ipv6:"IPv6 \\u0BAE\\u0BC1\\u0B95\\u0BB5\\u0BB0\\u0BBF",cidrv4:"IPv4 \\u0BB5\\u0BB0\\u0BAE\\u0BCD\\u0BAA\\u0BC1",cidrv6:"IPv6 \\u0BB5\\u0BB0\\u0BAE\\u0BCD\\u0BAA\\u0BC1",base64:"base64-encoded \\u0B9A\\u0BB0\\u0BAE\\u0BCD",base64url:"base64url-encoded \\u0B9A\\u0BB0\\u0BAE\\u0BCD",json_string:"JSON \\u0B9A\\u0BB0\\u0BAE\\u0BCD",e164:"E.164 \\u0B8E\\u0BA3\\u0BCD",jwt:"JWT",template_literal:"input"},o={nan:"NaN",number:"\\u0B8E\\u0BA3\\u0BCD",array:"\\u0B85\\u0BA3\\u0BBF",null:"\\u0BB5\\u0BC6\\u0BB1\\u0BC1\\u0BAE\\u0BC8"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 instanceof ${t.expected}, \\u0BAA\\u0BC6\\u0BB1\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${p}`:`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${i}, \\u0BAA\\u0BC6\\u0BB1\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${p}`}case"invalid_value":return t.values.length===1?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${$(t.values[0])}`:`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0BB5\\u0BBF\\u0BB0\\u0BC1\\u0BAA\\u0BCD\\u0BAA\\u0BAE\\u0BCD: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${h(t.values,"|")} \\u0B87\\u0BB2\\u0BCD \\u0B92\\u0BA9\\u0BCD\\u0BB1\\u0BC1`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u0BAE\\u0BBF\\u0B95 \\u0BAA\\u0BC6\\u0BB0\\u0BBF\\u0BAF\\u0BA4\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${(m=t.origin)!=null?m:"\\u0BAE\\u0BA4\\u0BBF\\u0BAA\\u0BCD\\u0BAA\\u0BC1"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0B89\\u0BB1\\u0BC1\\u0BAA\\u0BCD\\u0BAA\\u0BC1\\u0B95\\u0BB3\\u0BCD"} \\u0B86\\u0B95 \\u0B87\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:`\\u0BAE\\u0BBF\\u0B95 \\u0BAA\\u0BC6\\u0BB0\\u0BBF\\u0BAF\\u0BA4\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${(u=t.origin)!=null?u:"\\u0BAE\\u0BA4\\u0BBF\\u0BAA\\u0BCD\\u0BAA\\u0BC1"} ${i}${t.maximum.toString()} \\u0B86\\u0B95 \\u0B87\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0BAE\\u0BBF\\u0B95\\u0B9A\\u0BCD \\u0B9A\\u0BBF\\u0BB1\\u0BBF\\u0BAF\\u0BA4\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${t.origin} ${i}${t.minimum.toString()} ${l.unit} \\u0B86\\u0B95 \\u0B87\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:`\\u0BAE\\u0BBF\\u0B95\\u0B9A\\u0BCD \\u0B9A\\u0BBF\\u0BB1\\u0BBF\\u0BAF\\u0BA4\\u0BC1: \\u0B8E\\u0BA4\\u0BBF\\u0BB0\\u0BCD\\u0BAA\\u0BBE\\u0BB0\\u0BCD\\u0B95\\u0BCD\\u0B95\\u0BAA\\u0BCD\\u0BAA\\u0B9F\\u0BCD\\u0B9F\\u0BA4\\u0BC1 ${t.origin} ${i}${t.minimum.toString()} \\u0B86\\u0B95 \\u0B87\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B9A\\u0BB0\\u0BAE\\u0BCD: "${i.prefix}" \\u0B87\\u0BB2\\u0BCD \\u0BA4\\u0BCA\\u0B9F\\u0B99\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:i.format==="ends_with"?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B9A\\u0BB0\\u0BAE\\u0BCD: "${i.suffix}" \\u0B87\\u0BB2\\u0BCD \\u0BAE\\u0BC1\\u0B9F\\u0BBF\\u0BB5\\u0B9F\\u0BC8\\u0BAF \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:i.format==="includes"?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B9A\\u0BB0\\u0BAE\\u0BCD: "${i.includes}" \\u0B90 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0B9F\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:i.format==="regex"?`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B9A\\u0BB0\\u0BAE\\u0BCD: ${i.pattern} \\u0BAE\\u0BC1\\u0BB1\\u0BC8\\u0BAA\\u0BBE\\u0B9F\\u0BCD\\u0B9F\\u0BC1\\u0B9F\\u0BA9\\u0BCD \\u0BAA\\u0BCA\\u0BB0\\u0BC1\\u0BA8\\u0BCD\\u0BA4 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`:`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B8E\\u0BA3\\u0BCD: ${t.divisor} \\u0B87\\u0BA9\\u0BCD \\u0BAA\\u0BB2\\u0BAE\\u0BBE\\u0B95 \\u0B87\\u0BB0\\u0BC1\\u0B95\\u0BCD\\u0B95 \\u0BB5\\u0BC7\\u0BA3\\u0BCD\\u0B9F\\u0BC1\\u0BAE\\u0BCD`;case"unrecognized_keys":return`\\u0B85\\u0B9F\\u0BC8\\u0BAF\\u0BBE\\u0BB3\\u0BAE\\u0BCD \\u0BA4\\u0BC6\\u0BB0\\u0BBF\\u0BAF\\u0BBE\\u0BA4 \\u0BB5\\u0BBF\\u0B9A\\u0BC8${t.keys.length>1?"\\u0B95\\u0BB3\\u0BCD":""}: ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} \\u0B87\\u0BB2\\u0BCD \\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0BB5\\u0BBF\\u0B9A\\u0BC8`;case"invalid_union":return"\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1";case"invalid_element":return`${t.origin} \\u0B87\\u0BB2\\u0BCD \\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0BAE\\u0BA4\\u0BBF\\u0BAA\\u0BCD\\u0BAA\\u0BC1`;default:return"\\u0BA4\\u0BB5\\u0BB1\\u0BBE\\u0BA9 \\u0B89\\u0BB3\\u0BCD\\u0BB3\\u0BC0\\u0B9F\\u0BC1"}}};function jl(){return{localeError:Up()}}var Np=()=>{let e={string:{unit:"\\u0E15\\u0E31\\u0E27\\u0E2D\\u0E31\\u0E01\\u0E29\\u0E23",verb:"\\u0E04\\u0E27\\u0E23\\u0E21\\u0E35"},file:{unit:"\\u0E44\\u0E1A\\u0E15\\u0E4C",verb:"\\u0E04\\u0E27\\u0E23\\u0E21\\u0E35"},array:{unit:"\\u0E23\\u0E32\\u0E22\\u0E01\\u0E32\\u0E23",verb:"\\u0E04\\u0E27\\u0E23\\u0E21\\u0E35"},set:{unit:"\\u0E23\\u0E32\\u0E22\\u0E01\\u0E32\\u0E23",verb:"\\u0E04\\u0E27\\u0E23\\u0E21\\u0E35"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E17\\u0E35\\u0E48\\u0E1B\\u0E49\\u0E2D\\u0E19",email:"\\u0E17\\u0E35\\u0E48\\u0E2D\\u0E22\\u0E39\\u0E48\\u0E2D\\u0E35\\u0E40\\u0E21\\u0E25",url:"URL",emoji:"\\u0E2D\\u0E34\\u0E42\\u0E21\\u0E08\\u0E34",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u0E27\\u0E31\\u0E19\\u0E17\\u0E35\\u0E48\\u0E40\\u0E27\\u0E25\\u0E32\\u0E41\\u0E1A\\u0E1A ISO",date:"\\u0E27\\u0E31\\u0E19\\u0E17\\u0E35\\u0E48\\u0E41\\u0E1A\\u0E1A ISO",time:"\\u0E40\\u0E27\\u0E25\\u0E32\\u0E41\\u0E1A\\u0E1A ISO",duration:"\\u0E0A\\u0E48\\u0E27\\u0E07\\u0E40\\u0E27\\u0E25\\u0E32\\u0E41\\u0E1A\\u0E1A ISO",ipv4:"\\u0E17\\u0E35\\u0E48\\u0E2D\\u0E22\\u0E39\\u0E48 IPv4",ipv6:"\\u0E17\\u0E35\\u0E48\\u0E2D\\u0E22\\u0E39\\u0E48 IPv6",cidrv4:"\\u0E0A\\u0E48\\u0E27\\u0E07 IP \\u0E41\\u0E1A\\u0E1A IPv4",cidrv6:"\\u0E0A\\u0E48\\u0E27\\u0E07 IP \\u0E41\\u0E1A\\u0E1A IPv6",base64:"\\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E41\\u0E1A\\u0E1A Base64",base64url:"\\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E41\\u0E1A\\u0E1A Base64 \\u0E2A\\u0E33\\u0E2B\\u0E23\\u0E31\\u0E1A URL",json_string:"\\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E41\\u0E1A\\u0E1A JSON",e164:"\\u0E40\\u0E1A\\u0E2D\\u0E23\\u0E4C\\u0E42\\u0E17\\u0E23\\u0E28\\u0E31\\u0E1E\\u0E17\\u0E4C\\u0E23\\u0E30\\u0E2B\\u0E27\\u0E48\\u0E32\\u0E07\\u0E1B\\u0E23\\u0E30\\u0E40\\u0E17\\u0E28 (E.164)",jwt:"\\u0E42\\u0E17\\u0E40\\u0E04\\u0E19 JWT",template_literal:"\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E17\\u0E35\\u0E48\\u0E1B\\u0E49\\u0E2D\\u0E19"},o={nan:"NaN",number:"\\u0E15\\u0E31\\u0E27\\u0E40\\u0E25\\u0E02",array:"\\u0E2D\\u0E32\\u0E23\\u0E4C\\u0E40\\u0E23\\u0E22\\u0E4C (Array)",null:"\\u0E44\\u0E21\\u0E48\\u0E21\\u0E35\\u0E04\\u0E48\\u0E32 (null)"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0E1B\\u0E23\\u0E30\\u0E40\\u0E20\\u0E17\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E04\\u0E27\\u0E23\\u0E40\\u0E1B\\u0E47\\u0E19 instanceof ${t.expected} \\u0E41\\u0E15\\u0E48\\u0E44\\u0E14\\u0E49\\u0E23\\u0E31\\u0E1A ${p}`:`\\u0E1B\\u0E23\\u0E30\\u0E40\\u0E20\\u0E17\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E04\\u0E27\\u0E23\\u0E40\\u0E1B\\u0E47\\u0E19 ${i} \\u0E41\\u0E15\\u0E48\\u0E44\\u0E14\\u0E49\\u0E23\\u0E31\\u0E1A ${p}`}case"invalid_value":return t.values.length===1?`\\u0E04\\u0E48\\u0E32\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E04\\u0E27\\u0E23\\u0E40\\u0E1B\\u0E47\\u0E19 ${$(t.values[0])}`:`\\u0E15\\u0E31\\u0E27\\u0E40\\u0E25\\u0E37\\u0E2D\\u0E01\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E04\\u0E27\\u0E23\\u0E40\\u0E1B\\u0E47\\u0E19\\u0E2B\\u0E19\\u0E36\\u0E48\\u0E07\\u0E43\\u0E19 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"\\u0E44\\u0E21\\u0E48\\u0E40\\u0E01\\u0E34\\u0E19":"\\u0E19\\u0E49\\u0E2D\\u0E22\\u0E01\\u0E27\\u0E48\\u0E32",l=r(t.origin);return l?`\\u0E40\\u0E01\\u0E34\\u0E19\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14: ${(m=t.origin)!=null?m:"\\u0E04\\u0E48\\u0E32"} \\u0E04\\u0E27\\u0E23\\u0E21\\u0E35${i} ${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0E23\\u0E32\\u0E22\\u0E01\\u0E32\\u0E23"}`:`\\u0E40\\u0E01\\u0E34\\u0E19\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14: ${(u=t.origin)!=null?u:"\\u0E04\\u0E48\\u0E32"} \\u0E04\\u0E27\\u0E23\\u0E21\\u0E35${i} ${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?"\\u0E2D\\u0E22\\u0E48\\u0E32\\u0E07\\u0E19\\u0E49\\u0E2D\\u0E22":"\\u0E21\\u0E32\\u0E01\\u0E01\\u0E27\\u0E48\\u0E32",l=r(t.origin);return l?`\\u0E19\\u0E49\\u0E2D\\u0E22\\u0E01\\u0E27\\u0E48\\u0E32\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14: ${t.origin} \\u0E04\\u0E27\\u0E23\\u0E21\\u0E35${i} ${t.minimum.toString()} ${l.unit}`:`\\u0E19\\u0E49\\u0E2D\\u0E22\\u0E01\\u0E27\\u0E48\\u0E32\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14: ${t.origin} \\u0E04\\u0E27\\u0E23\\u0E21\\u0E35${i} ${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E15\\u0E49\\u0E2D\\u0E07\\u0E02\\u0E36\\u0E49\\u0E19\\u0E15\\u0E49\\u0E19\\u0E14\\u0E49\\u0E27\\u0E22 "${i.prefix}"`:i.format==="ends_with"?`\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E15\\u0E49\\u0E2D\\u0E07\\u0E25\\u0E07\\u0E17\\u0E49\\u0E32\\u0E22\\u0E14\\u0E49\\u0E27\\u0E22 "${i.suffix}"`:i.format==="includes"?`\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21\\u0E15\\u0E49\\u0E2D\\u0E07\\u0E21\\u0E35 "${i.includes}" \\u0E2D\\u0E22\\u0E39\\u0E48\\u0E43\\u0E19\\u0E02\\u0E49\\u0E2D\\u0E04\\u0E27\\u0E32\\u0E21`:i.format==="regex"?`\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E15\\u0E49\\u0E2D\\u0E07\\u0E15\\u0E23\\u0E07\\u0E01\\u0E31\\u0E1A\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E17\\u0E35\\u0E48\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14 ${i.pattern}`:`\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u0E15\\u0E31\\u0E27\\u0E40\\u0E25\\u0E02\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E15\\u0E49\\u0E2D\\u0E07\\u0E40\\u0E1B\\u0E47\\u0E19\\u0E08\\u0E33\\u0E19\\u0E27\\u0E19\\u0E17\\u0E35\\u0E48\\u0E2B\\u0E32\\u0E23\\u0E14\\u0E49\\u0E27\\u0E22 ${t.divisor} \\u0E44\\u0E14\\u0E49\\u0E25\\u0E07\\u0E15\\u0E31\\u0E27`;case"unrecognized_keys":return`\\u0E1E\\u0E1A\\u0E04\\u0E35\\u0E22\\u0E4C\\u0E17\\u0E35\\u0E48\\u0E44\\u0E21\\u0E48\\u0E23\\u0E39\\u0E49\\u0E08\\u0E31\\u0E01: ${h(t.keys,", ")}`;case"invalid_key":return`\\u0E04\\u0E35\\u0E22\\u0E4C\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07\\u0E43\\u0E19 ${t.origin}`;case"invalid_union":return"\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07: \\u0E44\\u0E21\\u0E48\\u0E15\\u0E23\\u0E07\\u0E01\\u0E31\\u0E1A\\u0E23\\u0E39\\u0E1B\\u0E41\\u0E1A\\u0E1A\\u0E22\\u0E39\\u0E40\\u0E19\\u0E35\\u0E22\\u0E19\\u0E17\\u0E35\\u0E48\\u0E01\\u0E33\\u0E2B\\u0E19\\u0E14\\u0E44\\u0E27\\u0E49";case"invalid_element":return`\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07\\u0E43\\u0E19 ${t.origin}`;default:return"\\u0E02\\u0E49\\u0E2D\\u0E21\\u0E39\\u0E25\\u0E44\\u0E21\\u0E48\\u0E16\\u0E39\\u0E01\\u0E15\\u0E49\\u0E2D\\u0E07"}}};function Dl(){return{localeError:Np()}}var Zp=()=>{let e={string:{unit:"karakter",verb:"olmal\\u0131"},file:{unit:"bayt",verb:"olmal\\u0131"},array:{unit:"\\xF6\\u011Fe",verb:"olmal\\u0131"},set:{unit:"\\xF6\\u011Fe",verb:"olmal\\u0131"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"girdi",email:"e-posta adresi",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO tarih ve saat",date:"ISO tarih",time:"ISO saat",duration:"ISO s\\xFCre",ipv4:"IPv4 adresi",ipv6:"IPv6 adresi",cidrv4:"IPv4 aral\\u0131\\u011F\\u0131",cidrv6:"IPv6 aral\\u0131\\u011F\\u0131",base64:"base64 ile \\u015Fifrelenmi\\u015F metin",base64url:"base64url ile \\u015Fifrelenmi\\u015F metin",json_string:"JSON dizesi",e164:"E.164 say\\u0131s\\u0131",jwt:"JWT",template_literal:"\\u015Eablon dizesi"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`Ge\\xE7ersiz de\\u011Fer: beklenen instanceof ${t.expected}, al\\u0131nan ${p}`:`Ge\\xE7ersiz de\\u011Fer: beklenen ${i}, al\\u0131nan ${p}`}case"invalid_value":return t.values.length===1?`Ge\\xE7ersiz de\\u011Fer: beklenen ${$(t.values[0])}`:`Ge\\xE7ersiz se\\xE7enek: a\\u015Fa\\u011F\\u0131dakilerden biri olmal\\u0131: ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\xC7ok b\\xFCy\\xFCk: beklenen ${(m=t.origin)!=null?m:"de\\u011Fer"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\xF6\\u011Fe"}`:`\\xC7ok b\\xFCy\\xFCk: beklenen ${(u=t.origin)!=null?u:"de\\u011Fer"} ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\xC7ok k\\xFC\\xE7\\xFCk: beklenen ${t.origin} ${i}${t.minimum.toString()} ${l.unit}`:`\\xC7ok k\\xFC\\xE7\\xFCk: beklenen ${t.origin} ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Ge\\xE7ersiz metin: "${i.prefix}" ile ba\\u015Flamal\\u0131`:i.format==="ends_with"?`Ge\\xE7ersiz metin: "${i.suffix}" ile bitmeli`:i.format==="includes"?`Ge\\xE7ersiz metin: "${i.includes}" i\\xE7ermeli`:i.format==="regex"?`Ge\\xE7ersiz metin: ${i.pattern} desenine uymal\\u0131`:`Ge\\xE7ersiz ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`Ge\\xE7ersiz say\\u0131: ${t.divisor} ile tam b\\xF6l\\xFCnebilmeli`;case"unrecognized_keys":return`Tan\\u0131nmayan anahtar${t.keys.length>1?"lar":""}: ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} i\\xE7inde ge\\xE7ersiz anahtar`;case"invalid_union":return"Ge\\xE7ersiz de\\u011Fer";case"invalid_element":return`${t.origin} i\\xE7inde ge\\xE7ersiz de\\u011Fer`;default:return"Ge\\xE7ersiz de\\u011Fer"}}};function Ol(){return{localeError:Zp()}}var Ep=()=>{let e={string:{unit:"\\u0441\\u0438\\u043C\\u0432\\u043E\\u043B\\u0456\\u0432",verb:"\\u043C\\u0430\\u0442\\u0438\\u043C\\u0435"},file:{unit:"\\u0431\\u0430\\u0439\\u0442\\u0456\\u0432",verb:"\\u043C\\u0430\\u0442\\u0438\\u043C\\u0435"},array:{unit:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0456\\u0432",verb:"\\u043C\\u0430\\u0442\\u0438\\u043C\\u0435"},set:{unit:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0456\\u0432",verb:"\\u043C\\u0430\\u0442\\u0438\\u043C\\u0435"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456",email:"\\u0430\\u0434\\u0440\\u0435\\u0441\\u0430 \\u0435\\u043B\\u0435\\u043A\\u0442\\u0440\\u043E\\u043D\\u043D\\u043E\\u0457 \\u043F\\u043E\\u0448\\u0442\\u0438",url:"URL",emoji:"\\u0435\\u043C\\u043E\\u0434\\u0437\\u0456",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\u0434\\u0430\\u0442\\u0430 \\u0442\\u0430 \\u0447\\u0430\\u0441 ISO",date:"\\u0434\\u0430\\u0442\\u0430 ISO",time:"\\u0447\\u0430\\u0441 ISO",duration:"\\u0442\\u0440\\u0438\\u0432\\u0430\\u043B\\u0456\\u0441\\u0442\\u044C ISO",ipv4:"\\u0430\\u0434\\u0440\\u0435\\u0441\\u0430 IPv4",ipv6:"\\u0430\\u0434\\u0440\\u0435\\u0441\\u0430 IPv6",cidrv4:"\\u0434\\u0456\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D IPv4",cidrv6:"\\u0434\\u0456\\u0430\\u043F\\u0430\\u0437\\u043E\\u043D IPv6",base64:"\\u0440\\u044F\\u0434\\u043E\\u043A \\u0443 \\u043A\\u043E\\u0434\\u0443\\u0432\\u0430\\u043D\\u043D\\u0456 base64",base64url:"\\u0440\\u044F\\u0434\\u043E\\u043A \\u0443 \\u043A\\u043E\\u0434\\u0443\\u0432\\u0430\\u043D\\u043D\\u0456 base64url",json_string:"\\u0440\\u044F\\u0434\\u043E\\u043A JSON",e164:"\\u043D\\u043E\\u043C\\u0435\\u0440 E.164",jwt:"JWT",template_literal:"\\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456"},o={nan:"NaN",number:"\\u0447\\u0438\\u0441\\u043B\\u043E",array:"\\u043C\\u0430\\u0441\\u0438\\u0432"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0456 \\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F instanceof ${t.expected}, \\u043E\\u0442\\u0440\\u0438\\u043C\\u0430\\u043D\\u043E ${p}`:`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0456 \\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F ${i}, \\u043E\\u0442\\u0440\\u0438\\u043C\\u0430\\u043D\\u043E ${p}`}case"invalid_value":return t.values.length===1?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0456 \\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F ${$(t.values[0])}`:`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0430 \\u043E\\u043F\\u0446\\u0456\\u044F: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F \\u043E\\u0434\\u043D\\u0435 \\u0437 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u043E \\u0432\\u0435\\u043B\\u0438\\u043A\\u0435: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F, \\u0449\\u043E ${(m=t.origin)!=null?m:"\\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u043D\\u044F"} ${l.verb} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0435\\u043B\\u0435\\u043C\\u0435\\u043D\\u0442\\u0456\\u0432"}`:`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u043E \\u0432\\u0435\\u043B\\u0438\\u043A\\u0435: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F, \\u0449\\u043E ${(u=t.origin)!=null?u:"\\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u043D\\u044F"} \\u0431\\u0443\\u0434\\u0435 ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u043E \\u043C\\u0430\\u043B\\u0435: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F, \\u0449\\u043E ${t.origin} ${l.verb} ${i}${t.minimum.toString()} ${l.unit}`:`\\u0417\\u0430\\u043D\\u0430\\u0434\\u0442\\u043E \\u043C\\u0430\\u043B\\u0435: \\u043E\\u0447\\u0456\\u043A\\u0443\\u0454\\u0442\\u044C\\u0441\\u044F, \\u0449\\u043E ${t.origin} \\u0431\\u0443\\u0434\\u0435 ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 \\u0440\\u044F\\u0434\\u043E\\u043A: \\u043F\\u043E\\u0432\\u0438\\u043D\\u0435\\u043D \\u043F\\u043E\\u0447\\u0438\\u043D\\u0430\\u0442\\u0438\\u0441\\u044F \\u0437 "${i.prefix}"`:i.format==="ends_with"?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 \\u0440\\u044F\\u0434\\u043E\\u043A: \\u043F\\u043E\\u0432\\u0438\\u043D\\u0435\\u043D \\u0437\\u0430\\u043A\\u0456\\u043D\\u0447\\u0443\\u0432\\u0430\\u0442\\u0438\\u0441\\u044F \\u043D\\u0430 "${i.suffix}"`:i.format==="includes"?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 \\u0440\\u044F\\u0434\\u043E\\u043A: \\u043F\\u043E\\u0432\\u0438\\u043D\\u0435\\u043D \\u043C\\u0456\\u0441\\u0442\\u0438\\u0442\\u0438 "${i.includes}"`:i.format==="regex"?`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 \\u0440\\u044F\\u0434\\u043E\\u043A: \\u043F\\u043E\\u0432\\u0438\\u043D\\u0435\\u043D \\u0432\\u0456\\u0434\\u043F\\u043E\\u0432\\u0456\\u0434\\u0430\\u0442\\u0438 \\u0448\\u0430\\u0431\\u043B\\u043E\\u043D\\u0443 ${i.pattern}`:`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0435 \\u0447\\u0438\\u0441\\u043B\\u043E: \\u043F\\u043E\\u0432\\u0438\\u043D\\u043D\\u043E \\u0431\\u0443\\u0442\\u0438 \\u043A\\u0440\\u0430\\u0442\\u043D\\u0438\\u043C ${t.divisor}`;case"unrecognized_keys":return`\\u041D\\u0435\\u0440\\u043E\\u0437\\u043F\\u0456\\u0437\\u043D\\u0430\\u043D\\u0438\\u0439 \\u043A\\u043B\\u044E\\u0447${t.keys.length>1?"\\u0456":""}: ${h(t.keys,", ")}`;case"invalid_key":return`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0438\\u0439 \\u043A\\u043B\\u044E\\u0447 \\u0443 ${t.origin}`;case"invalid_union":return"\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0456 \\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456";case"invalid_element":return`\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0435 \\u0437\\u043D\\u0430\\u0447\\u0435\\u043D\\u043D\\u044F \\u0443 ${t.origin}`;default:return"\\u041D\\u0435\\u043F\\u0440\\u0430\\u0432\\u0438\\u043B\\u044C\\u043D\\u0456 \\u0432\\u0445\\u0456\\u0434\\u043D\\u0456 \\u0434\\u0430\\u043D\\u0456"}}};function $r(){return{localeError:Ep()}}function Ul(){return $r()}var Lp=()=>{let e={string:{unit:"\\u062D\\u0631\\u0648\\u0641",verb:"\\u06C1\\u0648\\u0646\\u0627"},file:{unit:"\\u0628\\u0627\\u0626\\u0679\\u0633",verb:"\\u06C1\\u0648\\u0646\\u0627"},array:{unit:"\\u0622\\u0626\\u0679\\u0645\\u0632",verb:"\\u06C1\\u0648\\u0646\\u0627"},set:{unit:"\\u0622\\u0626\\u0679\\u0645\\u0632",verb:"\\u06C1\\u0648\\u0646\\u0627"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0627\\u0646 \\u067E\\u0679",email:"\\u0627\\u06CC \\u0645\\u06CC\\u0644 \\u0627\\u06CC\\u0688\\u0631\\u06CC\\u0633",url:"\\u06CC\\u0648 \\u0622\\u0631 \\u0627\\u06CC\\u0644",emoji:"\\u0627\\u06CC\\u0645\\u0648\\u062C\\u06CC",uuid:"\\u06CC\\u0648 \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC",uuidv4:"\\u06CC\\u0648 \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC \\u0648\\u06CC 4",uuidv6:"\\u06CC\\u0648 \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC \\u0648\\u06CC 6",nanoid:"\\u0646\\u06CC\\u0646\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC",guid:"\\u062C\\u06CC \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC",cuid:"\\u0633\\u06CC \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC",cuid2:"\\u0633\\u06CC \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC 2",ulid:"\\u06CC\\u0648 \\u0627\\u06CC\\u0644 \\u0622\\u0626\\u06CC \\u0688\\u06CC",xid:"\\u0627\\u06CC\\u06A9\\u0633 \\u0622\\u0626\\u06CC \\u0688\\u06CC",ksuid:"\\u06A9\\u06D2 \\u0627\\u06CC\\u0633 \\u06CC\\u0648 \\u0622\\u0626\\u06CC \\u0688\\u06CC",datetime:"\\u0622\\u0626\\u06CC \\u0627\\u06CC\\u0633 \\u0627\\u0648 \\u0688\\u06CC\\u0679 \\u0679\\u0627\\u0626\\u0645",date:"\\u0622\\u0626\\u06CC \\u0627\\u06CC\\u0633 \\u0627\\u0648 \\u062A\\u0627\\u0631\\u06CC\\u062E",time:"\\u0622\\u0626\\u06CC \\u0627\\u06CC\\u0633 \\u0627\\u0648 \\u0648\\u0642\\u062A",duration:"\\u0622\\u0626\\u06CC \\u0627\\u06CC\\u0633 \\u0627\\u0648 \\u0645\\u062F\\u062A",ipv4:"\\u0622\\u0626\\u06CC \\u067E\\u06CC \\u0648\\u06CC 4 \\u0627\\u06CC\\u0688\\u0631\\u06CC\\u0633",ipv6:"\\u0622\\u0626\\u06CC \\u067E\\u06CC \\u0648\\u06CC 6 \\u0627\\u06CC\\u0688\\u0631\\u06CC\\u0633",cidrv4:"\\u0622\\u0626\\u06CC \\u067E\\u06CC \\u0648\\u06CC 4 \\u0631\\u06CC\\u0646\\u062C",cidrv6:"\\u0622\\u0626\\u06CC \\u067E\\u06CC \\u0648\\u06CC 6 \\u0631\\u06CC\\u0646\\u062C",base64:"\\u0628\\u06CC\\u0633 64 \\u0627\\u0646 \\u06A9\\u0648\\u0688\\u0688 \\u0633\\u0679\\u0631\\u0646\\u06AF",base64url:"\\u0628\\u06CC\\u0633 64 \\u06CC\\u0648 \\u0622\\u0631 \\u0627\\u06CC\\u0644 \\u0627\\u0646 \\u06A9\\u0648\\u0688\\u0688 \\u0633\\u0679\\u0631\\u0646\\u06AF",json_string:"\\u062C\\u06D2 \\u0627\\u06CC\\u0633 \\u0627\\u0648 \\u0627\\u06CC\\u0646 \\u0633\\u0679\\u0631\\u0646\\u06AF",e164:"\\u0627\\u06CC 164 \\u0646\\u0645\\u0628\\u0631",jwt:"\\u062C\\u06D2 \\u0688\\u0628\\u0644\\u06CC\\u0648 \\u0679\\u06CC",template_literal:"\\u0627\\u0646 \\u067E\\u0679"},o={nan:"NaN",number:"\\u0646\\u0645\\u0628\\u0631",array:"\\u0622\\u0631\\u06D2",null:"\\u0646\\u0644"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u063A\\u0644\\u0637 \\u0627\\u0646 \\u067E\\u0679: instanceof ${t.expected} \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627\\u060C ${p} \\u0645\\u0648\\u0635\\u0648\\u0644 \\u06C1\\u0648\\u0627`:`\\u063A\\u0644\\u0637 \\u0627\\u0646 \\u067E\\u0679: ${i} \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627\\u060C ${p} \\u0645\\u0648\\u0635\\u0648\\u0644 \\u06C1\\u0648\\u0627`}case"invalid_value":return t.values.length===1?`\\u063A\\u0644\\u0637 \\u0627\\u0646 \\u067E\\u0679: ${$(t.values[0])} \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627`:`\\u063A\\u0644\\u0637 \\u0622\\u067E\\u0634\\u0646: ${h(t.values,"|")} \\u0645\\u06CC\\u06BA \\u0633\\u06D2 \\u0627\\u06CC\\u06A9 \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u0628\\u06C1\\u062A \\u0628\\u0691\\u0627: ${(m=t.origin)!=null?m:"\\u0648\\u06CC\\u0644\\u06CC\\u0648"} \\u06A9\\u06D2 ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u0639\\u0646\\u0627\\u0635\\u0631"} \\u06C1\\u0648\\u0646\\u06D2 \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u06D2`:`\\u0628\\u06C1\\u062A \\u0628\\u0691\\u0627: ${(u=t.origin)!=null?u:"\\u0648\\u06CC\\u0644\\u06CC\\u0648"} \\u06A9\\u0627 ${i}${t.maximum.toString()} \\u06C1\\u0648\\u0646\\u0627 \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u0628\\u06C1\\u062A \\u0686\\u06BE\\u0648\\u0679\\u0627: ${t.origin} \\u06A9\\u06D2 ${i}${t.minimum.toString()} ${l.unit} \\u06C1\\u0648\\u0646\\u06D2 \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u06D2`:`\\u0628\\u06C1\\u062A \\u0686\\u06BE\\u0648\\u0679\\u0627: ${t.origin} \\u06A9\\u0627 ${i}${t.minimum.toString()} \\u06C1\\u0648\\u0646\\u0627 \\u0645\\u062A\\u0648\\u0642\\u0639 \\u062A\\u06BE\\u0627`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u063A\\u0644\\u0637 \\u0633\\u0679\\u0631\\u0646\\u06AF: "${i.prefix}" \\u0633\\u06D2 \\u0634\\u0631\\u0648\\u0639 \\u06C1\\u0648\\u0646\\u0627 \\u0686\\u0627\\u06C1\\u06CC\\u06D2`:i.format==="ends_with"?`\\u063A\\u0644\\u0637 \\u0633\\u0679\\u0631\\u0646\\u06AF: "${i.suffix}" \\u067E\\u0631 \\u062E\\u062A\\u0645 \\u06C1\\u0648\\u0646\\u0627 \\u0686\\u0627\\u06C1\\u06CC\\u06D2`:i.format==="includes"?`\\u063A\\u0644\\u0637 \\u0633\\u0679\\u0631\\u0646\\u06AF: "${i.includes}" \\u0634\\u0627\\u0645\\u0644 \\u06C1\\u0648\\u0646\\u0627 \\u0686\\u0627\\u06C1\\u06CC\\u06D2`:i.format==="regex"?`\\u063A\\u0644\\u0637 \\u0633\\u0679\\u0631\\u0646\\u06AF: \\u067E\\u06CC\\u0679\\u0631\\u0646 ${i.pattern} \\u0633\\u06D2 \\u0645\\u06CC\\u0686 \\u06C1\\u0648\\u0646\\u0627 \\u0686\\u0627\\u06C1\\u06CC\\u06D2`:`\\u063A\\u0644\\u0637 ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u063A\\u0644\\u0637 \\u0646\\u0645\\u0628\\u0631: ${t.divisor} \\u06A9\\u0627 \\u0645\\u0636\\u0627\\u0639\\u0641 \\u06C1\\u0648\\u0646\\u0627 \\u0686\\u0627\\u06C1\\u06CC\\u06D2`;case"unrecognized_keys":return`\\u063A\\u06CC\\u0631 \\u062A\\u0633\\u0644\\u06CC\\u0645 \\u0634\\u062F\\u06C1 \\u06A9\\u06CC${t.keys.length>1?"\\u0632":""}: ${h(t.keys,"\\u060C ")}`;case"invalid_key":return`${t.origin} \\u0645\\u06CC\\u06BA \\u063A\\u0644\\u0637 \\u06A9\\u06CC`;case"invalid_union":return"\\u063A\\u0644\\u0637 \\u0627\\u0646 \\u067E\\u0679";case"invalid_element":return`${t.origin} \\u0645\\u06CC\\u06BA \\u063A\\u0644\\u0637 \\u0648\\u06CC\\u0644\\u06CC\\u0648`;default:return"\\u063A\\u0644\\u0637 \\u0627\\u0646 \\u067E\\u0679"}}};function Nl(){return{localeError:Lp()}}var Cp=()=>{let e={string:{unit:"belgi",verb:"bo\\u2018lishi kerak"},file:{unit:"bayt",verb:"bo\\u2018lishi kerak"},array:{unit:"element",verb:"bo\\u2018lishi kerak"},set:{unit:"element",verb:"bo\\u2018lishi kerak"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"kirish",email:"elektron pochta manzili",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO sana va vaqti",date:"ISO sana",time:"ISO vaqt",duration:"ISO davomiylik",ipv4:"IPv4 manzil",ipv6:"IPv6 manzil",mac:"MAC manzil",cidrv4:"IPv4 diapazon",cidrv6:"IPv6 diapazon",base64:"base64 kodlangan satr",base64url:"base64url kodlangan satr",json_string:"JSON satr",e164:"E.164 raqam",jwt:"JWT",template_literal:"kirish"},o={nan:"NaN",number:"raqam",array:"massiv"};return t=>{var a,c,m,s,u;switch(t.code){case"invalid_type":{let d=(a=o[t.expected])!=null?a:t.expected,i=b(t.input),l=(c=o[i])!=null?c:i;return/^[A-Z]/.test(t.expected)?`Noto\\u2018g\\u2018ri kirish: kutilgan instanceof ${t.expected}, qabul qilingan ${l}`:`Noto\\u2018g\\u2018ri kirish: kutilgan ${d}, qabul qilingan ${l}`}case"invalid_value":return t.values.length===1?`Noto\\u2018g\\u2018ri kirish: kutilgan ${$(t.values[0])}`:`Noto\\u2018g\\u2018ri variant: quyidagilardan biri kutilgan ${h(t.values,"|")}`;case"too_big":{let d=t.inclusive?"<=":"<",i=r(t.origin);return i?`Juda katta: kutilgan ${(m=t.origin)!=null?m:"qiymat"} ${d}${t.maximum.toString()} ${i.unit} ${i.verb}`:`Juda katta: kutilgan ${(s=t.origin)!=null?s:"qiymat"} ${d}${t.maximum.toString()}`}case"too_small":{let d=t.inclusive?">=":">",i=r(t.origin);return i?`Juda kichik: kutilgan ${t.origin} ${d}${t.minimum.toString()} ${i.unit} ${i.verb}`:`Juda kichik: kutilgan ${t.origin} ${d}${t.minimum.toString()}`}case"invalid_format":{let d=t;return d.format==="starts_with"?`Noto\\u2018g\\u2018ri satr: "${d.prefix}" bilan boshlanishi kerak`:d.format==="ends_with"?`Noto\\u2018g\\u2018ri satr: "${d.suffix}" bilan tugashi kerak`:d.format==="includes"?`Noto\\u2018g\\u2018ri satr: "${d.includes}" ni o\\u2018z ichiga olishi kerak`:d.format==="regex"?`Noto\\u2018g\\u2018ri satr: ${d.pattern} shabloniga mos kelishi kerak`:`Noto\\u2018g\\u2018ri ${(u=n[d.format])!=null?u:t.format}`}case"not_multiple_of":return`Noto\\u2018g\\u2018ri raqam: ${t.divisor} ning karralisi bo\\u2018lishi kerak`;case"unrecognized_keys":return`Noma\\u2019lum kalit${t.keys.length>1?"lar":""}: ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} dagi kalit noto\\u2018g\\u2018ri`;case"invalid_union":return"Noto\\u2018g\\u2018ri kirish";case"invalid_element":return`${t.origin} da noto\\u2018g\\u2018ri qiymat`;default:return"Noto\\u2018g\\u2018ri kirish"}}};function Zl(){return{localeError:Cp()}}var Rp=()=>{let e={string:{unit:"k\\xFD t\\u1EF1",verb:"c\\xF3"},file:{unit:"byte",verb:"c\\xF3"},array:{unit:"ph\\u1EA7n t\\u1EED",verb:"c\\xF3"},set:{unit:"ph\\u1EA7n t\\u1EED",verb:"c\\xF3"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u0111\\u1EA7u v\\xE0o",email:"\\u0111\\u1ECBa ch\\u1EC9 email",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ng\\xE0y gi\\u1EDD ISO",date:"ng\\xE0y ISO",time:"gi\\u1EDD ISO",duration:"kho\\u1EA3ng th\\u1EDDi gian ISO",ipv4:"\\u0111\\u1ECBa ch\\u1EC9 IPv4",ipv6:"\\u0111\\u1ECBa ch\\u1EC9 IPv6",cidrv4:"d\\u1EA3i IPv4",cidrv6:"d\\u1EA3i IPv6",base64:"chu\\u1ED7i m\\xE3 h\\xF3a base64",base64url:"chu\\u1ED7i m\\xE3 h\\xF3a base64url",json_string:"chu\\u1ED7i JSON",e164:"s\\u1ED1 E.164",jwt:"JWT",template_literal:"\\u0111\\u1EA7u v\\xE0o"},o={nan:"NaN",number:"s\\u1ED1",array:"m\\u1EA3ng"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u0110\\u1EA7u v\\xE0o kh\\xF4ng h\\u1EE3p l\\u1EC7: mong \\u0111\\u1EE3i instanceof ${t.expected}, nh\\u1EADn \\u0111\\u01B0\\u1EE3c ${p}`:`\\u0110\\u1EA7u v\\xE0o kh\\xF4ng h\\u1EE3p l\\u1EC7: mong \\u0111\\u1EE3i ${i}, nh\\u1EADn \\u0111\\u01B0\\u1EE3c ${p}`}case"invalid_value":return t.values.length===1?`\\u0110\\u1EA7u v\\xE0o kh\\xF4ng h\\u1EE3p l\\u1EC7: mong \\u0111\\u1EE3i ${$(t.values[0])}`:`T\\xF9y ch\\u1ECDn kh\\xF4ng h\\u1EE3p l\\u1EC7: mong \\u0111\\u1EE3i m\\u1ED9t trong c\\xE1c gi\\xE1 tr\\u1ECB ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`Qu\\xE1 l\\u1EDBn: mong \\u0111\\u1EE3i ${(m=t.origin)!=null?m:"gi\\xE1 tr\\u1ECB"} ${l.verb} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"ph\\u1EA7n t\\u1EED"}`:`Qu\\xE1 l\\u1EDBn: mong \\u0111\\u1EE3i ${(u=t.origin)!=null?u:"gi\\xE1 tr\\u1ECB"} ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`Qu\\xE1 nh\\u1ECF: mong \\u0111\\u1EE3i ${t.origin} ${l.verb} ${i}${t.minimum.toString()} ${l.unit}`:`Qu\\xE1 nh\\u1ECF: mong \\u0111\\u1EE3i ${t.origin} ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`Chu\\u1ED7i kh\\xF4ng h\\u1EE3p l\\u1EC7: ph\\u1EA3i b\\u1EAFt \\u0111\\u1EA7u b\\u1EB1ng "${i.prefix}"`:i.format==="ends_with"?`Chu\\u1ED7i kh\\xF4ng h\\u1EE3p l\\u1EC7: ph\\u1EA3i k\\u1EBFt th\\xFAc b\\u1EB1ng "${i.suffix}"`:i.format==="includes"?`Chu\\u1ED7i kh\\xF4ng h\\u1EE3p l\\u1EC7: ph\\u1EA3i bao g\\u1ED3m "${i.includes}"`:i.format==="regex"?`Chu\\u1ED7i kh\\xF4ng h\\u1EE3p l\\u1EC7: ph\\u1EA3i kh\\u1EDBp v\\u1EDBi m\\u1EABu ${i.pattern}`:`${(d=n[i.format])!=null?d:t.format} kh\\xF4ng h\\u1EE3p l\\u1EC7`}case"not_multiple_of":return`S\\u1ED1 kh\\xF4ng h\\u1EE3p l\\u1EC7: ph\\u1EA3i l\\xE0 b\\u1ED9i s\\u1ED1 c\\u1EE7a ${t.divisor}`;case"unrecognized_keys":return`Kh\\xF3a kh\\xF4ng \\u0111\\u01B0\\u1EE3c nh\\u1EADn d\\u1EA1ng: ${h(t.keys,", ")}`;case"invalid_key":return`Kh\\xF3a kh\\xF4ng h\\u1EE3p l\\u1EC7 trong ${t.origin}`;case"invalid_union":return"\\u0110\\u1EA7u v\\xE0o kh\\xF4ng h\\u1EE3p l\\u1EC7";case"invalid_element":return`Gi\\xE1 tr\\u1ECB kh\\xF4ng h\\u1EE3p l\\u1EC7 trong ${t.origin}`;default:return"\\u0110\\u1EA7u v\\xE0o kh\\xF4ng h\\u1EE3p l\\u1EC7"}}};function El(){return{localeError:Rp()}}var Ap=()=>{let e={string:{unit:"\\u5B57\\u7B26",verb:"\\u5305\\u542B"},file:{unit:"\\u5B57\\u8282",verb:"\\u5305\\u542B"},array:{unit:"\\u9879",verb:"\\u5305\\u542B"},set:{unit:"\\u9879",verb:"\\u5305\\u542B"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u8F93\\u5165",email:"\\u7535\\u5B50\\u90AE\\u4EF6",url:"URL",emoji:"\\u8868\\u60C5\\u7B26\\u53F7",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO\\u65E5\\u671F\\u65F6\\u95F4",date:"ISO\\u65E5\\u671F",time:"ISO\\u65F6\\u95F4",duration:"ISO\\u65F6\\u957F",ipv4:"IPv4\\u5730\\u5740",ipv6:"IPv6\\u5730\\u5740",cidrv4:"IPv4\\u7F51\\u6BB5",cidrv6:"IPv6\\u7F51\\u6BB5",base64:"base64\\u7F16\\u7801\\u5B57\\u7B26\\u4E32",base64url:"base64url\\u7F16\\u7801\\u5B57\\u7B26\\u4E32",json_string:"JSON\\u5B57\\u7B26\\u4E32",e164:"E.164\\u53F7\\u7801",jwt:"JWT",template_literal:"\\u8F93\\u5165"},o={nan:"NaN",number:"\\u6570\\u5B57",array:"\\u6570\\u7EC4",null:"\\u7A7A\\u503C(null)"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u65E0\\u6548\\u8F93\\u5165\\uFF1A\\u671F\\u671B instanceof ${t.expected}\\uFF0C\\u5B9E\\u9645\\u63A5\\u6536 ${p}`:`\\u65E0\\u6548\\u8F93\\u5165\\uFF1A\\u671F\\u671B ${i}\\uFF0C\\u5B9E\\u9645\\u63A5\\u6536 ${p}`}case"invalid_value":return t.values.length===1?`\\u65E0\\u6548\\u8F93\\u5165\\uFF1A\\u671F\\u671B ${$(t.values[0])}`:`\\u65E0\\u6548\\u9009\\u9879\\uFF1A\\u671F\\u671B\\u4EE5\\u4E0B\\u4E4B\\u4E00 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u6570\\u503C\\u8FC7\\u5927\\uFF1A\\u671F\\u671B ${(m=t.origin)!=null?m:"\\u503C"} ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u4E2A\\u5143\\u7D20"}`:`\\u6570\\u503C\\u8FC7\\u5927\\uFF1A\\u671F\\u671B ${(u=t.origin)!=null?u:"\\u503C"} ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u6570\\u503C\\u8FC7\\u5C0F\\uFF1A\\u671F\\u671B ${t.origin} ${i}${t.minimum.toString()} ${l.unit}`:`\\u6570\\u503C\\u8FC7\\u5C0F\\uFF1A\\u671F\\u671B ${t.origin} ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u65E0\\u6548\\u5B57\\u7B26\\u4E32\\uFF1A\\u5FC5\\u987B\\u4EE5 "${i.prefix}" \\u5F00\\u5934`:i.format==="ends_with"?`\\u65E0\\u6548\\u5B57\\u7B26\\u4E32\\uFF1A\\u5FC5\\u987B\\u4EE5 "${i.suffix}" \\u7ED3\\u5C3E`:i.format==="includes"?`\\u65E0\\u6548\\u5B57\\u7B26\\u4E32\\uFF1A\\u5FC5\\u987B\\u5305\\u542B "${i.includes}"`:i.format==="regex"?`\\u65E0\\u6548\\u5B57\\u7B26\\u4E32\\uFF1A\\u5FC5\\u987B\\u6EE1\\u8DB3\\u6B63\\u5219\\u8868\\u8FBE\\u5F0F ${i.pattern}`:`\\u65E0\\u6548${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u65E0\\u6548\\u6570\\u5B57\\uFF1A\\u5FC5\\u987B\\u662F ${t.divisor} \\u7684\\u500D\\u6570`;case"unrecognized_keys":return`\\u51FA\\u73B0\\u672A\\u77E5\\u7684\\u952E(key): ${h(t.keys,", ")}`;case"invalid_key":return`${t.origin} \\u4E2D\\u7684\\u952E(key)\\u65E0\\u6548`;case"invalid_union":return"\\u65E0\\u6548\\u8F93\\u5165";case"invalid_element":return`${t.origin} \\u4E2D\\u5305\\u542B\\u65E0\\u6548\\u503C(value)`;default:return"\\u65E0\\u6548\\u8F93\\u5165"}}};function Ll(){return{localeError:Ap()}}var Fp=()=>{let e={string:{unit:"\\u5B57\\u5143",verb:"\\u64C1\\u6709"},file:{unit:"\\u4F4D\\u5143\\u7D44",verb:"\\u64C1\\u6709"},array:{unit:"\\u9805\\u76EE",verb:"\\u64C1\\u6709"},set:{unit:"\\u9805\\u76EE",verb:"\\u64C1\\u6709"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u8F38\\u5165",email:"\\u90F5\\u4EF6\\u5730\\u5740",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"ISO \\u65E5\\u671F\\u6642\\u9593",date:"ISO \\u65E5\\u671F",time:"ISO \\u6642\\u9593",duration:"ISO \\u671F\\u9593",ipv4:"IPv4 \\u4F4D\\u5740",ipv6:"IPv6 \\u4F4D\\u5740",cidrv4:"IPv4 \\u7BC4\\u570D",cidrv6:"IPv6 \\u7BC4\\u570D",base64:"base64 \\u7DE8\\u78BC\\u5B57\\u4E32",base64url:"base64url \\u7DE8\\u78BC\\u5B57\\u4E32",json_string:"JSON \\u5B57\\u4E32",e164:"E.164 \\u6578\\u503C",jwt:"JWT",template_literal:"\\u8F38\\u5165"},o={nan:"NaN"};return t=>{var a,c,m,s,u,d;switch(t.code){case"invalid_type":{let i=(a=o[t.expected])!=null?a:t.expected,l=b(t.input),p=(c=o[l])!=null?c:l;return/^[A-Z]/.test(t.expected)?`\\u7121\\u6548\\u7684\\u8F38\\u5165\\u503C\\uFF1A\\u9810\\u671F\\u70BA instanceof ${t.expected}\\uFF0C\\u4F46\\u6536\\u5230 ${p}`:`\\u7121\\u6548\\u7684\\u8F38\\u5165\\u503C\\uFF1A\\u9810\\u671F\\u70BA ${i}\\uFF0C\\u4F46\\u6536\\u5230 ${p}`}case"invalid_value":return t.values.length===1?`\\u7121\\u6548\\u7684\\u8F38\\u5165\\u503C\\uFF1A\\u9810\\u671F\\u70BA ${$(t.values[0])}`:`\\u7121\\u6548\\u7684\\u9078\\u9805\\uFF1A\\u9810\\u671F\\u70BA\\u4EE5\\u4E0B\\u5176\\u4E2D\\u4E4B\\u4E00 ${h(t.values,"|")}`;case"too_big":{let i=t.inclusive?"<=":"<",l=r(t.origin);return l?`\\u6578\\u503C\\u904E\\u5927\\uFF1A\\u9810\\u671F ${(m=t.origin)!=null?m:"\\u503C"} \\u61C9\\u70BA ${i}${t.maximum.toString()} ${(s=l.unit)!=null?s:"\\u500B\\u5143\\u7D20"}`:`\\u6578\\u503C\\u904E\\u5927\\uFF1A\\u9810\\u671F ${(u=t.origin)!=null?u:"\\u503C"} \\u61C9\\u70BA ${i}${t.maximum.toString()}`}case"too_small":{let i=t.inclusive?">=":">",l=r(t.origin);return l?`\\u6578\\u503C\\u904E\\u5C0F\\uFF1A\\u9810\\u671F ${t.origin} \\u61C9\\u70BA ${i}${t.minimum.toString()} ${l.unit}`:`\\u6578\\u503C\\u904E\\u5C0F\\uFF1A\\u9810\\u671F ${t.origin} \\u61C9\\u70BA ${i}${t.minimum.toString()}`}case"invalid_format":{let i=t;return i.format==="starts_with"?`\\u7121\\u6548\\u7684\\u5B57\\u4E32\\uFF1A\\u5FC5\\u9808\\u4EE5 "${i.prefix}" \\u958B\\u982D`:i.format==="ends_with"?`\\u7121\\u6548\\u7684\\u5B57\\u4E32\\uFF1A\\u5FC5\\u9808\\u4EE5 "${i.suffix}" \\u7D50\\u5C3E`:i.format==="includes"?`\\u7121\\u6548\\u7684\\u5B57\\u4E32\\uFF1A\\u5FC5\\u9808\\u5305\\u542B "${i.includes}"`:i.format==="regex"?`\\u7121\\u6548\\u7684\\u5B57\\u4E32\\uFF1A\\u5FC5\\u9808\\u7B26\\u5408\\u683C\\u5F0F ${i.pattern}`:`\\u7121\\u6548\\u7684 ${(d=n[i.format])!=null?d:t.format}`}case"not_multiple_of":return`\\u7121\\u6548\\u7684\\u6578\\u5B57\\uFF1A\\u5FC5\\u9808\\u70BA ${t.divisor} \\u7684\\u500D\\u6578`;case"unrecognized_keys":return`\\u7121\\u6CD5\\u8B58\\u5225\\u7684\\u9375\\u503C${t.keys.length>1?"\\u5011":""}\\uFF1A${h(t.keys,"\\u3001")}`;case"invalid_key":return`${t.origin} \\u4E2D\\u6709\\u7121\\u6548\\u7684\\u9375\\u503C`;case"invalid_union":return"\\u7121\\u6548\\u7684\\u8F38\\u5165\\u503C";case"invalid_element":return`${t.origin} \\u4E2D\\u6709\\u7121\\u6548\\u7684\\u503C`;default:return"\\u7121\\u6548\\u7684\\u8F38\\u5165\\u503C"}}};function Cl(){return{localeError:Fp()}}var Mp=()=>{let e={string:{unit:"\\xE0mi",verb:"n\\xED"},file:{unit:"bytes",verb:"n\\xED"},array:{unit:"nkan",verb:"n\\xED"},set:{unit:"nkan",verb:"n\\xED"}};function r(t){var a;return(a=e[t])!=null?a:null}let n={regex:"\\u1EB9\\u0300r\\u1ECD \\xECb\\xE1w\\u1ECDl\\xE9",email:"\\xE0d\\xEDr\\u1EB9\\u0301s\\xEC \\xECm\\u1EB9\\u0301l\\xEC",url:"URL",emoji:"emoji",uuid:"UUID",uuidv4:"UUIDv4",uuidv6:"UUIDv6",nanoid:"nanoid",guid:"GUID",cuid:"cuid",cuid2:"cuid2",ulid:"ULID",xid:"XID",ksuid:"KSUID",datetime:"\\xE0k\\xF3k\\xF2 ISO",date:"\\u1ECDj\\u1ECD\\u0301 ISO",time:"\\xE0k\\xF3k\\xF2 ISO",duration:"\\xE0k\\xF3k\\xF2 t\\xF3 p\\xE9 ISO",ipv4:"\\xE0d\\xEDr\\u1EB9\\u0301s\\xEC IPv4",ipv6:"\\xE0d\\xEDr\\u1EB9\\u0301s\\xEC IPv6",cidrv4:"\\xE0gb\\xE8gb\\xE8 IPv4",cidrv6:"\\xE0gb\\xE8gb\\xE8 IPv6",base64:"\\u1ECD\\u0300r\\u1ECD\\u0300 t\\xED a k\\u1ECD\\u0301 n\\xED base64",base64url:"\\u1ECD\\u0300r\\u1ECD\\u0300 base64url",json_string:"\\u1ECD\\u0300r\\u1ECD\\u0300 JSON",e164:"n\\u1ECD\\u0301mb\\xE0 E.164",jwt:"JWT",template_literal:"\\u1EB9\\u0300r\\u1ECD \\xECb\\xE1w\\u1ECDl\\xE9"},o={nan:"NaN",number:"n\\u1ECD\\u0301mb\\xE0",array:"akop\\u1ECD"};return t=>{var a,c,m,s;switch(t.code){case"invalid_type":{let u=(a=o[t.expected])!=null?a:t.expected,d=b(t.input),i=(c=o[d])!=null?c:d;return/^[A-Z]/.test(t.expected)?`\\xCCb\\xE1w\\u1ECDl\\xE9 a\\u1E63\\xEC\\u1E63e: a n\\xED l\\xE1ti fi instanceof ${t.expected}, \\xE0m\\u1ECD\\u0300 a r\\xED ${i}`:`\\xCCb\\xE1w\\u1ECDl\\xE9 a\\u1E63\\xEC\\u1E63e: a n\\xED l\\xE1ti fi ${u}, \\xE0m\\u1ECD\\u0300 a r\\xED ${i}`}case"invalid_value":return t.values.length===1?`\\xCCb\\xE1w\\u1ECDl\\xE9 a\\u1E63\\xEC\\u1E63e: a n\\xED l\\xE1ti fi ${$(t.values[0])}`:`\\xC0\\u1E63\\xE0y\\xE0n a\\u1E63\\xEC\\u1E63e: yan \\u1ECD\\u0300kan l\\xE1ra ${h(t.values,"|")}`;case"too_big":{let u=t.inclusive?"<=":"<",d=r(t.origin);return d?`T\\xF3 p\\u1ECD\\u0300 j\\xF9: a n\\xED l\\xE1ti j\\u1EB9\\u0301 p\\xE9 ${(m=t.origin)!=null?m:"iye"} ${d.verb} ${u}${t.maximum} ${d.unit}`:`T\\xF3 p\\u1ECD\\u0300 j\\xF9: a n\\xED l\\xE1ti j\\u1EB9\\u0301 ${u}${t.maximum}`}case"too_small":{let u=t.inclusive?">=":">",d=r(t.origin);return d?`K\\xE9r\\xE9 ju: a n\\xED l\\xE1ti j\\u1EB9\\u0301 p\\xE9 ${t.origin} ${d.verb} ${u}${t.minimum} ${d.unit}`:`K\\xE9r\\xE9 ju: a n\\xED l\\xE1ti j\\u1EB9\\u0301 ${u}${t.minimum}`}case"invalid_format":{let u=t;return u.format==="starts_with"?`\\u1ECC\\u0300r\\u1ECD\\u0300 a\\u1E63\\xEC\\u1E63e: gb\\u1ECD\\u0301d\\u1ECD\\u0300 b\\u1EB9\\u0300r\\u1EB9\\u0300 p\\u1EB9\\u0300l\\xFA "${u.prefix}"`:u.format==="ends_with"?`\\u1ECC\\u0300r\\u1ECD\\u0300 a\\u1E63\\xEC\\u1E63e: gb\\u1ECD\\u0301d\\u1ECD\\u0300 par\\xED p\\u1EB9\\u0300l\\xFA "${u.suffix}"`:u.format==="includes"?`\\u1ECC\\u0300r\\u1ECD\\u0300 a\\u1E63\\xEC\\u1E63e: gb\\u1ECD\\u0301d\\u1ECD\\u0300 n\\xED "${u.includes}"`:u.format==="regex"?`\\u1ECC\\u0300r\\u1ECD\\u0300 a\\u1E63\\xEC\\u1E63e: gb\\u1ECD\\u0301d\\u1ECD\\u0300 b\\xE1 \\xE0p\\u1EB9\\u1EB9r\\u1EB9 mu ${u.pattern}`:`A\\u1E63\\xEC\\u1E63e: ${(s=n[u.format])!=null?s:t.format}`}case"not_multiple_of":return`N\\u1ECD\\u0301mb\\xE0 a\\u1E63\\xEC\\u1E63e: gb\\u1ECD\\u0301d\\u1ECD\\u0300 j\\u1EB9\\u0301 \\xE8y\\xE0 p\\xEDp\\xEDn ti ${t.divisor}`;case"unrecognized_keys":return`B\\u1ECDt\\xECn\\xEC \\xE0\\xECm\\u1ECD\\u0300: ${h(t.keys,", ")}`;case"invalid_key":return`B\\u1ECDt\\xECn\\xEC a\\u1E63\\xEC\\u1E63e n\\xEDn\\xFA ${t.origin}`;case"invalid_union":return"\\xCCb\\xE1w\\u1ECDl\\xE9 a\\u1E63\\xEC\\u1E63e";case"invalid_element":return`Iye a\\u1E63\\xEC\\u1E63e n\\xEDn\\xFA ${t.origin}`;default:return"\\xCCb\\xE1w\\u1ECDl\\xE9 a\\u1E63\\xEC\\u1E63e"}}};function Rl(){return{localeError:Mp()}}var Al,Ml=Symbol("ZodOutput"),Vl=Symbol("ZodInput"),br=class{constructor(){this._map=new WeakMap,this._idmap=new Map}add(r,...n){let o=n[0];return this._map.set(r,o),o&&typeof o=="object"&&"id"in o&&this._idmap.set(o.id,r),this}clear(){return this._map=new WeakMap,this._idmap=new Map,this}remove(r){let n=this._map.get(r);return n&&typeof n=="object"&&"id"in n&&this._idmap.delete(n.id),this._map.delete(r),this}get(r){var o;let n=r._zod.parent;if(n){let t=f({},(o=this.get(n))!=null?o:{});delete t.id;let a=f(f({},t),this._map.get(r));return Object.keys(a).length?a:void 0}return this._map.get(r)}has(r){return this._map.has(r)}};function ji(){return new br}var Fl;(Fl=(Al=globalThis).__zod_globalRegistry)!=null||(Al.__zod_globalRegistry=ji());var M=globalThis.__zod_globalRegistry;function Di(e,r){return new e(f({type:"string"},_(r)))}function Oi(e,r){return new e(f({type:"string",coerce:!0},_(r)))}function xr(e,r){return new e(f({type:"string",format:"email",check:"string_format",abort:!1},_(r)))}function ft(e,r){return new e(f({type:"string",format:"guid",check:"string_format",abort:!1},_(r)))}function _r(e,r){return new e(f({type:"string",format:"uuid",check:"string_format",abort:!1},_(r)))}function Sr(e,r){return new e(f({type:"string",format:"uuid",check:"string_format",abort:!1,version:"v4"},_(r)))}function kr(e,r){return new e(f({type:"string",format:"uuid",check:"string_format",abort:!1,version:"v6"},_(r)))}function Ir(e,r){return new e(f({type:"string",format:"uuid",check:"string_format",abort:!1,version:"v7"},_(r)))}function gt(e,r){return new e(f({type:"string",format:"url",check:"string_format",abort:!1},_(r)))}function zr(e,r){return new e(f({type:"string",format:"emoji",check:"string_format",abort:!1},_(r)))}function Tr(e,r){return new e(f({type:"string",format:"nanoid",check:"string_format",abort:!1},_(r)))}function wr(e,r){return new e(f({type:"string",format:"cuid",check:"string_format",abort:!1},_(r)))}function Pr(e,r){return new e(f({type:"string",format:"cuid2",check:"string_format",abort:!1},_(r)))}function jr(e,r){return new e(f({type:"string",format:"ulid",check:"string_format",abort:!1},_(r)))}function Dr(e,r){return new e(f({type:"string",format:"xid",check:"string_format",abort:!1},_(r)))}function Or(e,r){return new e(f({type:"string",format:"ksuid",check:"string_format",abort:!1},_(r)))}function Ur(e,r){return new e(f({type:"string",format:"ipv4",check:"string_format",abort:!1},_(r)))}function Nr(e,r){return new e(f({type:"string",format:"ipv6",check:"string_format",abort:!1},_(r)))}function Ui(e,r){return new e(f({type:"string",format:"mac",check:"string_format",abort:!1},_(r)))}function Zr(e,r){return new e(f({type:"string",format:"cidrv4",check:"string_format",abort:!1},_(r)))}function Er(e,r){return new e(f({type:"string",format:"cidrv6",check:"string_format",abort:!1},_(r)))}function Lr(e,r){return new e(f({type:"string",format:"base64",check:"string_format",abort:!1},_(r)))}function Cr(e,r){return new e(f({type:"string",format:"base64url",check:"string_format",abort:!1},_(r)))}function Rr(e,r){return new e(f({type:"string",format:"e164",check:"string_format",abort:!1},_(r)))}function Ar(e,r){return new e(f({type:"string",format:"jwt",check:"string_format",abort:!1},_(r)))}var Kl={Any:null,Minute:-1,Second:0,Millisecond:3,Microsecond:6};function Ni(e,r){return new e(f({type:"string",format:"datetime",check:"string_format",offset:!1,local:!1,precision:null},_(r)))}function Zi(e,r){return new e(f({type:"string",format:"date",check:"string_format"},_(r)))}function Ei(e,r){return new e(f({type:"string",format:"time",check:"string_format",precision:null},_(r)))}function Li(e,r){return new e(f({type:"string",format:"duration",check:"string_format"},_(r)))}function Ci(e,r){return new e(f({type:"number",checks:[]},_(r)))}function Ri(e,r){return new e(f({type:"number",coerce:!0,checks:[]},_(r)))}function Ai(e,r){return new e(f({type:"number",check:"number_format",abort:!1,format:"safeint"},_(r)))}function Fi(e,r){return new e(f({type:"number",check:"number_format",abort:!1,format:"float32"},_(r)))}function Mi(e,r){return new e(f({type:"number",check:"number_format",abort:!1,format:"float64"},_(r)))}function Vi(e,r){return new e(f({type:"number",check:"number_format",abort:!1,format:"int32"},_(r)))}function Ki(e,r){return new e(f({type:"number",check:"number_format",abort:!1,format:"uint32"},_(r)))}function Ji(e,r){return new e(f({type:"boolean"},_(r)))}function Bi(e,r){return new e(f({type:"boolean",coerce:!0},_(r)))}function Gi(e,r){return new e(f({type:"bigint"},_(r)))}function Wi(e,r){return new e(f({type:"bigint",coerce:!0},_(r)))}function qi(e,r){return new e(f({type:"bigint",check:"bigint_format",abort:!1,format:"int64"},_(r)))}function Xi(e,r){return new e(f({type:"bigint",check:"bigint_format",abort:!1,format:"uint64"},_(r)))}function Qi(e,r){return new e(f({type:"symbol"},_(r)))}function Yi(e,r){return new e(f({type:"undefined"},_(r)))}function Hi(e,r){return new e(f({type:"null"},_(r)))}function ea(e){return new e({type:"any"})}function ta(e){return new e({type:"unknown"})}function ra(e,r){return new e(f({type:"never"},_(r)))}function na(e,r){return new e(f({type:"void"},_(r)))}function oa(e,r){return new e(f({type:"date"},_(r)))}function ia(e,r){return new e(f({type:"date",coerce:!0},_(r)))}function aa(e,r){return new e(f({type:"nan"},_(r)))}function se(e,r){return new ar(I(f({check:"less_than"},_(r)),{value:e,inclusive:!1}))}function te(e,r){return new ar(I(f({check:"less_than"},_(r)),{value:e,inclusive:!0}))}function de(e,r){return new cr(I(f({check:"greater_than"},_(r)),{value:e,inclusive:!1}))}function W(e,r){return new cr(I(f({check:"greater_than"},_(r)),{value:e,inclusive:!0}))}function ca(e){return de(0,e)}function ua(e){return se(0,e)}function la(e){return te(0,e)}function sa(e){return W(0,e)}function De(e,r){return new eo(I(f({check:"multiple_of"},_(r)),{value:e}))}function Oe(e,r){return new no(I(f({check:"max_size"},_(r)),{maximum:e}))}function me(e,r){return new oo(I(f({check:"min_size"},_(r)),{minimum:e}))}function Be(e,r){return new io(I(f({check:"size_equals"},_(r)),{size:e}))}function Ge(e,r){return new ao(I(f({check:"max_length"},_(r)),{maximum:e}))}function _e(e,r){return new co(I(f({check:"min_length"},_(r)),{minimum:e}))}function We(e,r){return new uo(I(f({check:"length_equals"},_(r)),{length:e}))}function vt(e,r){return new lo(I(f({check:"string_format",format:"regex"},_(r)),{pattern:e}))}function ht(e){return new so(f({check:"string_format",format:"lowercase"},_(e)))}function yt(e){return new mo(f({check:"string_format",format:"uppercase"},_(e)))}function $t(e,r){return new po(I(f({check:"string_format",format:"includes"},_(r)),{includes:e}))}function bt(e,r){return new fo(I(f({check:"string_format",format:"starts_with"},_(r)),{prefix:e}))}function xt(e,r){return new go(I(f({check:"string_format",format:"ends_with"},_(r)),{suffix:e}))}function da(e,r,n){return new vo(f({check:"property",property:e,schema:r},_(n)))}function _t(e,r){return new ho(f({check:"mime_type",mime:e},_(r)))}function ie(e){return new yo({check:"overwrite",tx:e})}function St(e){return ie(r=>r.normalize(e))}function kt(){return ie(e=>e.trim())}function It(){return ie(e=>e.toLowerCase())}function zt(){return ie(e=>e.toUpperCase())}function Tt(){return ie(e=>hn(e))}function ma(e,r,n){return new e(f({type:"array",element:r},_(n)))}function Kp(e,r,n){return new e(f({type:"union",options:r},_(n)))}function Jp(e,r,n){return new e(f({type:"union",options:r,inclusive:!1},_(n)))}function Bp(e,r,n,o){return new e(f({type:"union",options:n,discriminator:r},_(o)))}function Gp(e,r,n){return new e({type:"intersection",left:r,right:n})}function Wp(e,r,n,o){let t=n instanceof P,a=t?o:n,c=t?n:null;return new e(f({type:"tuple",items:r,rest:c},_(a)))}function qp(e,r,n,o){return new e(f({type:"record",keyType:r,valueType:n},_(o)))}function Xp(e,r,n,o){return new e(f({type:"map",keyType:r,valueType:n},_(o)))}function Qp(e,r,n){return new e(f({type:"set",valueType:r},_(n)))}function Yp(e,r,n){let o=Array.isArray(r)?Object.fromEntries(r.map(t=>[t,t])):r;return new e(f({type:"enum",entries:o},_(n)))}function Hp(e,r,n){return new e(f({type:"enum",entries:r},_(n)))}function ef(e,r,n){return new e(f({type:"literal",values:Array.isArray(r)?r:[r]},_(n)))}function pa(e,r){return new e(f({type:"file"},_(r)))}function tf(e,r){return new e({type:"transform",transform:r})}function rf(e,r){return new e({type:"optional",innerType:r})}function nf(e,r){return new e({type:"nullable",innerType:r})}function of(e,r,n){return new e({type:"default",innerType:r,get defaultValue(){return typeof n=="function"?n():$n(n)}})}function af(e,r,n){return new e(f({type:"nonoptional",innerType:r},_(n)))}function cf(e,r){return new e({type:"success",innerType:r})}function uf(e,r,n){return new e({type:"catch",innerType:r,catchValue:typeof n=="function"?n:()=>n})}function lf(e,r,n){return new e({type:"pipe",in:r,out:n})}function sf(e,r){return new e({type:"readonly",innerType:r})}function df(e,r,n){return new e(f({type:"template_literal",parts:r},_(n)))}function mf(e,r){return new e({type:"lazy",getter:r})}function pf(e,r){return new e({type:"promise",innerType:r})}function fa(e,r,n){var a;let o=_(n);return(a=o.abort)!=null||(o.abort=!0),new e(f({type:"custom",check:"custom",fn:r},o))}function ga(e,r,n){return new e(f({type:"custom",check:"custom",fn:r},_(n)))}function va(e){let r=Jl(n=>(n.addIssue=o=>{var t,a,c,m;if(typeof o=="string")n.issues.push(Ce(o,n.value,r._zod.def));else{let s=o;s.fatal&&(s.continue=!1),(t=s.code)!=null||(s.code="custom"),(a=s.input)!=null||(s.input=n.value),(c=s.inst)!=null||(s.inst=r),(m=s.continue)!=null||(s.continue=!r._zod.def.abort),n.issues.push(Ce(s))}},e(n.value,n)));return r}function Jl(e,r){let n=new L(f({check:"custom"},_(r)));return n._zod.check=e,n}function ha(e){let r=new L({check:"describe"});return r._zod.onattach=[n=>{var t;let o=(t=M.get(n))!=null?t:{};M.add(n,I(f({},o),{description:e}))}],r._zod.check=()=>{},r}function ya(e){let r=new L({check:"meta"});return r._zod.onattach=[n=>{var t;let o=(t=M.get(n))!=null?t:{};M.add(n,f(f({},o),e))}],r._zod.check=()=>{},r}function $a(e,r){var p,v,y,S,w;let n=_(r),o=(p=n.truthy)!=null?p:["true","1","yes","on","y","enabled"],t=(v=n.falsy)!=null?v:["false","0","no","off","n","disabled"];n.case!=="sensitive"&&(o=o.map(j=>typeof j=="string"?j.toLowerCase():j),t=t.map(j=>typeof j=="string"?j.toLowerCase():j));let a=new Set(o),c=new Set(t),m=(y=e.Codec)!=null?y:mt,s=(S=e.Boolean)!=null?S:st,u=(w=e.String)!=null?w:je,d=new u({type:"string",error:n.error}),i=new s({type:"boolean",error:n.error}),l=new m({type:"pipe",in:d,out:i,transform:((j,N)=>{let k=j;return n.case!=="sensitive"&&(k=k.toLowerCase()),a.has(k)?!0:c.has(k)?!1:(N.issues.push({code:"invalid_value",expected:"stringbool",values:[...a,...c],input:N.value,inst:l,continue:!1}),{})}),reverseTransform:((j,N)=>j===!0?o[0]||"true":t[0]||"false"),error:n.error});return l}function qe(e,r,n,o={}){let t=_(o),a=f(I(f({},_(o)),{check:"string_format",type:"string",format:r,fn:typeof n=="function"?n:m=>n.test(m)}),t);return n instanceof RegExp&&(a.pattern=n),new e(a)}function Se(e){var n,o,t,a,c,m,s,u,d;let r=(n=e==null?void 0:e.target)!=null?n:"draft-2020-12";return r==="draft-4"&&(r="draft-04"),r==="draft-7"&&(r="draft-07"),{processors:(o=e.processors)!=null?o:{},metadataRegistry:(t=e==null?void 0:e.metadata)!=null?t:M,target:r,unrepresentable:(a=e==null?void 0:e.unrepresentable)!=null?a:"throw",override:(c=e==null?void 0:e.override)!=null?c:(()=>{}),io:(m=e==null?void 0:e.io)!=null?m:"output",counter:0,seen:new Map,cycles:(s=e==null?void 0:e.cycles)!=null?s:"ref",reused:(u=e==null?void 0:e.reused)!=null?u:"inline",external:(d=e==null?void 0:e.external)!=null?d:void 0}}function Z(e,r,n={path:[],schemaPath:[]}){var d,i,l;var o;let t=e._zod.def,a=r.seen.get(e);if(a)return a.count++,n.schemaPath.includes(e)&&(a.cycle=n.path),a.schema;let c={schema:{},count:1,cycle:void 0,path:n.path};r.seen.set(e,c);let m=(i=(d=e._zod).toJSONSchema)==null?void 0:i.call(d);if(m)c.schema=m;else{let p=I(f({},n),{schemaPath:[...n.schemaPath,e],path:n.path});if(e._zod.processJSONSchema)e._zod.processJSONSchema(r,c.schema,p);else{let y=c.schema,S=r.processors[t.type];if(!S)throw new Error(`[toJSONSchema]: Non-representable type encountered: ${t.type}`);S(e,r,y,p)}let v=e._zod.parent;v&&(c.ref||(c.ref=v),Z(v,r,p),r.seen.get(v).isParent=!0)}let s=r.metadataRegistry.get(e);return s&&Object.assign(c.schema,s),r.io==="input"&&V(e)&&(delete c.schema.examples,delete c.schema.default),r.io==="input"&&c.schema._prefault&&((l=(o=c.schema).default)!=null||(o.default=c.schema._prefault)),delete c.schema._prefault,r.seen.get(e).schema}function ke(e,r){var c,m,s,u;let n=e.seen.get(r);if(!n)throw new Error("Unprocessed schema. This is a bug in Zod.");let o=new Map;for(let d of e.seen.entries()){let i=(c=e.metadataRegistry.get(d[0]))==null?void 0:c.id;if(i){let l=o.get(i);if(l&&l!==d[0])throw new Error(`Duplicate schema id "${i}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);o.set(i,d[0])}}let t=d=>{var y,S,w,j,N;let i=e.target==="draft-2020-12"?"$defs":"definitions";if(e.external){let k=(y=e.external.registry.get(d[0]))==null?void 0:y.id,T=(S=e.external.uri)!=null?S:(R=>R);if(k)return{ref:T(k)};let U=(j=(w=d[1].defId)!=null?w:d[1].schema.id)!=null?j:`schema${e.counter++}`;return d[1].defId=U,{defId:U,ref:`${T("__shared")}#/${i}/${U}`}}if(d[1]===n)return{ref:"#"};let p=`#/${i}/`,v=(N=d[1].schema.id)!=null?N:`__schema${e.counter++}`;return{defId:v,ref:p+v}},a=d=>{if(d[1].schema.$ref)return;let i=d[1],{ref:l,defId:p}=t(d);i.def=f({},i.schema),p&&(i.defId=p);let v=i.schema;for(let y in v)delete v[y];v.$ref=l};if(e.cycles==="throw")for(let d of e.seen.entries()){let i=d[1];if(i.cycle)throw new Error(`Cycle detected: #/${(m=i.cycle)==null?void 0:m.join("/")}/<root>\n\nSet the \\`cycles\\` parameter to \\`"ref"\\` to resolve cyclical schemas with defs.`)}for(let d of e.seen.entries()){let i=d[1];if(r===d[0]){a(d);continue}if(e.external){let p=(s=e.external.registry.get(d[0]))==null?void 0:s.id;if(r!==d[0]&&p){a(d);continue}}if((u=e.metadataRegistry.get(d[0]))==null?void 0:u.id){a(d);continue}if(i.cycle){a(d);continue}if(i.count>1&&e.reused==="ref"){a(d);continue}}}function Ie(e,r){var c,m,s,u,d;let n=e.seen.get(r);if(!n)throw new Error("Unprocessed schema. This is a bug in Zod.");let o=i=>{var w,j,N;let l=e.seen.get(i);if(l.ref===null)return;let p=(w=l.def)!=null?w:l.schema,v=f({},p),y=l.ref;if(l.ref=null,y){o(y);let k=e.seen.get(y),T=k.schema;if(T.$ref&&(e.target==="draft-07"||e.target==="draft-04"||e.target==="openapi-3.0")?(p.allOf=(j=p.allOf)!=null?j:[],p.allOf.push(T)):Object.assign(p,T),Object.assign(p,v),i._zod.parent===y)for(let R in p)R==="$ref"||R==="allOf"||R in v||delete p[R];if(T.$ref&&k.def)for(let R in p)R==="$ref"||R==="allOf"||R in k.def&&JSON.stringify(p[R])===JSON.stringify(k.def[R])&&delete p[R]}let S=i._zod.parent;if(S&&S!==y){o(S);let k=e.seen.get(S);if(k!=null&&k.schema.$ref&&(p.$ref=k.schema.$ref,k.def))for(let T in p)T==="$ref"||T==="allOf"||T in k.def&&JSON.stringify(p[T])===JSON.stringify(k.def[T])&&delete p[T]}e.override({zodSchema:i,jsonSchema:p,path:(N=l.path)!=null?N:[]})};for(let i of[...e.seen.entries()].reverse())o(i[0]);let t={};if(e.target==="draft-2020-12"?t.$schema="https://json-schema.org/draft/2020-12/schema":e.target==="draft-07"?t.$schema="http://json-schema.org/draft-07/schema#":e.target==="draft-04"?t.$schema="http://json-schema.org/draft-04/schema#":e.target,(c=e.external)!=null&&c.uri){let i=(m=e.external.registry.get(r))==null?void 0:m.id;if(!i)throw new Error("Schema is missing an `id` property");t.$id=e.external.uri(i)}Object.assign(t,(s=n.def)!=null?s:n.schema);let a=(d=(u=e.external)==null?void 0:u.defs)!=null?d:{};for(let i of e.seen.entries()){let l=i[1];l.def&&l.defId&&(a[l.defId]=l.def)}e.external||Object.keys(a).length>0&&(e.target==="draft-2020-12"?t.$defs=a:t.definitions=a);try{let i=JSON.parse(JSON.stringify(t));return Object.defineProperty(i,"~standard",{value:I(f({},r["~standard"]),{jsonSchema:{input:Xe(r,"input",e.processors),output:Xe(r,"output",e.processors)}}),enumerable:!1,writable:!1}),i}catch(i){throw new Error("Error converting schema to JSON.")}}function V(e,r){let n=r!=null?r:{seen:new Set};if(n.seen.has(e))return!1;n.seen.add(e);let o=e._zod.def;if(o.type==="transform")return!0;if(o.type==="array")return V(o.element,n);if(o.type==="set")return V(o.valueType,n);if(o.type==="lazy")return V(o.getter(),n);if(o.type==="promise"||o.type==="optional"||o.type==="nonoptional"||o.type==="nullable"||o.type==="readonly"||o.type==="default"||o.type==="prefault")return V(o.innerType,n);if(o.type==="intersection")return V(o.left,n)||V(o.right,n);if(o.type==="record"||o.type==="map")return V(o.keyType,n)||V(o.valueType,n);if(o.type==="pipe")return V(o.in,n)||V(o.out,n);if(o.type==="object"){for(let t in o.shape)if(V(o.shape[t],n))return!0;return!1}if(o.type==="union"){for(let t of o.options)if(V(t,n))return!0;return!1}if(o.type==="tuple"){for(let t of o.items)if(V(t,n))return!0;return!!(o.rest&&V(o.rest,n))}return!1}var ba=(e,r={})=>n=>{let o=Se(I(f({},n),{processors:r}));return Z(e,o),ke(o,e),Ie(o,e)},Xe=(e,r,n={})=>o=>{let{libraryOptions:t,target:a}=o!=null?o:{},c=Se(I(f({},t!=null?t:{}),{target:a,io:r,processors:n}));return Z(e,c),ke(c,e),Ie(c,e)};var ff={guid:"uuid",url:"uri",datetime:"date-time",json_string:"json-string",regex:""},xa=(e,r,n,o)=>{var d;let t=n;t.type="string";let{minimum:a,maximum:c,format:m,patterns:s,contentEncoding:u}=e._zod.bag;if(typeof a=="number"&&(t.minLength=a),typeof c=="number"&&(t.maxLength=c),m&&(t.format=(d=ff[m])!=null?d:m,t.format===""&&delete t.format,m==="time"&&delete t.format),u&&(t.contentEncoding=u),s&&s.size>0){let i=[...s];i.length===1?t.pattern=i[0].source:i.length>1&&(t.allOf=[...i.map(l=>I(f({},r.target==="draft-07"||r.target==="draft-04"||r.target==="openapi-3.0"?{type:"string"}:{}),{pattern:l.source}))])}},_a=(e,r,n,o)=>{let t=n,{minimum:a,maximum:c,format:m,multipleOf:s,exclusiveMaximum:u,exclusiveMinimum:d}=e._zod.bag;typeof m=="string"&&m.includes("int")?t.type="integer":t.type="number",typeof d=="number"&&(r.target==="draft-04"||r.target==="openapi-3.0"?(t.minimum=d,t.exclusiveMinimum=!0):t.exclusiveMinimum=d),typeof a=="number"&&(t.minimum=a,typeof d=="number"&&r.target!=="draft-04"&&(d>=a?delete t.minimum:delete t.exclusiveMinimum)),typeof u=="number"&&(r.target==="draft-04"||r.target==="openapi-3.0"?(t.maximum=u,t.exclusiveMaximum=!0):t.exclusiveMaximum=u),typeof c=="number"&&(t.maximum=c,typeof u=="number"&&r.target!=="draft-04"&&(u<=c?delete t.maximum:delete t.exclusiveMaximum)),typeof s=="number"&&(t.multipleOf=s)},Sa=(e,r,n,o)=>{n.type="boolean"},ka=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("BigInt cannot be represented in JSON Schema")},Ia=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Symbols cannot be represented in JSON Schema")},za=(e,r,n,o)=>{r.target==="openapi-3.0"?(n.type="string",n.nullable=!0,n.enum=[null]):n.type="null"},Ta=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Undefined cannot be represented in JSON Schema")},wa=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Void cannot be represented in JSON Schema")},Pa=(e,r,n,o)=>{n.not={}},ja=(e,r,n,o)=>{},Da=(e,r,n,o)=>{},Oa=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Date cannot be represented in JSON Schema")},Ua=(e,r,n,o)=>{let t=e._zod.def,a=tt(t.entries);a.every(c=>typeof c=="number")&&(n.type="number"),a.every(c=>typeof c=="string")&&(n.type="string"),n.enum=a},Na=(e,r,n,o)=>{let t=e._zod.def,a=[];for(let c of t.values)if(c===void 0){if(r.unrepresentable==="throw")throw new Error("Literal `undefined` cannot be represented in JSON Schema")}else if(typeof c=="bigint"){if(r.unrepresentable==="throw")throw new Error("BigInt literals cannot be represented in JSON Schema");a.push(Number(c))}else a.push(c);if(a.length!==0)if(a.length===1){let c=a[0];n.type=c===null?"null":typeof c,r.target==="draft-04"||r.target==="openapi-3.0"?n.enum=[c]:n.const=c}else a.every(c=>typeof c=="number")&&(n.type="number"),a.every(c=>typeof c=="string")&&(n.type="string"),a.every(c=>typeof c=="boolean")&&(n.type="boolean"),a.every(c=>c===null)&&(n.type="null"),n.enum=a},Za=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("NaN cannot be represented in JSON Schema")},Ea=(e,r,n,o)=>{let t=n,a=e._zod.pattern;if(!a)throw new Error("Pattern not found in template literal");t.type="string",t.pattern=a.source},La=(e,r,n,o)=>{let t=n,a={type:"string",format:"binary",contentEncoding:"binary"},{minimum:c,maximum:m,mime:s}=e._zod.bag;c!==void 0&&(a.minLength=c),m!==void 0&&(a.maxLength=m),s?s.length===1?(a.contentMediaType=s[0],Object.assign(t,a)):(Object.assign(t,a),t.anyOf=s.map(u=>({contentMediaType:u}))):Object.assign(t,a)},Ca=(e,r,n,o)=>{n.type="boolean"},Ra=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Custom types cannot be represented in JSON Schema")},Aa=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Function types cannot be represented in JSON Schema")},Fa=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Transforms cannot be represented in JSON Schema")},Ma=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Map cannot be represented in JSON Schema")},Va=(e,r,n,o)=>{if(r.unrepresentable==="throw")throw new Error("Set cannot be represented in JSON Schema")},Ka=(e,r,n,o)=>{let t=n,a=e._zod.def,{minimum:c,maximum:m}=e._zod.bag;typeof c=="number"&&(t.minItems=c),typeof m=="number"&&(t.maxItems=m),t.type="array",t.items=Z(a.element,r,I(f({},o),{path:[...o.path,"items"]}))},Ja=(e,r,n,o)=>{var u;let t=n,a=e._zod.def;t.type="object",t.properties={};let c=a.shape;for(let d in c)t.properties[d]=Z(c[d],r,I(f({},o),{path:[...o.path,"properties",d]}));let m=new Set(Object.keys(c)),s=new Set([...m].filter(d=>{let i=a.shape[d]._zod;return r.io==="input"?i.optin===void 0:i.optout===void 0}));s.size>0&&(t.required=Array.from(s)),((u=a.catchall)==null?void 0:u._zod.def.type)==="never"?t.additionalProperties=!1:a.catchall?a.catchall&&(t.additionalProperties=Z(a.catchall,r,I(f({},o),{path:[...o.path,"additionalProperties"]}))):r.io==="output"&&(t.additionalProperties=!1)},Mr=(e,r,n,o)=>{let t=e._zod.def,a=t.inclusive===!1,c=t.options.map((m,s)=>Z(m,r,I(f({},o),{path:[...o.path,a?"oneOf":"anyOf",s]})));a?n.oneOf=c:n.anyOf=c},Ba=(e,r,n,o)=>{let t=e._zod.def,a=Z(t.left,r,I(f({},o),{path:[...o.path,"allOf",0]})),c=Z(t.right,r,I(f({},o),{path:[...o.path,"allOf",1]})),m=u=>"allOf"in u&&Object.keys(u).length===1,s=[...m(a)?a.allOf:[a],...m(c)?c.allOf:[c]];n.allOf=s},Ga=(e,r,n,o)=>{let t=n,a=e._zod.def;t.type="array";let c=r.target==="draft-2020-12"?"prefixItems":"items",m=r.target==="draft-2020-12"||r.target==="openapi-3.0"?"items":"additionalItems",s=a.items.map((l,p)=>Z(l,r,I(f({},o),{path:[...o.path,c,p]}))),u=a.rest?Z(a.rest,r,I(f({},o),{path:[...o.path,m,...r.target==="openapi-3.0"?[a.items.length]:[]]})):null;r.target==="draft-2020-12"?(t.prefixItems=s,u&&(t.items=u)):r.target==="openapi-3.0"?(t.items={anyOf:s},u&&t.items.anyOf.push(u),t.minItems=s.length,u||(t.maxItems=s.length)):(t.items=s,u&&(t.additionalItems=u));let{minimum:d,maximum:i}=e._zod.bag;typeof d=="number"&&(t.minItems=d),typeof i=="number"&&(t.maxItems=i)},Wa=(e,r,n,o)=>{let t=n,a=e._zod.def;t.type="object";let c=a.keyType,m=c._zod.bag,s=m==null?void 0:m.patterns;if(a.mode==="loose"&&s&&s.size>0){let d=Z(a.valueType,r,I(f({},o),{path:[...o.path,"patternProperties","*"]}));t.patternProperties={};for(let i of s)t.patternProperties[i.source]=d}else(r.target==="draft-07"||r.target==="draft-2020-12")&&(t.propertyNames=Z(a.keyType,r,I(f({},o),{path:[...o.path,"propertyNames"]}))),t.additionalProperties=Z(a.valueType,r,I(f({},o),{path:[...o.path,"additionalProperties"]}));let u=c._zod.values;if(u){let d=[...u].filter(i=>typeof i=="string"||typeof i=="number");d.length>0&&(t.required=d)}},qa=(e,r,n,o)=>{let t=e._zod.def,a=Z(t.innerType,r,o),c=r.seen.get(e);r.target==="openapi-3.0"?(c.ref=t.innerType,n.nullable=!0):n.anyOf=[a,{type:"null"}]},Xa=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType},Qa=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType,n.default=JSON.parse(JSON.stringify(t.defaultValue))},Ya=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType,r.io==="input"&&(n._prefault=JSON.parse(JSON.stringify(t.defaultValue)))},Ha=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType;let c;try{c=t.catchValue(void 0)}catch(m){throw new Error("Dynamic catch values are not supported in JSON Schema")}n.default=c},ec=(e,r,n,o)=>{let t=e._zod.def,a=r.io==="input"?t.in._zod.def.type==="transform"?t.out:t.in:t.out;Z(a,r,o);let c=r.seen.get(e);c.ref=a},tc=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType,n.readOnly=!0},rc=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType},Vr=(e,r,n,o)=>{let t=e._zod.def;Z(t.innerType,r,o);let a=r.seen.get(e);a.ref=t.innerType},nc=(e,r,n,o)=>{let t=e._zod.innerType;Z(t,r,o);let a=r.seen.get(e);a.ref=t},Fr={string:xa,number:_a,boolean:Sa,bigint:ka,symbol:Ia,null:za,undefined:Ta,void:wa,never:Pa,any:ja,unknown:Da,date:Oa,enum:Ua,literal:Na,nan:Za,template_literal:Ea,file:La,success:Ca,custom:Ra,function:Aa,transform:Fa,map:Ma,set:Va,array:Ka,object:Ja,union:Mr,intersection:Ba,tuple:Ga,record:Wa,nullable:qa,nonoptional:Xa,default:Qa,prefault:Ya,catch:Ha,pipe:ec,readonly:tc,promise:rc,optional:Vr,lazy:nc};function oc(e,r){if("_idmap"in e){let o=e,t=Se(I(f({},r),{processors:Fr})),a={};for(let s of o._idmap.entries()){let[u,d]=s;Z(d,t)}let c={},m={registry:o,uri:r==null?void 0:r.uri,defs:a};t.external=m;for(let s of o._idmap.entries()){let[u,d]=s;ke(t,d),c[u]=Ie(t,d)}if(Object.keys(a).length>0){let s=t.target==="draft-2020-12"?"$defs":"definitions";c.__shared={[s]:a}}return{schemas:c}}let n=Se(I(f({},r),{processors:Fr}));return Z(e,n),ke(n,e),Ie(n,e)}var Kr=class{get metadataRegistry(){return this.ctx.metadataRegistry}get target(){return this.ctx.target}get unrepresentable(){return this.ctx.unrepresentable}get override(){return this.ctx.override}get io(){return this.ctx.io}get counter(){return this.ctx.counter}set counter(r){this.ctx.counter=r}get seen(){return this.ctx.seen}constructor(r){var o;let n=(o=r==null?void 0:r.target)!=null?o:"draft-2020-12";n==="draft-4"&&(n="draft-04"),n==="draft-7"&&(n="draft-07"),this.ctx=Se(f(f(f(f({processors:Fr,target:n},(r==null?void 0:r.metadata)&&{metadata:r.metadata}),(r==null?void 0:r.unrepresentable)&&{unrepresentable:r.unrepresentable}),(r==null?void 0:r.override)&&{override:r.override}),(r==null?void 0:r.io)&&{io:r.io}))}process(r,n={path:[],schemaPath:[]}){return Z(r,this.ctx,n)}emit(r,n){n&&(n.cycles&&(this.ctx.cycles=n.cycles),n.reused&&(this.ctx.reused=n.reused),n.external&&(this.ctx.external=n.external)),ke(this.ctx,r);let c=Ie(this.ctx,r),{"~standard":t}=c;return ou(c,["~standard"])}};var ic={};var wt={};ve(wt,{ZodAny:()=>ss,ZodArray:()=>fs,ZodBase64:()=>wc,ZodBase64URL:()=>Pc,ZodBigInt:()=>Nt,ZodBigIntFormat:()=>Oc,ZodBoolean:()=>Ut,ZodCIDRv4:()=>zc,ZodCIDRv6:()=>Tc,ZodCUID:()=>$c,ZodCUID2:()=>bc,ZodCatch:()=>Es,ZodCodec:()=>Rc,ZodCustom:()=>tn,ZodCustomStringFormat:()=>Dt,ZodDate:()=>Qr,ZodDefault:()=>js,ZodDiscriminatedUnion:()=>vs,ZodE164:()=>jc,ZodEmail:()=>vc,ZodEmoji:()=>hc,ZodEnum:()=>Pt,ZodExactOptional:()=>Ts,ZodFile:()=>Is,ZodFunction:()=>Js,ZodGUID:()=>Br,ZodIPv4:()=>kc,ZodIPv6:()=>Ic,ZodIntersection:()=>hs,ZodJWT:()=>Dc,ZodKSUID:()=>Sc,ZodLazy:()=>Ms,ZodLiteral:()=>ks,ZodMAC:()=>is,ZodMap:()=>_s,ZodNaN:()=>Cs,ZodNanoID:()=>yc,ZodNever:()=>ms,ZodNonOptional:()=>Lc,ZodNull:()=>us,ZodNullable:()=>Ps,ZodNumber:()=>Ot,ZodNumberFormat:()=>Ye,ZodObject:()=>Yr,ZodOptional:()=>Ec,ZodPipe:()=>Cc,ZodPrefault:()=>Os,ZodPromise:()=>Ks,ZodReadonly:()=>Rs,ZodRecord:()=>en,ZodSet:()=>Ss,ZodString:()=>jt,ZodStringFormat:()=>C,ZodSuccess:()=>Zs,ZodSymbol:()=>as,ZodTemplateLiteral:()=>Fs,ZodTransform:()=>zs,ZodTuple:()=>$s,ZodType:()=>D,ZodULID:()=>xc,ZodURL:()=>Xr,ZodUUID:()=>fe,ZodUndefined:()=>cs,ZodUnion:()=>Hr,ZodUnknown:()=>ds,ZodVoid:()=>ps,ZodXID:()=>_c,ZodXor:()=>gs,_ZodString:()=>gc,_default:()=>Ds,_function:()=>xg,any:()=>eg,array:()=>ce,base64:()=>Lf,base64url:()=>Cf,bigint:()=>qf,boolean:()=>Ue,catch:()=>Ls,check:()=>_g,cidrv4:()=>Zf,cidrv6:()=>Ef,codec:()=>yg,cuid:()=>Tf,cuid2:()=>wf,custom:()=>Sg,date:()=>rg,describe:()=>kg,discriminatedUnion:()=>cg,e164:()=>Rf,email:()=>hf,emoji:()=>If,enum:()=>ze,exactOptional:()=>ws,file:()=>fg,float32:()=>Jf,float64:()=>Bf,function:()=>xg,guid:()=>yf,hash:()=>Kf,hex:()=>Vf,hostname:()=>Mf,httpUrl:()=>kf,instanceof:()=>zg,int:()=>fc,int32:()=>Gf,int64:()=>Xf,intersection:()=>ys,ipv4:()=>Of,ipv6:()=>Nf,json:()=>wg,jwt:()=>Af,keyof:()=>ng,ksuid:()=>Df,lazy:()=>Vs,literal:()=>pg,looseObject:()=>ig,looseRecord:()=>lg,mac:()=>Uf,map:()=>sg,meta:()=>Ig,nan:()=>hg,nanoid:()=>zf,nativeEnum:()=>mg,never:()=>Uc,nonoptional:()=>Ns,null:()=>ls,nullable:()=>Wr,nullish:()=>gg,number:()=>ae,object:()=>ge,optional:()=>Gr,partialRecord:()=>ug,pipe:()=>qr,prefault:()=>Us,preprocess:()=>Pg,promise:()=>bg,readonly:()=>As,record:()=>xs,refine:()=>Bs,set:()=>dg,strictObject:()=>og,string:()=>K,stringFormat:()=>Ff,stringbool:()=>Tg,success:()=>vg,superRefine:()=>Gs,symbol:()=>Yf,templateLiteral:()=>$g,transform:()=>Zc,tuple:()=>bs,uint32:()=>Wf,uint64:()=>Qf,ulid:()=>Pf,undefined:()=>Hf,union:()=>Nc,unknown:()=>Q,url:()=>Sf,uuid:()=>$f,uuidv4:()=>bf,uuidv6:()=>xf,uuidv7:()=>_f,void:()=>tg,xid:()=>jf,xor:()=>ag});var Jr={};ve(Jr,{endsWith:()=>xt,gt:()=>de,gte:()=>W,includes:()=>$t,length:()=>We,lowercase:()=>ht,lt:()=>se,lte:()=>te,maxLength:()=>Ge,maxSize:()=>Oe,mime:()=>_t,minLength:()=>_e,minSize:()=>me,multipleOf:()=>De,negative:()=>ua,nonnegative:()=>sa,nonpositive:()=>la,normalize:()=>St,overwrite:()=>ie,positive:()=>ca,property:()=>da,regex:()=>vt,size:()=>Be,slugify:()=>Tt,startsWith:()=>bt,toLowerCase:()=>It,toUpperCase:()=>zt,trim:()=>kt,uppercase:()=>yt});var Qe={};ve(Qe,{ZodISODate:()=>uc,ZodISODateTime:()=>ac,ZodISODuration:()=>mc,ZodISOTime:()=>sc,date:()=>lc,datetime:()=>cc,duration:()=>pc,time:()=>dc});var ac=g("ZodISODateTime",(e,r)=>{Oo.init(e,r),C.init(e,r)});function cc(e){return Ni(ac,e)}var uc=g("ZodISODate",(e,r)=>{Uo.init(e,r),C.init(e,r)});function lc(e){return Zi(uc,e)}var sc=g("ZodISOTime",(e,r)=>{No.init(e,r),C.init(e,r)});function dc(e){return Ei(sc,e)}var mc=g("ZodISODuration",(e,r)=>{Zo.init(e,r),C.init(e,r)});function pc(e){return Li(mc,e)}var Bl=(e,r)=>{at.init(e,r),e.name="ZodError",Object.defineProperties(e,{format:{value:n=>Gt(e,n)},flatten:{value:n=>Bt(e,n)},addIssue:{value:n=>{e.issues.push(n),e.message=JSON.stringify(e.issues,Ee,2)}},addIssues:{value:n=>{e.issues.push(...n),e.message=JSON.stringify(e.issues,Ee,2)}},isEmpty:{get(){return e.issues.length===0}}})},Qy=g("ZodError",Bl),X=g("ZodError",Bl,{Parent:Error});var Gl=Re(X),Wl=Ae(X),ql=Fe(X),Xl=Me(X),Ql=Xt(X),Yl=Qt(X),Hl=Yt(X),es=Ht(X),ts=er(X),rs=tr(X),ns=rr(X),os=nr(X);var D=g("ZodType",(e,r)=>(P.init(e,r),Object.assign(e["~standard"],{jsonSchema:{input:Xe(e,"input"),output:Xe(e,"output")}}),e.toJSONSchema=ba(e,{}),e.def=r,e.type=r.type,Object.defineProperty(e,"_def",{value:r}),e.check=(...n)=>{var o;return e.clone(x.mergeDefs(r,{checks:[...(o=r.checks)!=null?o:[],...n.map(t=>typeof t=="function"?{_zod:{check:t,def:{check:"custom"},onattach:[]}}:t)]}),{parent:!0})},e.with=e.check,e.clone=(n,o)=>J(e,n,o),e.brand=()=>e,e.register=((n,o)=>(n.add(e,o),e)),e.parse=(n,o)=>Gl(e,n,o,{callee:e.parse}),e.safeParse=(n,o)=>ql(e,n,o),e.parseAsync=async(n,o)=>Wl(e,n,o,{callee:e.parseAsync}),e.safeParseAsync=async(n,o)=>Xl(e,n,o),e.spa=e.safeParseAsync,e.encode=(n,o)=>Ql(e,n,o),e.decode=(n,o)=>Yl(e,n,o),e.encodeAsync=async(n,o)=>Hl(e,n,o),e.decodeAsync=async(n,o)=>es(e,n,o),e.safeEncode=(n,o)=>ts(e,n,o),e.safeDecode=(n,o)=>rs(e,n,o),e.safeEncodeAsync=async(n,o)=>ns(e,n,o),e.safeDecodeAsync=async(n,o)=>os(e,n,o),e.refine=(n,o)=>e.check(Bs(n,o)),e.superRefine=n=>e.check(Gs(n)),e.overwrite=n=>e.check(ie(n)),e.optional=()=>Gr(e),e.exactOptional=()=>ws(e),e.nullable=()=>Wr(e),e.nullish=()=>Gr(Wr(e)),e.nonoptional=n=>Ns(e,n),e.array=()=>ce(e),e.or=n=>Nc([e,n]),e.and=n=>ys(e,n),e.transform=n=>qr(e,Zc(n)),e.default=n=>Ds(e,n),e.prefault=n=>Us(e,n),e.catch=n=>Ls(e,n),e.pipe=n=>qr(e,n),e.readonly=()=>As(e),e.describe=n=>{let o=e.clone();return M.add(o,{description:n}),o},Object.defineProperty(e,"description",{get(){var n;return(n=M.get(e))==null?void 0:n.description},configurable:!0}),e.meta=(...n)=>{if(n.length===0)return M.get(e);let o=e.clone();return M.add(o,n[0]),o},e.isOptional=()=>e.safeParse(void 0).success,e.isNullable=()=>e.safeParse(null).success,e.apply=n=>n(e),e)),gc=g("_ZodString",(e,r)=>{var o,t,a;je.init(e,r),D.init(e,r),e._zod.processJSONSchema=(c,m,s)=>xa(e,c,m,s);let n=e._zod.bag;e.format=(o=n.format)!=null?o:null,e.minLength=(t=n.minimum)!=null?t:null,e.maxLength=(a=n.maximum)!=null?a:null,e.regex=(...c)=>e.check(vt(...c)),e.includes=(...c)=>e.check($t(...c)),e.startsWith=(...c)=>e.check(bt(...c)),e.endsWith=(...c)=>e.check(xt(...c)),e.min=(...c)=>e.check(_e(...c)),e.max=(...c)=>e.check(Ge(...c)),e.length=(...c)=>e.check(We(...c)),e.nonempty=(...c)=>e.check(_e(1,...c)),e.lowercase=c=>e.check(ht(c)),e.uppercase=c=>e.check(yt(c)),e.trim=()=>e.check(kt()),e.normalize=(...c)=>e.check(St(...c)),e.toLowerCase=()=>e.check(It()),e.toUpperCase=()=>e.check(zt()),e.slugify=()=>e.check(Tt())}),jt=g("ZodString",(e,r)=>{je.init(e,r),gc.init(e,r),e.email=n=>e.check(xr(vc,n)),e.url=n=>e.check(gt(Xr,n)),e.jwt=n=>e.check(Ar(Dc,n)),e.emoji=n=>e.check(zr(hc,n)),e.guid=n=>e.check(ft(Br,n)),e.uuid=n=>e.check(_r(fe,n)),e.uuidv4=n=>e.check(Sr(fe,n)),e.uuidv6=n=>e.check(kr(fe,n)),e.uuidv7=n=>e.check(Ir(fe,n)),e.nanoid=n=>e.check(Tr(yc,n)),e.guid=n=>e.check(ft(Br,n)),e.cuid=n=>e.check(wr($c,n)),e.cuid2=n=>e.check(Pr(bc,n)),e.ulid=n=>e.check(jr(xc,n)),e.base64=n=>e.check(Lr(wc,n)),e.base64url=n=>e.check(Cr(Pc,n)),e.xid=n=>e.check(Dr(_c,n)),e.ksuid=n=>e.check(Or(Sc,n)),e.ipv4=n=>e.check(Ur(kc,n)),e.ipv6=n=>e.check(Nr(Ic,n)),e.cidrv4=n=>e.check(Zr(zc,n)),e.cidrv6=n=>e.check(Er(Tc,n)),e.e164=n=>e.check(Rr(jc,n)),e.datetime=n=>e.check(cc(n)),e.date=n=>e.check(lc(n)),e.time=n=>e.check(dc(n)),e.duration=n=>e.check(pc(n))});function K(e){return Di(jt,e)}var C=g("ZodStringFormat",(e,r)=>{E.init(e,r),gc.init(e,r)}),vc=g("ZodEmail",(e,r)=>{So.init(e,r),C.init(e,r)});function hf(e){return xr(vc,e)}var Br=g("ZodGUID",(e,r)=>{xo.init(e,r),C.init(e,r)});function yf(e){return ft(Br,e)}var fe=g("ZodUUID",(e,r)=>{_o.init(e,r),C.init(e,r)});function $f(e){return _r(fe,e)}function bf(e){return Sr(fe,e)}function xf(e){return kr(fe,e)}function _f(e){return Ir(fe,e)}var Xr=g("ZodURL",(e,r)=>{ko.init(e,r),C.init(e,r)});function Sf(e){return gt(Xr,e)}function kf(e){return gt(Xr,f({protocol:/^https?$/,hostname:ee.domain},x.normalizeParams(e)))}var hc=g("ZodEmoji",(e,r)=>{Io.init(e,r),C.init(e,r)});function If(e){return zr(hc,e)}var yc=g("ZodNanoID",(e,r)=>{zo.init(e,r),C.init(e,r)});function zf(e){return Tr(yc,e)}var $c=g("ZodCUID",(e,r)=>{To.init(e,r),C.init(e,r)});function Tf(e){return wr($c,e)}var bc=g("ZodCUID2",(e,r)=>{wo.init(e,r),C.init(e,r)});function wf(e){return Pr(bc,e)}var xc=g("ZodULID",(e,r)=>{Po.init(e,r),C.init(e,r)});function Pf(e){return jr(xc,e)}var _c=g("ZodXID",(e,r)=>{jo.init(e,r),C.init(e,r)});function jf(e){return Dr(_c,e)}var Sc=g("ZodKSUID",(e,r)=>{Do.init(e,r),C.init(e,r)});function Df(e){return Or(Sc,e)}var kc=g("ZodIPv4",(e,r)=>{Eo.init(e,r),C.init(e,r)});function Of(e){return Ur(kc,e)}var is=g("ZodMAC",(e,r)=>{Co.init(e,r),C.init(e,r)});function Uf(e){return Ui(is,e)}var Ic=g("ZodIPv6",(e,r)=>{Lo.init(e,r),C.init(e,r)});function Nf(e){return Nr(Ic,e)}var zc=g("ZodCIDRv4",(e,r)=>{Ro.init(e,r),C.init(e,r)});function Zf(e){return Zr(zc,e)}var Tc=g("ZodCIDRv6",(e,r)=>{Ao.init(e,r),C.init(e,r)});function Ef(e){return Er(Tc,e)}var wc=g("ZodBase64",(e,r)=>{Mo.init(e,r),C.init(e,r)});function Lf(e){return Lr(wc,e)}var Pc=g("ZodBase64URL",(e,r)=>{Vo.init(e,r),C.init(e,r)});function Cf(e){return Cr(Pc,e)}var jc=g("ZodE164",(e,r)=>{Ko.init(e,r),C.init(e,r)});function Rf(e){return Rr(jc,e)}var Dc=g("ZodJWT",(e,r)=>{Jo.init(e,r),C.init(e,r)});function Af(e){return Ar(Dc,e)}var Dt=g("ZodCustomStringFormat",(e,r)=>{Bo.init(e,r),C.init(e,r)});function Ff(e,r,n={}){return qe(Dt,e,r,n)}function Mf(e){return qe(Dt,"hostname",ee.hostname,e)}function Vf(e){return qe(Dt,"hex",ee.hex,e)}function Kf(e,r){var a;let n=(a=r==null?void 0:r.enc)!=null?a:"hex",o=`${e}_${n}`,t=ee[o];if(!t)throw new Error(`Unrecognized hash format: ${o}`);return qe(Dt,o,t,r)}var Ot=g("ZodNumber",(e,r)=>{var o,t,a,c,m,s,u,d,i;pr.init(e,r),D.init(e,r),e._zod.processJSONSchema=(l,p,v)=>_a(e,l,p,v),e.gt=(l,p)=>e.check(de(l,p)),e.gte=(l,p)=>e.check(W(l,p)),e.min=(l,p)=>e.check(W(l,p)),e.lt=(l,p)=>e.check(se(l,p)),e.lte=(l,p)=>e.check(te(l,p)),e.max=(l,p)=>e.check(te(l,p)),e.int=l=>e.check(fc(l)),e.safe=l=>e.check(fc(l)),e.positive=l=>e.check(de(0,l)),e.nonnegative=l=>e.check(W(0,l)),e.negative=l=>e.check(se(0,l)),e.nonpositive=l=>e.check(te(0,l)),e.multipleOf=(l,p)=>e.check(De(l,p)),e.step=(l,p)=>e.check(De(l,p)),e.finite=()=>e;let n=e._zod.bag;e.minValue=(a=Math.max((o=n.minimum)!=null?o:Number.NEGATIVE_INFINITY,(t=n.exclusiveMinimum)!=null?t:Number.NEGATIVE_INFINITY))!=null?a:null,e.maxValue=(s=Math.min((c=n.maximum)!=null?c:Number.POSITIVE_INFINITY,(m=n.exclusiveMaximum)!=null?m:Number.POSITIVE_INFINITY))!=null?s:null,e.isInt=((u=n.format)!=null?u:"").includes("int")||Number.isSafeInteger((d=n.multipleOf)!=null?d:.5),e.isFinite=!0,e.format=(i=n.format)!=null?i:null});function ae(e){return Ci(Ot,e)}var Ye=g("ZodNumberFormat",(e,r)=>{Go.init(e,r),Ot.init(e,r)});function fc(e){return Ai(Ye,e)}function Jf(e){return Fi(Ye,e)}function Bf(e){return Mi(Ye,e)}function Gf(e){return Vi(Ye,e)}function Wf(e){return Ki(Ye,e)}var Ut=g("ZodBoolean",(e,r)=>{st.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Sa(e,n,o,t)});function Ue(e){return Ji(Ut,e)}var Nt=g("ZodBigInt",(e,r)=>{var o,t,a;fr.init(e,r),D.init(e,r),e._zod.processJSONSchema=(c,m,s)=>ka(e,c,m,s),e.gte=(c,m)=>e.check(W(c,m)),e.min=(c,m)=>e.check(W(c,m)),e.gt=(c,m)=>e.check(de(c,m)),e.gte=(c,m)=>e.check(W(c,m)),e.min=(c,m)=>e.check(W(c,m)),e.lt=(c,m)=>e.check(se(c,m)),e.lte=(c,m)=>e.check(te(c,m)),e.max=(c,m)=>e.check(te(c,m)),e.positive=c=>e.check(de(BigInt(0),c)),e.negative=c=>e.check(se(BigInt(0),c)),e.nonpositive=c=>e.check(te(BigInt(0),c)),e.nonnegative=c=>e.check(W(BigInt(0),c)),e.multipleOf=(c,m)=>e.check(De(c,m));let n=e._zod.bag;e.minValue=(o=n.minimum)!=null?o:null,e.maxValue=(t=n.maximum)!=null?t:null,e.format=(a=n.format)!=null?a:null});function qf(e){return Gi(Nt,e)}var Oc=g("ZodBigIntFormat",(e,r)=>{Wo.init(e,r),Nt.init(e,r)});function Xf(e){return qi(Oc,e)}function Qf(e){return Xi(Oc,e)}var as=g("ZodSymbol",(e,r)=>{qo.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ia(e,n,o,t)});function Yf(e){return Qi(as,e)}var cs=g("ZodUndefined",(e,r)=>{Xo.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ta(e,n,o,t)});function Hf(e){return Yi(cs,e)}var us=g("ZodNull",(e,r)=>{Qo.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>za(e,n,o,t)});function ls(e){return Hi(us,e)}var ss=g("ZodAny",(e,r)=>{Yo.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>ja(e,n,o,t)});function eg(){return ea(ss)}var ds=g("ZodUnknown",(e,r)=>{Ho.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Da(e,n,o,t)});function Q(){return ta(ds)}var ms=g("ZodNever",(e,r)=>{ei.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Pa(e,n,o,t)});function Uc(e){return ra(ms,e)}var ps=g("ZodVoid",(e,r)=>{ti.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>wa(e,n,o,t)});function tg(e){return na(ps,e)}var Qr=g("ZodDate",(e,r)=>{ri.init(e,r),D.init(e,r),e._zod.processJSONSchema=(o,t,a)=>Oa(e,o,t,a),e.min=(o,t)=>e.check(W(o,t)),e.max=(o,t)=>e.check(te(o,t));let n=e._zod.bag;e.minDate=n.minimum?new Date(n.minimum):null,e.maxDate=n.maximum?new Date(n.maximum):null});function rg(e){return oa(Qr,e)}var fs=g("ZodArray",(e,r)=>{ni.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ka(e,n,o,t),e.element=r.element,e.min=(n,o)=>e.check(_e(n,o)),e.nonempty=n=>e.check(_e(1,n)),e.max=(n,o)=>e.check(Ge(n,o)),e.length=(n,o)=>e.check(We(n,o)),e.unwrap=()=>e.element});function ce(e,r){return ma(fs,e,r)}function ng(e){let r=e._zod.def.shape;return ze(Object.keys(r))}var Yr=g("ZodObject",(e,r)=>{oi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ja(e,n,o,t),x.defineLazy(e,"shape",()=>r.shape),e.keyof=()=>ze(Object.keys(e._zod.def.shape)),e.catchall=n=>e.clone(I(f({},e._zod.def),{catchall:n})),e.passthrough=()=>e.clone(I(f({},e._zod.def),{catchall:Q()})),e.loose=()=>e.clone(I(f({},e._zod.def),{catchall:Q()})),e.strict=()=>e.clone(I(f({},e._zod.def),{catchall:Uc()})),e.strip=()=>e.clone(I(f({},e._zod.def),{catchall:void 0})),e.extend=n=>x.extend(e,n),e.safeExtend=n=>x.safeExtend(e,n),e.merge=n=>x.merge(e,n),e.pick=n=>x.pick(e,n),e.omit=n=>x.omit(e,n),e.partial=(...n)=>x.partial(Ec,e,n[0]),e.required=(...n)=>x.required(Lc,e,n[0])});function ge(e,r){let n=f({type:"object",shape:e!=null?e:{}},x.normalizeParams(r));return new Yr(n)}function og(e,r){return new Yr(f({type:"object",shape:e,catchall:Uc()},x.normalizeParams(r)))}function ig(e,r){return new Yr(f({type:"object",shape:e,catchall:Q()},x.normalizeParams(r)))}var Hr=g("ZodUnion",(e,r)=>{dt.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Mr(e,n,o,t),e.options=r.options});function Nc(e,r){return new Hr(f({type:"union",options:e},x.normalizeParams(r)))}var gs=g("ZodXor",(e,r)=>{Hr.init(e,r),ii.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Mr(e,n,o,t),e.options=r.options});function ag(e,r){return new gs(f({type:"union",options:e,inclusive:!1},x.normalizeParams(r)))}var vs=g("ZodDiscriminatedUnion",(e,r)=>{Hr.init(e,r),ai.init(e,r)});function cg(e,r,n){return new vs(f({type:"union",options:r,discriminator:e},x.normalizeParams(n)))}var hs=g("ZodIntersection",(e,r)=>{ci.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ba(e,n,o,t)});function ys(e,r){return new hs({type:"intersection",left:e,right:r})}var $s=g("ZodTuple",(e,r)=>{gr.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ga(e,n,o,t),e.rest=n=>e.clone(I(f({},e._zod.def),{rest:n}))});function bs(e,r,n){let o=r instanceof P,t=o?n:r,a=o?r:null;return new $s(f({type:"tuple",items:e,rest:a},x.normalizeParams(t)))}var en=g("ZodRecord",(e,r)=>{ui.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Wa(e,n,o,t),e.keyType=r.keyType,e.valueType=r.valueType});function xs(e,r,n){return new en(f({type:"record",keyType:e,valueType:r},x.normalizeParams(n)))}function ug(e,r,n){let o=J(e);return o._zod.values=void 0,new en(f({type:"record",keyType:o,valueType:r},x.normalizeParams(n)))}function lg(e,r,n){return new en(f({type:"record",keyType:e,valueType:r,mode:"loose"},x.normalizeParams(n)))}var _s=g("ZodMap",(e,r)=>{li.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ma(e,n,o,t),e.keyType=r.keyType,e.valueType=r.valueType,e.min=(...n)=>e.check(me(...n)),e.nonempty=n=>e.check(me(1,n)),e.max=(...n)=>e.check(Oe(...n)),e.size=(...n)=>e.check(Be(...n))});function sg(e,r,n){return new _s(f({type:"map",keyType:e,valueType:r},x.normalizeParams(n)))}var Ss=g("ZodSet",(e,r)=>{si.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Va(e,n,o,t),e.min=(...n)=>e.check(me(...n)),e.nonempty=n=>e.check(me(1,n)),e.max=(...n)=>e.check(Oe(...n)),e.size=(...n)=>e.check(Be(...n))});function dg(e,r){return new Ss(f({type:"set",valueType:e},x.normalizeParams(r)))}var Pt=g("ZodEnum",(e,r)=>{di.init(e,r),D.init(e,r),e._zod.processJSONSchema=(o,t,a)=>Ua(e,o,t,a),e.enum=r.entries,e.options=Object.values(r.entries);let n=new Set(Object.keys(r.entries));e.extract=(o,t)=>{let a={};for(let c of o)if(n.has(c))a[c]=r.entries[c];else throw new Error(`Key ${c} not found in enum`);return new Pt(I(f(I(f({},r),{checks:[]}),x.normalizeParams(t)),{entries:a}))},e.exclude=(o,t)=>{let a=f({},r.entries);for(let c of o)if(n.has(c))delete a[c];else throw new Error(`Key ${c} not found in enum`);return new Pt(I(f(I(f({},r),{checks:[]}),x.normalizeParams(t)),{entries:a}))}});function ze(e,r){let n=Array.isArray(e)?Object.fromEntries(e.map(o=>[o,o])):e;return new Pt(f({type:"enum",entries:n},x.normalizeParams(r)))}function mg(e,r){return new Pt(f({type:"enum",entries:e},x.normalizeParams(r)))}var ks=g("ZodLiteral",(e,r)=>{mi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Na(e,n,o,t),e.values=new Set(r.values),Object.defineProperty(e,"value",{get(){if(r.values.length>1)throw new Error("This schema contains multiple valid literal values. Use `.values` instead.");return r.values[0]}})});function pg(e,r){return new ks(f({type:"literal",values:Array.isArray(e)?e:[e]},x.normalizeParams(r)))}var Is=g("ZodFile",(e,r)=>{pi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>La(e,n,o,t),e.min=(n,o)=>e.check(me(n,o)),e.max=(n,o)=>e.check(Oe(n,o)),e.mime=(n,o)=>e.check(_t(Array.isArray(n)?n:[n],o))});function fg(e){return pa(Is,e)}var zs=g("ZodTransform",(e,r)=>{fi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Fa(e,n,o,t),e._zod.parse=(n,o)=>{if(o.direction==="backward")throw new he(e.constructor.name);n.addIssue=a=>{var c,m,s;if(typeof a=="string")n.issues.push(x.issue(a,n.value,r));else{let u=a;u.fatal&&(u.continue=!1),(c=u.code)!=null||(u.code="custom"),(m=u.input)!=null||(u.input=n.value),(s=u.inst)!=null||(u.inst=e),n.issues.push(x.issue(u))}};let t=r.transform(n.value,n);return t instanceof Promise?t.then(a=>(n.value=a,n)):(n.value=t,n)}});function Zc(e){return new zs({type:"transform",transform:e})}var Ec=g("ZodOptional",(e,r)=>{vr.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Vr(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function Gr(e){return new Ec({type:"optional",innerType:e})}var Ts=g("ZodExactOptional",(e,r)=>{gi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Vr(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function ws(e){return new Ts({type:"optional",innerType:e})}var Ps=g("ZodNullable",(e,r)=>{vi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>qa(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function Wr(e){return new Ps({type:"nullable",innerType:e})}function gg(e){return Gr(Wr(e))}var js=g("ZodDefault",(e,r)=>{hi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Qa(e,n,o,t),e.unwrap=()=>e._zod.def.innerType,e.removeDefault=e.unwrap});function Ds(e,r){return new js({type:"default",innerType:e,get defaultValue(){return typeof r=="function"?r():x.shallowClone(r)}})}var Os=g("ZodPrefault",(e,r)=>{yi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ya(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function Us(e,r){return new Os({type:"prefault",innerType:e,get defaultValue(){return typeof r=="function"?r():x.shallowClone(r)}})}var Lc=g("ZodNonOptional",(e,r)=>{$i.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Xa(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function Ns(e,r){return new Lc(f({type:"nonoptional",innerType:e},x.normalizeParams(r)))}var Zs=g("ZodSuccess",(e,r)=>{bi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ca(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function vg(e){return new Zs({type:"success",innerType:e})}var Es=g("ZodCatch",(e,r)=>{xi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ha(e,n,o,t),e.unwrap=()=>e._zod.def.innerType,e.removeCatch=e.unwrap});function Ls(e,r){return new Es({type:"catch",innerType:e,catchValue:typeof r=="function"?r:()=>r})}var Cs=g("ZodNaN",(e,r)=>{_i.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Za(e,n,o,t)});function hg(e){return aa(Cs,e)}var Cc=g("ZodPipe",(e,r)=>{Si.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>ec(e,n,o,t),e.in=r.in,e.out=r.out});function qr(e,r){return new Cc({type:"pipe",in:e,out:r})}var Rc=g("ZodCodec",(e,r)=>{Cc.init(e,r),mt.init(e,r)});function yg(e,r,n){return new Rc({type:"pipe",in:e,out:r,transform:n.decode,reverseTransform:n.encode})}var Rs=g("ZodReadonly",(e,r)=>{ki.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>tc(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function As(e){return new Rs({type:"readonly",innerType:e})}var Fs=g("ZodTemplateLiteral",(e,r)=>{Ii.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ea(e,n,o,t)});function $g(e,r){return new Fs(f({type:"template_literal",parts:e},x.normalizeParams(r)))}var Ms=g("ZodLazy",(e,r)=>{wi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>nc(e,n,o,t),e.unwrap=()=>e._zod.def.getter()});function Vs(e){return new Ms({type:"lazy",getter:e})}var Ks=g("ZodPromise",(e,r)=>{Ti.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>rc(e,n,o,t),e.unwrap=()=>e._zod.def.innerType});function bg(e){return new Ks({type:"promise",innerType:e})}var Js=g("ZodFunction",(e,r)=>{zi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Aa(e,n,o,t)});function xg(e){var r,n;return new Js({type:"function",input:Array.isArray(e==null?void 0:e.input)?bs(e==null?void 0:e.input):(r=e==null?void 0:e.input)!=null?r:ce(Q()),output:(n=e==null?void 0:e.output)!=null?n:Q()})}var tn=g("ZodCustom",(e,r)=>{Pi.init(e,r),D.init(e,r),e._zod.processJSONSchema=(n,o,t)=>Ra(e,n,o,t)});function _g(e){let r=new L({check:"custom"});return r._zod.check=e,r}function Sg(e,r){return fa(tn,e!=null?e:(()=>!0),r)}function Bs(e,r={}){return ga(tn,e,r)}function Gs(e){return va(e)}var kg=ha,Ig=ya;function zg(e,r={}){let n=new tn(f({type:"custom",check:"custom",fn:o=>o instanceof e,abort:!0},x.normalizeParams(r)));return n._zod.bag.Class=e,n._zod.check=o=>{var t;o.value instanceof e||o.issues.push({code:"invalid_type",expected:e.name,input:o.value,inst:n,path:[...(t=n._zod.def.path)!=null?t:[]]})},n}var Tg=(...e)=>$a({Codec:Rc,Boolean:Ut,String:jt},...e);function wg(e){let r=Vs(()=>Nc([K(e),ae(),Ue(),ls(),ce(r),xs(K(),r)]));return r}function Pg(e,r){return qr(Zc(e),r)}var Ws;Ws||(Ws={});var a$=I(f(f({},wt),Jr),{iso:Qe});var Ac={};ve(Ac,{bigint:()=>Ug,boolean:()=>Og,date:()=>Ng,number:()=>Dg,string:()=>jg});function jg(e){return Oi(jt,e)}function Dg(e){return Ri(Ot,e)}function Og(e){return Bi(Ut,e)}function Ug(e){return Wi(Nt,e)}function Ng(e){return ia(Qr,e)}F(hr());var Zg=ze(["DETAILED"]),Eg=ze(["GYM","POKESTOP","POWERSPOT"]),Lg=ze(["HOLOHOLO"]),Cg=ze(["ACTIVE","INACTIVE"]),qs=/^\\(\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)$/,Xs=K().transform((e,r)=>{let n=qs.exec(e);return n?{lat:Number(n[1]),lng:Number(n[2])}:(r.addIssue({code:"invalid_format",message:"Invalid point format. Expected `(${number},${number})",format:"custom",pattern:qs.source,input:e}),Vt)}),Qs=ge({ne:Xs,sw:Xs}),Rg=ge({s2CellLevel:ae(),s2CellId:K(),generatedTimestamp:K(),count:ae(),format:Zg}),Ag=ge({gameBrand:Lg,entity:Eg,status:Cg}),Fg=ge({poiId:K(),latE6:ae(),lngE6:ae(),title:K(),description:K(),address:K(),categoryTags:ce(Q()),mainImage:K(),hasAdditionalImages:Ue(),gmo:ce(Ag),isCommunityContributed:Ue()}),Mg=ge({metadata:Rg,pois:ce(Fg),clusters:ce(Q())}),Vg=ge({success:Ue(),data:ce(Mg),cellsQueried:ae(),cellsLoaded:ae(),snapshot:K(),cellLevel:ae()}),Ys=ge({result:Vg,message:Q(),code:K(),errorsWithIcon:Q(),fieldErrors:Q(),errorDetails:Q(),version:K(),captcha:Ue()});function Hs(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function Kg(e,r,n,o){return{sw:{lat:e,lng:r},ne:{lat:n,lng:o}}}function ed(e,r){return Kg(e.lat,e.lng,r.lat,r.lng)}function td(e){return{lat:(e.sw.lat+e.ne.lat)/2,lng:(e.sw.lng+e.ne.lng)/2}}function rd(e,r){return{sw:{lat:Math.min(e.sw.lat,r.lat),lng:Math.min(e.sw.lng,r.lng)},ne:{lat:Math.max(e.ne.lat,r.lat),lng:Math.max(e.ne.lng,r.lng)}}}function nd(e,r){return e.sw.lat<=r.ne.lat&&e.ne.lat>=r.sw.lat&&e.sw.lng<=r.ne.lng&&e.ne.lng>=r.sw.lng}function Mc(e){return e}function id(...e){}var Fc=class extends Error{constructor(n){super(n);this.name="AbortError"}};function ad(e="The operation was aborted."){return typeof DOMException=="function"?new DOMException(e,"AbortError"):new Fc(e)}function Jg(e,r){for(let[n,o]of Object.entries(r)){let t=e.createObjectStore(n,{keyPath:o.key.slice()});for(let[a,c]of Object.entries(o.indexes))t.createIndex(a,c.key,c)}}function cd(e,r,n){return new Promise((o,t)=>{let a=indexedDB.open(e,r);a.addEventListener("upgradeneeded",()=>Jg(a.result,n)),a.addEventListener("blocked",()=>t(new Error("database blocked"))),a.addEventListener("error",()=>t(a.error)),a.addEventListener("success",()=>o(a.result))})}var Vc=class{constructor(r,n,o){this.source=r;this.query=n;this.action=o}};function ud(e,{mode:r,signal:n},o,...t){return new Promise((a,c)=>{if(n!=null&&n.aborted){c(ad());return}let m=!1,s,u=e.transaction(t,r),d=n?()=>{m||u.abort()}:id;u.addEventListener("complete",()=>{n==null||n.removeEventListener("abort",d),m?a(s):c(new Error("internal error"))}),u.addEventListener("error",k=>{n==null||n.removeEventListener("abort",d),c(k.target.error)}),n==null||n.addEventListener("abort",d);let i={};for(let k of t)i[k]=u.objectStore(k);let l=o(i),p,v,y,S,w,j;function N(){let k;switch(p){case void 0:k=l.next();break;case"Request":{let U=v.result;p=void 0,v=void 0,k=l.next(U);break}case"WaitRequests":{let U=y,R=S,Ne=R[U.length].result;if(U.push(Ne),U.length!==R.length)return;p=void 0,S=void 0,y=void 0,k=l.next(U);break}case"OpenCursor":{let U=w.result;if(U===null||j(U.value)==="break")p=void 0,w=void 0,j=void 0,k=l.next(void 0);else{U.continue();return}break}default:{c(new Error(`Invalid resolving kind: ${p}`));return}}if(k.done){m=!0,s=k.value;return}let T=k.value;if(T instanceof IDBRequest){p="Request",v=T,T.onsuccess=N;return}if(T instanceof Vc){p="OpenCursor",w=T.source.openCursor(T.query),j=T.action,w.onsuccess=N;return}p="WaitRequests",S=T,y=[];for(let U of T)U.onsuccess=N}N()})}function rn(e,r){return e.index(r)}function Bg(e,r){let n=[];for(let o of r)n.push(e.get(o));return n}function*ld(e,r){let n=Bg(e,r);return n.length===0?[]:yield n}function*sd(e,r,n){return yield e.getAll(r,n)}function*Kc(e,r){let n;for(let o of r)n=e.put(o);n!=null&&(yield n)}function*dd(e,r){let n;for(let o of r)n=e.delete(o);n!=null&&(yield n)}function Wg(e){"use strict";var r=e.S2={L:{}};r.L.LatLng=function(s,u,d){var i=parseFloat(s,10),l=parseFloat(u,10);if(isNaN(i)||isNaN(l))throw new Error("Invalid LatLng object: ("+s+", "+u+")");return d!==!0&&(i=Math.max(Math.min(i,90),-90),l=(l+180)%360+(l<-180||l===180?180:-180)),{lat:i,lng:l}},r.L.LatLng.DEG_TO_RAD=Math.PI/180,r.L.LatLng.RAD_TO_DEG=180/Math.PI,r.LatLngToXYZ=function(s){var u=r.L.LatLng.DEG_TO_RAD,d=s.lat*u,i=s.lng*u,l=Math.cos(d);return[Math.cos(i)*l,Math.sin(i)*l,Math.sin(d)]},r.XYZToLatLng=function(s){var u=r.L.LatLng.RAD_TO_DEG,d=Math.atan2(s[2],Math.sqrt(s[0]*s[0]+s[1]*s[1])),i=Math.atan2(s[1],s[0]);return r.L.LatLng(d*u,i*u)};var n=function(s){var u=[Math.abs(s[0]),Math.abs(s[1]),Math.abs(s[2])];return u[0]>u[1]?u[0]>u[2]?0:2:u[1]>u[2]?1:2},o=function(s,u){var d,i;switch(s){case 0:d=u[1]/u[0],i=u[2]/u[0];break;case 1:d=-u[0]/u[1],i=u[2]/u[1];break;case 2:d=-u[0]/u[2],i=-u[1]/u[2];break;case 3:d=u[2]/u[0],i=u[1]/u[0];break;case 4:d=u[2]/u[1],i=-u[0]/u[1];break;case 5:d=-u[1]/u[2],i=-u[0]/u[2];break;default:throw{error:"Invalid face"}}return[d,i]};r.XYZToFaceUV=function(s){var u=n(s);s[u]<0&&(u+=3);var d=o(u,s);return[u,d]},r.FaceUVToXYZ=function(s,u){var d=u[0],i=u[1];switch(s){case 0:return[1,d,i];case 1:return[-d,1,i];case 2:return[-d,-i,1];case 3:return[-1,-i,-d];case 4:return[i,-1,-d];case 5:return[i,d,-1];default:throw{error:"Invalid face"}}};var t=function(s){return s>=.5?1/3*(4*s*s-1):1/3*(1-4*(1-s)*(1-s))};r.STToUV=function(s){return[t(s[0]),t(s[1])]};var a=function(s){return s>=0?.5*Math.sqrt(1+3*s):1-.5*Math.sqrt(1-3*s)};r.UVToST=function(s){return[a(s[0]),a(s[1])]},r.STToIJ=function(s,u){var d=1<<u,i=function(l){var p=Math.floor(l*d);return Math.max(0,Math.min(d-1,p))};return[i(s[0]),i(s[1])]},r.IJToST=function(s,u,d){var i=1<<u;return[(s[0]+d[0])/i,(s[1]+d[1])/i]};var c=function(s,u,d,i){var l,p;if(i==0){d==1&&(u.x=s-1-u.x,u.y=s-1-u.y);var v=u.x;u.x=u.y,u.y=v}},m=function(s,u,d,i){var l={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof i!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var p=i%2?"d":"a",v=[],y=d-1;y>=0;y--){var S=1<<y,w=s&S?1:0,j=u&S?1:0,N=l[p][w*2+j];v.push(N[0]),p=N[1]}return v};return r.S2Cell=function(){},r.S2Cell.FromHilbertQuadKey=function(s){var u=s.split("/"),d=parseInt(u[0]),i=u[1],l=i.length,p={x:0,y:0},v,y,S,w,j,N;for(v=l-1;v>=0;v--)y=l-v,S=i[v],w=0,j=0,S==="1"?j=1:S==="2"?(w=1,j=1):S==="3"&&(w=1),N=Math.pow(2,y-1),c(N,p,w,j),p.x+=N*w,p.y+=N*j;if(d%2===1){var k=p.x;p.x=p.y,p.y=k}return r.S2Cell.FromFaceIJ(parseInt(d),[p.x,p.y],y)},r.S2Cell.FromLatLng=function(s,u){if(!s.lat&&s.lat!==0||!s.lng&&s.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var d=r.LatLngToXYZ(s),i=r.XYZToFaceUV(d),l=r.UVToST(i[1]),p=r.STToIJ(l,u);return r.S2Cell.FromFaceIJ(i[0],p,u)},r.S2Cell.FromFaceIJ=function(s,u,d){var i=new r.S2Cell;return i.face=s,i.ij=u,i.level=d,i},r.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},r.S2Cell.prototype.getLatLng=function(){var s=r.IJToST(this.ij,this.level,[.5,.5]),u=r.STToUV(s),d=r.FaceUVToXYZ(this.face,u);return r.XYZToLatLng(d)},r.S2Cell.prototype.getCornerLatLngs=function(){for(var s=[],u=[[0,0],[0,1],[1,1],[1,0]],d=0;d<4;d++){var i=r.IJToST(this.ij,this.level,u[d]),l=r.STToUV(i),p=r.FaceUVToXYZ(this.face,l);s.push(r.XYZToLatLng(p))}return s},r.S2Cell.prototype.getFaceAndQuads=function(){var s=m(this.ij[0],this.ij[1],this.level,this.face);return[this.face,s]},r.S2Cell.prototype.toHilbertQuadkey=function(){var s=m(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+s.join("")},r.latLngToNeighborKeys=r.S2Cell.latLngToNeighborKeys=function(s,u,d){return r.S2Cell.FromLatLng({lat:s,lng:u},d).getNeighbors().map(function(i){return i.toHilbertQuadkey()})},r.S2Cell.prototype.getNeighbors=function(){var s=function(p,v,y){var S=1<<y;if(v[0]>=0&&v[1]>=0&&v[0]<S&&v[1]<S)return r.S2Cell.FromFaceIJ(p,v,y);var w=r.IJToST(v,y,[.5,.5]),j=r.STToUV(w),N=r.FaceUVToXYZ(p,j),k=r.XYZToFaceUV(N);return p=k[0],j=k[1],w=r.UVToST(j),v=r.STToIJ(w,y),r.S2Cell.FromFaceIJ(p,v,y)},u=this.face,d=this.ij[0],i=this.ij[1],l=this.level;return[s(u,[d-1,i],l),s(u,[d,i-1],l),s(u,[d+1,i],l),s(u,[d,i+1],l)]},r.FACE_BITS=3,r.MAX_LEVEL=30,r.POS_BITS=2*r.MAX_LEVEL+1,r.facePosLevelToId=r.S2Cell.facePosLevelToId=r.fromFacePosLevel=function(s,u,d){var i=e.dcodeIO&&e.dcodeIO.Long,l,p,v;for(d||(d=u.length),u.length>d&&(u=u.substr(0,d)),l=i.fromString(s.toString(10),!0,10).toString(2);l.length<r.FACE_BITS;)l="0"+l;for(p=i.fromString(u,!0,4).toString(2);p.length<2*d;)p="0"+p;for(v=l+p,v+="1";v.length<r.FACE_BITS+r.POS_BITS;)v+="0";return i.fromString(v,!0,2).toString(10)},r.keyToId=r.S2Cell.keyToId=r.toId=r.toCellId=r.fromKey=function(s){var u=s.split("/");return r.fromFacePosLevel(u[0],u[1],u[1].length)},r.idToKey=r.S2Cell.idToKey=r.S2Cell.toKey=r.toKey=r.fromId=r.fromCellId=r.S2Cell.toHilbertQuadkey=r.toHilbertQuadkey=function(s){for(var u=e.dcodeIO&&e.dcodeIO.Long,d=u.fromString(s,!0,10).toString(2);d.length<r.FACE_BITS+r.POS_BITS;)d="0"+d;for(var i=d.lastIndexOf("1"),l=d.substring(0,3),p=d.substring(3,i),v=p.length/2,y=u.fromString(l,!0,2).toString(10),S=u.fromString(p,!0,2).toString(4);S.length<v;)S="0"+S;return y+"/"+S},r.keyToLatLng=r.S2Cell.keyToLatLng=function(s){var u=r.S2Cell.FromHilbertQuadKey(s);return u.getLatLng()},r.idToLatLng=r.S2Cell.idToLatLng=function(s){var u=r.idToKey(s);return r.keyToLatLng(u)},r.S2Cell.latLngToKey=r.latLngToKey=r.latLngToQuadkey=function(s,u,d){if(isNaN(d)||d<1||d>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return r.S2Cell.FromLatLng({lat:s,lng:u},d).toHilbertQuadkey()},r.stepKey=function(s,u){var d=e.dcodeIO&&e.dcodeIO.Long,i=s.split("/"),l=i[0],p=i[1],v=i[1].length,y=d.fromString(p,!0,4),S;u>0?S=y.add(Math.abs(u)):u<0&&(S=y.subtract(Math.abs(u)));var w=S.toString(4);for(w==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));w.length<v;)w="0"+w;return l+"/"+w},r.S2Cell.prevKey=r.prevKey=function(s){return r.stepKey(s,-1)},r.S2Cell.nextKey=r.nextKey=function(s){return r.stepKey(s,1)},r}var Zt=Wg(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function Jc(e,r){return Zt.S2Cell.FromLatLng(e,r)}function qg(e){return Zt.S2Cell.FromHilbertQuadKey(e)}function an(e,r){return Jc(e,r).toString()}var Xg=Object.freeze(["0","1","2","3"]);function Bc(e){let r=e.level;if(Zt.MAX_LEVEL<=r)throw new Error("Cannot get children for a cell at MAX_LEVEL (30).");let n=e.toHilbertQuadkey(),o=[];for(let t of Xg){let a=n+t;o.push(qg(a))}return o}function md(e){let r=e.padEnd(16,"0"),n=BigInt(`0x${r}`),o=Yg(n);return Zt.S2Cell.FromHilbertQuadKey(o)}var Gc=new BigUint64Array(1),on=new Uint32Array(Gc.buffer);function Qg(e){Gc[0]=e;let r=on[0],n=on[1];return r!==0?31-Math.clz32(r&-r):n!==0?32+(31-Math.clz32(n&-n)):64}var nn=[];function Yg(e){Gc[0]=e;let r=on[0],n=on[1],o=n>>>29,t=Hg(e);nn.length=0,nn.push(o,"/");for(let a=1;a<=t;a++){let c=61-2*a,m;c>=32?m=n>>>c-32&3:c===31?m=(n&1)<<1|r>>>31:m=r>>>c&3,nn.push(m)}return nn.join("")}function Hg(e){let r=Qg(e);if(r>60||(r&1)!==0)throw new Error("Invalid S2CellID");return 60-r>>1}var ev={pois:{recordType:Mc,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:Mc,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},cn=Symbol("_pois"),pd=Symbol("_cells"),tv=Symbol("_coordinatesIndex"),fd=Symbol("_cellIdsIndex"),rv=Symbol("_ancestorIdsIndexSymbol");var nv="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",ov=1,gd=Symbol("_database");async function vd(){return{[gd]:await cd(nv,ov,ev)}}function iv(e,r,n,o){return ud(e[gd],{mode:r,signal:n==null?void 0:n.signal},({pois:t,cells:a})=>{let c={[cn]:t,[pd]:a,[tv]:rn(t,"coordinates"),[fd]:rn(t,"cellIds"),[rv]:rn(a,"ancestorIds")};return o(c)},"pois","cells")}function av(e,r){let n=[],o=new Set,t=[Jc(td(e),r)];for(let a;a=t.pop();){let c=a.toString();if(o.has(c))continue;o.add(c);let m=Hs();for(let s of a.getCornerLatLngs())m=rd(m,s);nd(e,m)&&(n.push(a),t.push(...a.getNeighbors()))}return n}function cv(e,r,n,o){let t=n.latE6/1e6,a=n.lngE6/1e6,c=n.title,m={lat:t,lng:a},s=[an(m,14),an(m,15)],u=e!=null?e:{guid:r,lat:t,lng:a,name:c,data:n,cellIds:s,firstFetchDate:o,lastFetchDate:o};return I(f({},u),{name:c!==""?c:u.name,lat:t,lng:a,data:n,cellIds:s,lastFetchDate:o})}async function hd(e,r,n,o,t){let a=new Map;for(let c of n)for(let m of av(c,15)){let s=m.toString();r.has(s)||a.set(s,{cell:m})}await iv(e,"readwrite",{signal:t},function*(c){yield*ue(uv(c,r)),yield*ue(lv(r,c,o)),yield*ue(sv(c,r,a,o))})}function*uv(e,r){let n=[];for(let[o,{pois:t}]of r){let a=new Set;for(let m of t)a.add(m.poiId);let c=yield*ue(sd(e[fd],o));for(let{guid:m}of c)a.has(m)||n.push(m)}yield*ue(dd(e[cn],n))}function*lv(e,r,n){let o=[],t=[];for(let{pois:m}of e.values())for(let s of m)o.push(s.poiId),t.push(s);let c=(yield*ue(ld(r[cn],o))).map((m,s)=>{let u=t[s];return cv(m,u.poiId,u,n)});yield*ue(Kc(r[cn],c))}function*sv(e,r,n,o){let t=[];for(let{cell:a}of[...r.values(),...n.values()])for(let c of Bc(a))for(let m of Bc(c)){let s=m.getLatLng();t.push({cellId:m.toString(),centerLat:s.lat,centerLng:s.lng,level:m.level,ancestorIds:[an(s,14)],firstFetchDate:o,lastFetchDate:o})}yield*ue(Kc(e[pd],t))}function yd(){return new EventTarget}function $d(e,r){return new CustomEvent(e,{detail:r})}function dv(e){let r={};return e.searchParams.forEach((n,o)=>{r[o]=n}),r}async function mv(e,r,{cells:n,bounds:o},t){await hd(e,n,o,Date.now(),t),r.dispatchEvent($d("gcs-saved",void 0))}async function pv(e,r){let n=new Map,o=[];for(let{queries:t,responseText:a}of e){await r.yield();let c=Ys.parse(JSON.parse(a));if(c.captcha||!c.result.success)continue;let m=Qs.parse(t);o.push(ed(m.sw,m.ne));for(let{metadata:s,pois:u}of c.result.data){if(s.s2CellLevel!==15)continue;let i=md(s.s2CellId),l=i.toString();n.set(l,{pois:u,cell:i})}}return{cells:n,bounds:o}}async function bd(e,r){let n=await vd(),o=mu(async t=>{let{signal:a}=new AbortController,c=fu(a),m=await pv(t,c);await mv(n,e,m,a)},r);return(t,a)=>{o.push({queries:dv(t),responseText:a})}}function xd(e){console.error("An error occurred during asynchronous processing:",e)}async function fv(){let e=mn(self),r=yd(),n=a=>e.dispatchEvent(a.type,a.detail);["gcs-received","gcs-saved"].forEach(a=>r.addEventListener(a,n));let o=await bd(r,xd);Mt({hello(a){return`Worker received: ${a}`},onGcsReceived(a,c){o(new URL(a),c)}})}fv().catch(xd);\n/*! Bundled license information:\n\ncomlink/dist/esm/comlink.mjs:\n  (**\n   * @license\n   * Copyright 2019 Google LLC\n   * SPDX-License-Identifier: Apache-2.0\n   *)\n*/\n');
+  }
+
+  // node_modules/comlink/dist/esm/comlink.mjs
+  var proxyMarker = /* @__PURE__ */ Symbol("Comlink.proxy");
+  var createEndpoint = /* @__PURE__ */ Symbol("Comlink.endpoint");
+  var releaseProxy = /* @__PURE__ */ Symbol("Comlink.releaseProxy");
+  var finalizer = /* @__PURE__ */ Symbol("Comlink.finalizer");
+  var throwMarker = /* @__PURE__ */ Symbol("Comlink.thrown");
+  var isObject2 = (val) => typeof val === "object" && val !== null || typeof val === "function";
+  var proxyTransferHandler = {
+    canHandle: (val) => isObject2(val) && val[proxyMarker],
+    serialize(obj) {
+      const { port1, port2 } = new MessageChannel();
+      expose(obj, port1);
+      return [port2, [port2]];
+    },
+    deserialize(port) {
+      port.start();
+      return wrap2(port);
+    }
+  };
+  var throwTransferHandler = {
+    canHandle: (value) => isObject2(value) && throwMarker in value,
+    serialize({ value }) {
+      let serialized;
+      if (value instanceof Error) {
+        serialized = {
+          isError: true,
+          value: {
+            message: value.message,
+            name: value.name,
+            stack: value.stack
+          }
+        };
+      } else {
+        serialized = { isError: false, value };
+      }
+      return [serialized, []];
+    },
+    deserialize(serialized) {
+      if (serialized.isError) {
+        throw Object.assign(new Error(serialized.value.message), serialized.value);
+      }
+      throw serialized.value;
+    }
+  };
+  var transferHandlers = /* @__PURE__ */ new Map([
+    ["proxy", proxyTransferHandler],
+    ["throw", throwTransferHandler]
+  ]);
+  function isAllowedOrigin(allowedOrigins, origin) {
+    for (const allowedOrigin of allowedOrigins) {
+      if (origin === allowedOrigin || allowedOrigin === "*") {
+        return true;
+      }
+      if (allowedOrigin instanceof RegExp && allowedOrigin.test(origin)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  function expose(obj, ep = globalThis, allowedOrigins = ["*"]) {
+    ep.addEventListener("message", function callback(ev) {
+      if (!ev || !ev.data) {
+        return;
+      }
+      if (!isAllowedOrigin(allowedOrigins, ev.origin)) {
+        console.warn(`Invalid origin '${ev.origin}' for comlink proxy`);
+        return;
+      }
+      const { id: id2, type, path } = Object.assign({ path: [] }, ev.data);
+      const argumentList = (ev.data.argumentList || []).map(fromWireValue);
+      let returnValue;
+      try {
+        const parent = path.slice(0, -1).reduce((obj2, prop) => obj2[prop], obj);
+        const rawValue = path.reduce((obj2, prop) => obj2[prop], obj);
+        switch (type) {
+          case "GET":
+            {
+              returnValue = rawValue;
+            }
+            break;
+          case "SET":
+            {
+              parent[path.slice(-1)[0]] = fromWireValue(ev.data.value);
+              returnValue = true;
+            }
+            break;
+          case "APPLY":
+            {
+              returnValue = rawValue.apply(parent, argumentList);
+            }
+            break;
+          case "CONSTRUCT":
+            {
+              const value = new rawValue(...argumentList);
+              returnValue = proxy(value);
+            }
+            break;
+          case "ENDPOINT":
+            {
+              const { port1, port2 } = new MessageChannel();
+              expose(obj, port2);
+              returnValue = transfer(port1, [port1]);
+            }
+            break;
+          case "RELEASE":
+            {
+              returnValue = void 0;
+            }
+            break;
+          default:
+            return;
+        }
+      } catch (value) {
+        returnValue = { value, [throwMarker]: 0 };
+      }
+      Promise.resolve(returnValue).catch((value) => {
+        return { value, [throwMarker]: 0 };
+      }).then((returnValue2) => {
+        const [wireValue, transferables] = toWireValue(returnValue2);
+        ep.postMessage(Object.assign(Object.assign({}, wireValue), { id: id2 }), transferables);
+        if (type === "RELEASE") {
+          ep.removeEventListener("message", callback);
+          closeEndPoint(ep);
+          if (finalizer in obj && typeof obj[finalizer] === "function") {
+            obj[finalizer]();
+          }
+        }
+      }).catch((error48) => {
+        const [wireValue, transferables] = toWireValue({
+          value: new TypeError("Unserializable return value"),
+          [throwMarker]: 0
+        });
+        ep.postMessage(Object.assign(Object.assign({}, wireValue), { id: id2 }), transferables);
+      });
+    });
+    if (ep.start) {
+      ep.start();
+    }
+  }
+  function isMessagePort(endpoint) {
+    return endpoint.constructor.name === "MessagePort";
+  }
+  function closeEndPoint(endpoint) {
+    if (isMessagePort(endpoint))
+      endpoint.close();
+  }
+  function wrap2(ep, target) {
+    const pendingListeners = /* @__PURE__ */ new Map();
+    ep.addEventListener("message", function handleMessage(ev) {
+      const { data } = ev;
+      if (!data || !data.id) {
+        return;
+      }
+      const resolver = pendingListeners.get(data.id);
+      if (!resolver) {
+        return;
+      }
+      try {
+        resolver(data);
+      } finally {
+        pendingListeners.delete(data.id);
+      }
+    });
+    return createProxy(ep, pendingListeners, [], target);
+  }
+  function throwIfProxyReleased(isReleased) {
+    if (isReleased) {
+      throw new Error("Proxy has been released and is not useable");
+    }
+  }
+  function releaseEndpoint(ep) {
+    return requestResponseMessage(ep, /* @__PURE__ */ new Map(), {
+      type: "RELEASE"
+    }).then(() => {
+      closeEndPoint(ep);
+    });
+  }
+  var proxyCounter = /* @__PURE__ */ new WeakMap();
+  var proxyFinalizers = "FinalizationRegistry" in globalThis && new FinalizationRegistry((ep) => {
+    const newCount = (proxyCounter.get(ep) || 0) - 1;
+    proxyCounter.set(ep, newCount);
+    if (newCount === 0) {
+      releaseEndpoint(ep);
+    }
+  });
+  function registerProxy(proxy2, ep) {
+    const newCount = (proxyCounter.get(ep) || 0) + 1;
+    proxyCounter.set(ep, newCount);
+    if (proxyFinalizers) {
+      proxyFinalizers.register(proxy2, ep, proxy2);
+    }
+  }
+  function unregisterProxy(proxy2) {
+    if (proxyFinalizers) {
+      proxyFinalizers.unregister(proxy2);
+    }
+  }
+  function createProxy(ep, pendingListeners, path = [], target = function() {
+  }) {
+    let isProxyReleased = false;
+    const proxy2 = new Proxy(target, {
+      get(_target, prop) {
+        throwIfProxyReleased(isProxyReleased);
+        if (prop === releaseProxy) {
+          return () => {
+            unregisterProxy(proxy2);
+            releaseEndpoint(ep);
+            pendingListeners.clear();
+            isProxyReleased = true;
+          };
+        }
+        if (prop === "then") {
+          if (path.length === 0) {
+            return { then: () => proxy2 };
+          }
+          const r = requestResponseMessage(ep, pendingListeners, {
+            type: "GET",
+            path: path.map((p) => p.toString())
+          }).then(fromWireValue);
+          return r.then.bind(r);
+        }
+        return createProxy(ep, pendingListeners, [...path, prop]);
+      },
+      set(_target, prop, rawValue) {
+        throwIfProxyReleased(isProxyReleased);
+        const [value, transferables] = toWireValue(rawValue);
+        return requestResponseMessage(ep, pendingListeners, {
+          type: "SET",
+          path: [...path, prop].map((p) => p.toString()),
+          value
+        }, transferables).then(fromWireValue);
+      },
+      apply(_target, _thisArg, rawArgumentList) {
+        throwIfProxyReleased(isProxyReleased);
+        const last = path[path.length - 1];
+        if (last === createEndpoint) {
+          return requestResponseMessage(ep, pendingListeners, {
+            type: "ENDPOINT"
+          }).then(fromWireValue);
+        }
+        if (last === "bind") {
+          return createProxy(ep, pendingListeners, path.slice(0, -1));
+        }
+        const [argumentList, transferables] = processArguments(rawArgumentList);
+        return requestResponseMessage(ep, pendingListeners, {
+          type: "APPLY",
+          path: path.map((p) => p.toString()),
+          argumentList
+        }, transferables).then(fromWireValue);
+      },
+      construct(_target, rawArgumentList) {
+        throwIfProxyReleased(isProxyReleased);
+        const [argumentList, transferables] = processArguments(rawArgumentList);
+        return requestResponseMessage(ep, pendingListeners, {
+          type: "CONSTRUCT",
+          path: path.map((p) => p.toString()),
+          argumentList
+        }, transferables).then(fromWireValue);
+      }
+    });
+    registerProxy(proxy2, ep);
+    return proxy2;
+  }
+  function myFlat(arr) {
+    return Array.prototype.concat.apply([], arr);
+  }
+  function processArguments(argumentList) {
+    const processed = argumentList.map(toWireValue);
+    return [processed.map((v) => v[0]), myFlat(processed.map((v) => v[1]))];
+  }
+  var transferCache = /* @__PURE__ */ new WeakMap();
+  function transfer(obj, transfers) {
+    transferCache.set(obj, transfers);
+    return obj;
+  }
+  function proxy(obj) {
+    return Object.assign(obj, { [proxyMarker]: true });
+  }
+  function toWireValue(value) {
+    for (const [name, handler] of transferHandlers) {
+      if (handler.canHandle(value)) {
+        const [serializedValue, transferables] = handler.serialize(value);
+        return [
+          {
+            type: "HANDLER",
+            name,
+            value: serializedValue
+          },
+          transferables
+        ];
+      }
+    }
+    return [
+      {
+        type: "RAW",
+        value
+      },
+      transferCache.get(value) || []
+    ];
+  }
+  function fromWireValue(value) {
+    switch (value.type) {
+      case "HANDLER":
+        return transferHandlers.get(value.name).deserialize(value.value);
+      case "RAW":
+        return value.value;
+    }
+  }
+  function requestResponseMessage(ep, pendingListeners, msg, transfers) {
+    return new Promise((resolve) => {
+      const id2 = generateUUID();
+      pendingListeners.set(id2, resolve);
+      if (ep.start) {
+        ep.start();
+      }
+      ep.postMessage(Object.assign({ id: id2 }, msg), transfers);
+    });
+  }
+  function generateUUID() {
+    return new Array(4).fill(0).map(() => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16)).join("-");
   }
 
   // source/setup.ts
+  var localConfigKey = "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
   function handleAsyncError(reason) {
     console.error("An error occurred during asynchronous processing:", reason);
   }
@@ -8294,76 +16185,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }, options);
   }
-  async function processGcsRequest(page, queries, response, signal) {
-    if (response.captcha || !response.result.success) return;
-    const bounds = new google.maps.LatLngBounds(queries.sw, queries.ne);
-    const pois = [];
-    for (const cellData of response.result.data) {
-      pois.push(...cellData.pois);
-    }
-    performance.mark("start save");
-    await updateRecordsOfReceivedPois(
-      page.records,
-      pois,
-      bounds,
-      Date.now(),
-      signal
-    );
-    performance.mark("end save");
-    page.events.dispatchEvent(createTypedCustomEvent("gcs-saved", void 0));
-    performance.measure("parse", "start json parse", "end json parse");
-    performance.measure("save", "start save", "end save");
-    performance.measure(
-      "nearly cells calculation",
-      "begin nearly cells calculation",
-      "end nearly cells calculation"
-    );
-    performance.measure(
-      "remove deleted pois",
-      "begin remove deleted pois",
-      "begin remove deleted pois"
-    );
-    performance.measure(
-      "update cells",
-      "begin update cells",
-      "end update cells"
-    );
-    performance.measure("update pois", "begin update pois", "end update pois");
-  }
-  function parseQueryFromUrl(urlObj) {
-    const q = {};
-    urlObj.searchParams.forEach((v, k) => {
-      q[k] = v;
+  function setupWorkerRecorder(events) {
+    const mainApi = {
+      dispatchEvent(type, data) {
+        events.dispatchEvent(createTypedCustomEvent(type, data));
+      }
+    };
+    const recordsWorker = new Worker2();
+    expose(mainApi, recordsWorker);
+    const workerApi = wrap2(recordsWorker);
+    injectGcsListener((url2, responseText) => {
+      events.dispatchEvent(createTypedCustomEvent("gcs-received", void 0));
+      workerApi.onGcsReceived(url2.toString(), responseText).catch(handleAsyncError);
     });
-    return q;
   }
   async function asyncSetup(signal) {
     await awaitElement(() => document.querySelector("#wfmapmods-side-panel"), {
       signal
     });
     const map2 = await getGMapObject({ signal });
+    const local = createConfigAccessor(localConfigKey);
+    const events = createTypedEventTarget();
     const page = {
-      map: map2,
       records: await openRecords(),
+      map: map2,
       defaultAsyncErrorHandler: handleAsyncError,
       overlay: createPoisOverlay(map2),
-      events: createTypedEventTarget()
+      events,
+      local,
+      drafts: createDraftsOverlay(map2, handleAsyncError)
     };
-    const gcsQueue = createAsyncQueue(async (items) => {
-      for (const { url: url2, responseText } of items) {
-        performance.mark("start json parse");
-        const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url2));
-        const response = GcsResponseSchema.parse(
-          JSON.parse(responseText)
-        );
-        performance.mark("end json parse");
-        await processGcsRequest(page, queries, response, signal);
-      }
-    }, handleAsyncError);
-    injectGcsListener((url2, responseText) => {
-      gcsQueue.push({ url: url2, responseText });
-    });
+    setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
+    await setupDraftsOverlay(page.drafts, local);
   }
   function setup() {
     const cancel = new AbortController();
@@ -8376,3 +16230,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     setup();
   })();
 })();
+/*! Bundled license information:
+
+comlink/dist/esm/comlink.mjs:
+  (**
+   * @license
+   * Copyright 2019 Google LLC
+   * SPDX-License-Identifier: Apache-2.0
+   *)
+*/
