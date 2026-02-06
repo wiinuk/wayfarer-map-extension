@@ -13,6 +13,7 @@ import type { LatLng } from "./s2";
 import type { PageResource } from "./setup";
 import { createAsyncCancelScope } from "./standard-extensions";
 import type { Cell, Cell14Id, CellId } from "./typed-s2cell";
+import * as Bounds from "./bounds";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -259,7 +260,7 @@ async function renderPoiAndCells(
         return;
     }
 
-    const nearlyCell14s = getNearlyCellsForBounds(bounds, 14);
+    const nearlyCell14s = getNearlyCellsForBounds(Bounds.fromClass(bounds), 14);
     nearlyCell14s.sort(
         (a, b) =>
             distanceSquared(center, a.getLatLng()) -
