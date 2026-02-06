@@ -10,6 +10,7 @@
     "chokidar": "^3.6.0",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
+    "fast-check": "^4.5.3",
     "gas-drivetunnel": "github:wiinuk/gas-drivetunnel#d3c576328adf7cb180c7623893d3ac65f28097d1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
