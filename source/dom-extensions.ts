@@ -1,3 +1,5 @@
+import { isWebWorker } from "./environments";
+
 export function addNavigateListener(onHistoryChanged: () => void) {
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
@@ -21,7 +23,7 @@ export interface Scheduler {
     yield(): Promise<void> | null;
 }
 
-export function createScheduler(
+function createSchedulerByAnimationFrame(
     signal: AbortSignal,
     thresholdMs = 10,
 ): Scheduler {
@@ -54,4 +56,18 @@ export function createScheduler(
             });
         },
     };
+}
+
+function createWorkerScheduler(): Scheduler {
+    return {
+        isYieldRequested: false,
+        yield() {
+            return null;
+        },
+    };
+}
+
+export function createScheduler(signal: AbortSignal, thresholdMs = 10) {
+    if (isWebWorker()) return createWorkerScheduler();
+    return createSchedulerByAnimationFrame(signal, thresholdMs);
 }

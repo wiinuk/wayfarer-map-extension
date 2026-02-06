@@ -54,7 +54,7 @@ export function openDatabase<TSchema extends DatabaseSchemaKind>(
     databaseSchema: TSchema,
 ) {
     return new Promise<Database<TSchema>>((resolve, reject) => {
-        const request = window.indexedDB.open(databaseName, databaseVersion);
+        const request = indexedDB.open(databaseName, databaseVersion);
         request.addEventListener("upgradeneeded", () =>
             defineDatabase(request.result, databaseSchema),
         );
