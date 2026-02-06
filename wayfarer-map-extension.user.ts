@@ -10,7 +10,4 @@
 
 import { setup } from "./source/setup";
 
-(function () {
-    "use strict";
-    setup();
-})();
+setup();
