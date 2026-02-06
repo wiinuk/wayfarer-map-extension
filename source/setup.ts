@@ -1,18 +1,5 @@
-// spell-checker: ignore wfmapmods pois
-import { createAsyncQueue, type AsyncQueue } from "./async-queue";
+// spell-checker: ignore wfmapmods pois Comlink
 import { injectGcsListener } from "./gcs";
-import {
-    GcsQueriesSchema,
-    GcsResponseSchema,
-    type GcsQueries,
-    type GcsResponse,
-    type Poi,
-} from "./gcs-schema";
-import {
-    openRecords,
-    updateRecordsOfReceivedPois,
-    type PoiRecords,
-} from "./poi-records";
 import {
     createPoisOverlay,
     setupPoiRecordOverlay,
@@ -22,7 +9,6 @@ import { awaitElement } from "./standard-extensions";
 import {
     createTypedCustomEvent,
     createTypedEventTarget,
-    type TypedEventTarget,
 } from "./typed-event-target";
 import { createConfigAccessor, type LocalConfigAccessor } from "./local-config";
 import {
@@ -30,6 +16,11 @@ import {
     setupDraftsOverlay,
     type DraftsOverlay,
 } from "./drafts-overlay";
+//@ts-expect-error worker
+import PoiRecordsWorker from "./poi-records.worker";
+import type { PageEventMap, PageEventTarget } from "./page-events";
+import * as Comlink from "comlink";
+import { openRecords, type PoiRecords } from "./poi-records";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -53,69 +44,41 @@ async function getGMapObject(options: {
     }, options);
 }
 
-interface PageEventMap {
-    "gcs-saved": undefined;
-}
 export interface PageResource {
+    readonly records: PoiRecords;
     readonly overlay: PoisOverlay;
     readonly defaultAsyncErrorHandler: (reason: unknown) => void;
     readonly map: google.maps.Map;
-    readonly records: PoiRecords;
-    readonly events: TypedEventTarget<PageEventMap>;
+    readonly events: PageEventTarget;
     readonly local: LocalConfigAccessor;
     readonly drafts: DraftsOverlay;
 }
-async function processGcsRequest(
-    page: PageResource,
-    queries: GcsQueries,
-    response: GcsResponse,
-    signal: AbortSignal,
-) {
-    if (response.captcha || !response.result.success) return;
 
-    const bounds = new google.maps.LatLngBounds(queries.sw, queries.ne);
-    const pois: Poi[] = [];
-    for (const cellData of response.result.data) {
-        pois.push(...cellData.pois);
-    }
-    performance.mark("start save");
-    await updateRecordsOfReceivedPois(
-        page.records,
-        pois,
-        bounds,
-        Date.now(),
-        signal,
-    );
-    performance.mark("end save");
-    page.events.dispatchEvent(createTypedCustomEvent("gcs-saved", undefined));
+export type MainApi = {
+    dispatchEvent<K extends keyof PageEventMap>(
+        type: K,
+        data: PageEventMap[K],
+    ): void;
+};
 
-    performance.measure("parse", "start json parse", "end json parse");
-    performance.measure("save", "start save", "end save");
+function setupWorkerRecorder(events: PageEventTarget) {
+    const mainApi: MainApi = {
+        dispatchEvent(type, data) {
+            events.dispatchEvent(createTypedCustomEvent(type, data));
+        },
+    };
+    const recordsWorker = new PoiRecordsWorker();
+    Comlink.expose(mainApi, recordsWorker);
 
-    performance.measure(
-        "nearly cells calculation",
-        "begin nearly cells calculation",
-        "end nearly cells calculation",
-    );
-    performance.measure(
-        "remove deleted pois",
-        "begin remove deleted pois",
-        "begin remove deleted pois",
-    );
-    performance.measure(
-        "update cells",
-        "begin update cells",
-        "end update cells",
-    );
-    performance.measure("update pois", "begin update pois", "end update pois");
-}
+    const workerApi =
+        Comlink.wrap<import("./poi-records.worker").WorkerApi>(recordsWorker);
 
-function parseQueryFromUrl(urlObj: URL) {
-    const q: Record<string, string> = {};
-    urlObj.searchParams.forEach((v, k) => {
-        q[k] = v;
+    injectGcsListener((url, responseText) => {
+        events.dispatchEvent(createTypedCustomEvent("gcs-received", undefined));
+        workerApi
+            .onGcsReceived(url.toString(), responseText)
+            .catch(handleAsyncError);
     });
-    return q;
 }
 
 async function asyncSetup(signal: AbortSignal) {
@@ -125,33 +88,18 @@ async function asyncSetup(signal: AbortSignal) {
 
     const map = await getGMapObject({ signal });
     const local = createConfigAccessor(localConfigKey);
+    const events = createTypedEventTarget<PageEventMap>();
     const page: PageResource = {
-        map,
         records: await openRecords(),
+        map,
         defaultAsyncErrorHandler: handleAsyncError,
         overlay: createPoisOverlay(map),
-        events: createTypedEventTarget(),
+        events,
         local,
         drafts: createDraftsOverlay(map, handleAsyncError),
     };
 
-    const gcsQueue: AsyncQueue<{ url: URL; responseText: string }> =
-        createAsyncQueue(async (items) => {
-            for (const { url, responseText } of items) {
-                performance.mark("start json parse");
-                const queries = GcsQueriesSchema.parse(parseQueryFromUrl(url));
-                const response = GcsResponseSchema.parse(
-                    JSON.parse(responseText),
-                );
-                performance.mark("end json parse");
-                await processGcsRequest(page, queries, response, signal);
-            }
-        }, handleAsyncError);
-
-    injectGcsListener((url, responseText) => {
-        gcsQueue.push({ url, responseText });
-    });
-
+    setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
     await setupDraftsOverlay(page.drafts, local);
 }
