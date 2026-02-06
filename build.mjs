@@ -3,6 +3,7 @@ import * as esbuild from "esbuild";
 import * as fs from "fs/promises";
 import { exec } from "child_process";
 import path from "path";
+import workerPlugin from "esbuild-plugin-inline-worker";
 import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
 
 const mainFile = "./wayfarer-map-extension.user.ts";
@@ -80,11 +81,14 @@ async function build() {
     const baseOptions = {
         entryPoints: [mainFile],
         bundle: true,
-        outfile: changeExt(mainFile, debugMode || watchMode ? ".debug.js" : ".js"),
+        outfile: changeExt(
+            mainFile,
+            debugMode || watchMode ? ".debug.js" : ".js",
+        ),
         banner: { js: banner },
         footer: debugMode ? { js: clientSnippet } : undefined,
         sourcemap: debugMode ? "inline" : false,
-        plugins: [TypedCssModulePlugin()],
+        plugins: [TypedCssModulePlugin(), workerPlugin()],
     };
 
     if (watchMode) {
