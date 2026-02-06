@@ -7,11 +7,17 @@ export interface S2Namespace {
 }
 export type LatLng = google.maps.LatLngLiteral;
 export interface S2CellNamespace {
+    FromHilbertQuadKey: (hilbertQuadkey: string) => S2Cell;
     FromLatLng: (latLng: LatLng, level: number) => S2Cell;
 }
 export interface S2Cell {
-    getNeighbors: () => readonly S2Cell[];
+    getNeighbors: () => S2Cell[];
     getCornerLatLngs: () => LatLng[];
+    getLatLng: () => LatLng;
+    toHilbertQuadkey(): string;
+    readonly face: number;
+    readonly ij: readonly [i: number, j: number];
+    readonly level: number;
 }
 
 function exposeS2Module(exports: any) {

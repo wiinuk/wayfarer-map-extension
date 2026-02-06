@@ -1,7 +1,12 @@
 import { S2, type LatLng, type S2Cell } from "./s2";
 
 function cellVsBounds(cell: S2Cell, bounds: google.maps.LatLngBounds) {
-    const cellCorners = cell.getCornerLatLngs();
+    const cellCorners = cell.getCornerLatLngs() as [
+        LatLng,
+        LatLng,
+        LatLng,
+        LatLng,
+    ];
 
     // セルの角が Bounds に含まれているか
     for (const cellCorner of cellCorners) {
@@ -12,7 +17,7 @@ function cellVsBounds(cell: S2Cell, bounds: google.maps.LatLngBounds) {
 }
 
 function cellVsBoundsRest(
-    cellCorners: readonly LatLng[],
+    cellCorners: readonly [LatLng, LatLng, LatLng, LatLng],
     bounds: google.maps.LatLngBounds,
 ) {
     // セルの角を含む外接矩形に含まれなければ交差しない
@@ -30,7 +35,7 @@ function cellVsBoundsRest(
         ne,
         new google.maps.LatLng(sw.lat(), ne.lng()), // 北西
         new google.maps.LatLng(ne.lat(), sw.lng()), // 南東
-    ];
+    ] as const;
     for (const corner of boundsCorners) {
         if (pointVsPolygon(corner, cellCorners)) return true;
     }
@@ -41,13 +46,13 @@ function cellVsBoundsRest(
         [boundsCorners[3], boundsCorners[1]], // 東辺
         [boundsCorners[1], boundsCorners[2]], // 北辺
         [boundsCorners[2], boundsCorners[0]], // 西辺
-    ];
+    ] as const;
     const cellEdges = [
         [cellCorners[0], cellCorners[1]],
         [cellCorners[1], cellCorners[2]],
         [cellCorners[2], cellCorners[3]],
         [cellCorners[3], cellCorners[0]],
-    ];
+    ] as const;
     for (const [boundsEdgePoint1, boundsEdgePoint2] of boundsEdges) {
         for (const cellEdge of cellEdges) {
             if (
@@ -77,10 +82,10 @@ function pointVsPolygon(point: google.maps.LatLng, polygon: readonly LatLng[]) {
     const y = point.lat();
 
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i].lng,
-            yi = polygon[i].lat;
-        const xj = polygon[j].lng,
-            yj = polygon[j].lat;
+        const xi = polygon[i]!.lng,
+            yi = polygon[i]!.lat;
+        const xj = polygon[j]!.lng,
+            yj = polygon[j]!.lat;
 
         const intersect =
             yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
