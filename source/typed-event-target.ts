@@ -1,3 +1,5 @@
+import type { Flatten, Tagged } from "./standard-extensions";
+
 export interface TypedCustomEvent<TType, TDetail> extends Omit<
     CustomEvent<TDetail>,
     "type"
@@ -31,3 +33,22 @@ export function createTypedCustomEvent<TType extends string, TDetail>(
         TDetail
     >;
 }
+
+export type EventDefinitionKind = readonly Tagged<string, unknown>[];
+
+type UnwrapTag<TTag extends Tagged<unknown, unknown>> =
+    TTag extends Tagged<infer t, infer _> ? t : never;
+
+export type DefinitionToTypes<Def extends EventDefinitionKind> = {
+    [i in keyof Def]: UnwrapTag<Def[i]>;
+};
+
+export type DefinitionToMap<
+    Def extends EventDefinitionKind,
+    TMap = Record<never, never>,
+> = Def extends readonly [
+    Tagged<infer type extends string, infer detail>,
+    ...infer def extends EventDefinitionKind,
+]
+    ? DefinitionToMap<def, TMap & { readonly [k in type]: detail }>
+    : Flatten<TMap>;

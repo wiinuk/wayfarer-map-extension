@@ -18,6 +18,10 @@ export function withTag<E, M>(value: E) {
     return value as unknown as Tagged<E, M>;
 }
 
+export type Flatten<T> = {
+    [K in keyof T]: T[K];
+} & {};
+
 // 要素が出現するまで待機するユーティリティ
 export async function awaitElement<T>(
     get: () => T,
