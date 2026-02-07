@@ -15,7 +15,9 @@
     "jsxImportSource": "document-jsx",
     "paths": {
       "document-jsx/*": ["./source/document-jsx/*"]
-    }
+    },
+
+    "resolveJsonModule": true
   },
   "exclude": ["node_modules", "**/.private/"],
   "include": [
