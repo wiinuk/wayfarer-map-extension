@@ -1,0 +1,112 @@
+.dialog {
+    --initial-height: min(300px, 50%);
+    --initial-width: min(400px, 80%);
+
+    position: fixed;
+    top: var(--drag-top, calc(100% - var(--initial-height)));
+    left: var(--drag-left, calc(100% - var(--initial-width)));
+    height: var(--initial-height);
+    width: var(--initial-width);
+
+    --foreground-color: var(--external-foreground-color, darkgray);
+    --background-color: var(--external-background-color, aliceblue);
+
+    color: var(--foreground-color);
+    background: var(--background-color);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+
+    overflow: auto;
+    resize: both;
+    display: flex;
+    flex-direction: column;
+}
+
+.dialog.maximized {
+    /* resize: both によってブラウザによって設定されたインラインスタイルを上書きするため */
+    width: 100% !important;
+    height: 100% !important;
+    left: 0;
+    top: 0;
+    resize: none;
+}
+
+.dialog.minimized {
+    resize: none;
+
+    /* resize: both によってブラウザによって設定されたインラインスタイルを上書きするため */
+    width: auto !important;
+    height: auto !important;
+}
+
+.titlebar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    align-content: center;
+    user-select: none;
+    touch-action: none;
+
+    padding: 0.3em;
+}
+
+.titlebar-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+}
+
+.titlebar-title {
+    display: flex;
+    justify-content: center;
+    flex-grow: 1;
+
+    cursor: move;
+}
+
+.titlebar-right-controls {
+    display: flex;
+    align-items: center;
+}
+
+.titlebar-button {
+    color: var(--foreground-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 12px;
+}
+
+.titlebar-button::before {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+}
+
+.maximize-toggle-button::before {
+    content: "□";
+}
+
+.maximized .maximize-toggle-button::before {
+    content: "❐";
+}
+
+.minimize-toggle-button::before {
+    content: "＿";
+}
+
+.minimized .minimize-toggle-button::before {
+    content: "❐";
+}
+
+.minimized .titlebar-button:not(.minimize-toggle-button) {
+    display: none;
+}
+
+.inner-container {
+    flex-grow: 1;
+    overflow: auto;
+}
+
+.minimized .inner-container {
+    display: none;
+}
