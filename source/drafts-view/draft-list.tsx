@@ -53,15 +53,14 @@ export function createDraftList({
     );
 
     const detailPane = (
-        <div class={classNames["detail-pane"]}>
-            {detailName}
+        <details class={classNames["detail-pane"]} open={true}>
+            <summary class={classNames["detail-summary"]}>{detailName}</summary>
             {detailDescription}
             {detailNote}
             {detailCoordinates}
             {mapButton}
-        </div>
+        </details>
     );
-
     const container = (
         <div class={classNames["container"]}>
             {searchInput}
