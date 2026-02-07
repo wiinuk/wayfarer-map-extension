@@ -5,7 +5,7 @@ import {
     createTypedEventTarget,
     type TypedCustomEvent,
 } from "./typed-event-target";
-import type { PageEventMap } from "./page-events";
+import { pageEventTypes, type PageEventMap } from "./page-events";
 
 export interface WorkerApi {
     hello(message: string): string;
@@ -28,7 +28,7 @@ async function setup() {
         >,
     ) => mainAPI.dispatchEvent(e.type, e.detail);
 
-    (["gcs-received", "gcs-saved"] as const).forEach((type) =>
+    pageEventTypes.forEach((type) =>
         events.addEventListener(type, transferEvent),
     );
 
