@@ -30,6 +30,23 @@ async function runEslint() {
     });
 }
 
+async function runTsc() {
+    console.log("[tsc] Running TypeScript compiler...");
+    return new Promise((resolve) => {
+        exec("tsc --noEmit", (error, stdout, stderr) => {
+            if (stdout) console.log(stdout);
+            if (stderr) console.error(stderr);
+            if (error) {
+                console.error("[tsc] TypeScript found errors!");
+                resolve(false);
+            } else {
+                console.log("[tsc] TypeScript passed.");
+                resolve(true);
+            }
+        });
+    });
+}
+
 async function startWsServer() {
     try {
         const { WebSocketServer } = await import("ws");
@@ -111,6 +128,11 @@ async function build() {
                         console.error("Build aborted due to linting errors.");
                         return;
                     }
+                    const tscPassed = await runTsc();
+                    if (!tscPassed) {
+                        console.error("Build aborted due to TypeScript errors.");
+                        return;
+                    }
                 }
 
                 await esbuild.build(baseOptions);
@@ -148,6 +170,11 @@ async function build() {
         const lintPassed = await runEslint();
         if (!lintPassed) {
             console.error("Build aborted due to linting errors.");
+            process.exit(1);
+        }
+        const tscPassed = await runTsc();
+        if (!tscPassed) {
+            console.error("Build aborted due to TypeScript errors.");
             process.exit(1);
         }
         await esbuild.build(baseOptions);
