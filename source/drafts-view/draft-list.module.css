@@ -29,9 +29,19 @@
 }
 
 .item {
-    padding: 8px;
+    display: flex;
+    align-items: center;
+    padding: 4px;
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
+    -webkit-user-select: none;
+    /* Safari */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* IE 10+ */
+    user-select: none;
+    /* Standard */
 }
 
 .item:last-child {
@@ -43,16 +53,29 @@
     color: var(--selected-text-color);
 }
 
-.item-name {
-    font-weight: bold;
+.item.selected .item-note {
+    color: var(--selected-text-color);
 }
 
-.item-description {
-    font-size: 0.9em;
+.item-name {
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+.item-note {
+    font-size: 0.8em;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.item-content {
+    display: flex;
+    flex-grow: 1;
+    min-width: 0;
+    align-items: center;
 }
 
 .detail-pane {
@@ -104,6 +127,8 @@
     margin-bottom: 4px;
     margin-top: 0;
     padding: 0 16px;
+    word-wrap: break-word;
+    word-break: break-word;
 }
 
 .map-button {

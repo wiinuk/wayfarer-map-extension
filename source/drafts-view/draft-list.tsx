@@ -100,7 +100,7 @@ export function createDraftList({
 
     const updateVirtualList = () => {
         const virtualElements: VirtualElements = {
-            itemHeight: 60,
+            itemHeight: 40,
             count: filteredDrafts.length,
             get: (index: number) => {
                 const draft = filteredDrafts[index];
@@ -116,11 +116,14 @@ export function createDraftList({
                 nameDiv.className = classNames["item-name"];
                 nameDiv.textContent = draft.name;
 
-                const descriptionDiv = document.createElement("div");
-                descriptionDiv.className = classNames["item-description"];
-                descriptionDiv.textContent = draft.description;
+                const noteDiv = document.createElement("div");
+                noteDiv.className = classNames["item-note"];
+                noteDiv.textContent = draft.note;
 
-                item.append(nameDiv, descriptionDiv);
+                const contentDiv = document.createElement("div");
+                contentDiv.className = classNames["item-content"];
+                contentDiv.append(nameDiv, noteDiv);
+                item.append(contentDiv);
 
                 item.addEventListener("click", () => {
                     selectedDraft = draft;
