@@ -16,8 +16,7 @@ import {
     setupDraftsOverlay,
     type DraftsOverlay,
 } from "./drafts-overlay";
-//@ts-expect-error worker
-import PoiRecordsWorker from "./poi-records.worker";
+import PoiRecordsWorker from "./poi-records.worker.ts?worker";
 import type { PageEventMap, PageEventTarget } from "./page-events";
 import * as Comlink from "comlink";
 import { openRecords, type PoiRecords } from "./poi-records";
