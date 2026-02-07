@@ -23,6 +23,7 @@ import { openRecords, type PoiRecords } from "./poi-records";
 import { createDialog } from "./drafts-view/dialog";
 import { createDraftList } from "./drafts-view/draft-list";
 import jaDictionary from "./locales/ja.json";
+import { createRemote, type Remote } from "./remote";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -50,6 +51,7 @@ const defaultDictionary = jaDictionary satisfies Record<string, string>;
 type Dictionary = typeof defaultDictionary;
 export interface PageResource {
     readonly records: PoiRecords;
+    readonly remote: Remote;
     readonly styleElement: HTMLStyleElement;
     readonly overlay: PoisOverlay;
     readonly defaultAsyncErrorHandler: (reason: unknown) => void;
@@ -133,6 +135,7 @@ async function asyncSetup(signal: AbortSignal) {
     );
     const page: PageResource = {
         records: await openRecords(),
+        remote: createRemote(handleAsyncError, 2000),
         styleElement: document.createElement("style"),
         map,
         defaultAsyncErrorHandler: handleAsyncError,

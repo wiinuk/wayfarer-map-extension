@@ -319,7 +319,7 @@ export async function setupDraftsOverlay(
 
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
-        const { routes } = await remote.getRoutes(
+        const { routes } = await remote.getDrafts(
             {
                 "user-id": userId,
             },
