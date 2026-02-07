@@ -89,11 +89,17 @@ export interface DraftsOverlay {
     readonly asyncRouteListUpdateScope: (
         scope: (signal: AbortSignal) => Promise<void>,
     ) => void;
+    updateList?: (newDrafts: Draft[]) => void;
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
-    // overlay.asyncRouteListUpdateScope((signal) => {
-    //     return updateRouteListElementAsync(overlay, scheduler, signal);
-    // });
+    overlay.asyncRouteListUpdateScope(async (_signal) => {
+        if (overlay.updateList) {
+            const currentDrafts = Array.from(overlay.drafts.values()).map(
+                (view) => view.draft,
+            );
+            overlay.updateList(currentDrafts);
+        }
+    });
 }
 
 function getPosition(draft: Draft) {

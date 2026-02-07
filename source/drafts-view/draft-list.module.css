@@ -1,0 +1,90 @@
+:root {
+    --border-color: #ccc;
+    --selected-background-color: #007bff;
+    --selected-text-color: #fff;
+    --text-muted: #666;
+    --background-color-light: #f8f9fa;
+    --primary-color: #007bff;
+    --primary-color-dark: #0056b3;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.search-input {
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.list-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.item {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.item:last-child {
+    border-bottom: none;
+}
+
+.item.selected {
+    background-color: var(--selected-background-color);
+    color: var(--selected-text-color);
+}
+
+.item-name {
+    font-weight: bold;
+}
+
+.item-description {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.detail-pane {
+    padding: 16px;
+    margin-top: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-color-light);
+}
+
+.detail-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.detail-description,
+.detail-note,
+.detail-coordinates {
+    margin-bottom: 4px;
+}
+
+.map-button {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.map-button:hover {
+    background-color: var(--primary-color-dark);
+}

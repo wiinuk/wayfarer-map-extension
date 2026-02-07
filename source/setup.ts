@@ -21,6 +21,7 @@ import type { PageEventMap, PageEventTarget } from "./page-events";
 import * as Comlink from "comlink";
 import { openRecords, type PoiRecords } from "./poi-records";
 import { createDialog } from "./drafts-view/dialog";
+import { createDraftList } from "./drafts-view/draft-list";
 import jaDictionary from "./locales/ja.json";
 
 const localConfigKey =
@@ -98,18 +99,23 @@ function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
     );
 }
 function setupDraftManagerWindow(page: PageResource) {
-    const div = document.createElement("div");
-    div.innerText = "DRAFTS";
-    const drafts = createDialog(div, {
+    const draftList = createDraftList({
+        overlay: page.drafts,
+    });
+
+    const drafts = createDialog(draftList.element, {
         title: getDictionaryEntry(page, "draftsTitle"),
     });
     drafts.show();
     setStyle(page, drafts.cssText);
+    setStyle(page, draftList.cssText);
     document.body.append(drafts.element);
 
     page.events.addEventListener("config-changed", () => {
         drafts.setTitle(getDictionaryEntry(page, "draftsTitle"));
     });
+
+    page.drafts.updateList = draftList.updateDrafts;
 }
 
 async function asyncSetup(signal: AbortSignal) {
