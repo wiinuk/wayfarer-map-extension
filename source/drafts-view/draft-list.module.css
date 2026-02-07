@@ -31,17 +31,15 @@
 .item {
     display: flex;
     align-items: center;
+    flex-grow: 1;
+    min-width: 0;
     padding: 4px;
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     -webkit-user-select: none;
-    /* Safari */
     -moz-user-select: none;
-    /* Firefox */
     -ms-user-select: none;
-    /* IE 10+ */
     user-select: none;
-    /* Standard */
 }
 
 .item:last-child {
@@ -71,12 +69,7 @@
     text-overflow: ellipsis;
 }
 
-.item-content {
-    display: flex;
-    flex-grow: 1;
-    min-width: 0;
-    align-items: center;
-}
+
 
 .detail-pane {
     margin-top: 8px;
@@ -126,9 +119,13 @@
 .detail-coordinates {
     margin-bottom: 4px;
     margin-top: 0;
-    padding: 0 16px;
-    word-wrap: break-word;
-    word-break: break-word;
+    padding: 0 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.detail-content-wrapper {
+    padding: 0 16px 16px 16px;
 }
 
 .map-button {
@@ -146,4 +143,8 @@
 
 .map-button:hover {
     background-color: var(--primary-color-dark);
+}
+
+.input-error {
+    border: 1px solid red;
 }

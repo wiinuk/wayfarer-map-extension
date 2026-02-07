@@ -90,6 +90,8 @@ export interface DraftsOverlay {
         scope: (signal: AbortSignal) => Promise<void>,
     ) => void;
     updateList?: (newDrafts: Draft[]) => void;
+    updateDraftTitle(draft: Draft): void;
+    updateDraftCoordinates(draft: Draft): void;
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
     overlay.asyncRouteListUpdateScope(async (_signal) => {
@@ -307,6 +309,25 @@ export function createDraftsOverlay(
         addedMapViews: new Set(),
         asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
         asyncRenderDraftsInMapScope: createAsyncCancelScope(asyncErrorHandler),
+        updateDraftTitle(draft: Draft) {
+            const draftWithView = this.drafts.get(draft.id);
+            if (draftWithView) {
+                draftWithView.draft.name = draft.name;
+                draftWithView.mapView.marker.setLabel({
+                    ...draftWithView.mapView.label,
+                    text: draft.name,
+                });
+                notifyMapRangeChanged(this);
+            }
+        },
+        updateDraftCoordinates(this: DraftsOverlay, draft: Draft) {
+            const draftWithView = this.drafts.get(draft.id);
+            if (draftWithView) {
+                draftWithView.draft.coordinates = draft.coordinates;
+                draftWithView.mapView.marker.setPosition(getPosition(draft));
+                notifyMapRangeChanged(this);
+            }
+        },
     };
 }
 export async function setupDraftsOverlay(

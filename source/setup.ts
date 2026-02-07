@@ -103,6 +103,8 @@ function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
 function setupDraftManagerWindow(page: PageResource) {
     const draftList = createDraftList({
         overlay: page.drafts,
+        remote: page.remote,
+        local: page.local,
     });
 
     const drafts = createDialog(draftList.element, {
