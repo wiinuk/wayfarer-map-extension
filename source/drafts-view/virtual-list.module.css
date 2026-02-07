@@ -1,0 +1,20 @@
+.list-window {
+    height: 100%;
+    overflow: auto;
+}
+
+.list-spacer {
+    box-sizing: border-box;
+    height: var(--list-height);
+    padding-top: var(--list-offset-top);
+}
+
+.list {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+.item {
+    height: var(--item-height);
+}
