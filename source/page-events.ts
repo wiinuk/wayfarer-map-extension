@@ -9,6 +9,7 @@ function eventType<T, E>(type: T, _: Id<E>): Tagged<T, E> {
     return withTag(type);
 }
 const pageEventDefinition = [
+    eventType("config-changed", id<undefined>),
     eventType("gcs-received", id<undefined>),
     eventType("gcs-saved", id<undefined>),
 ] as const;

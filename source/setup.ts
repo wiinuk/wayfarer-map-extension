@@ -20,6 +20,11 @@ import PoiRecordsWorker from "./poi-records.worker.ts?worker";
 import type { PageEventMap, PageEventTarget } from "./page-events";
 import * as Comlink from "comlink";
 import { openRecords, type PoiRecords } from "./poi-records";
+import { createDialog } from "./drafts-view/dialog";
+import { createDraftList } from "./drafts-view/draft-list";
+import jaDictionary from "./locales/ja.json";
+import { createRemote, type Remote } from "./remote";
+import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -43,13 +48,18 @@ async function getGMapObject(options: {
     }, options);
 }
 
+const defaultDictionary = jaDictionary satisfies Record<string, string>;
+type Dictionary = typeof defaultDictionary;
 export interface PageResource {
     readonly records: PoiRecords;
+    readonly remote: Remote;
+    readonly styleElement: HTMLStyleElement;
     readonly overlay: PoisOverlay;
     readonly defaultAsyncErrorHandler: (reason: unknown) => void;
     readonly map: google.maps.Map;
     readonly events: PageEventTarget;
     readonly local: LocalConfigAccessor;
+    readonly defaultDictionary: Dictionary;
     readonly drafts: DraftsOverlay;
 }
 
@@ -80,26 +90,87 @@ function setupWorkerRecorder(events: PageEventTarget) {
     });
 }
 
+function setStyle(page: PageResource, cssText: string) {
+    page.styleElement.textContent += cssText + "\n";
+}
+
+function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
+    const lang = navigator.language;
+    return (
+        page.local.getConfig()?.dictionaries?.[lang]?.[key] ??
+        page.defaultDictionary[key]
+    );
+}
+function setupDraftManagerDialog(page: PageResource) {
+    const draftList = createDraftList({
+        overlay: page.drafts,
+        remote: page.remote,
+        local: page.local,
+    });
+
+    const title = createDraftsDialogTitle({
+        title: getDictionaryEntry(page, "draftsTitle"),
+    });
+    const drafts = createDialog(draftList.element, {
+        title: title.element,
+    });
+    drafts.show();
+    setStyle(page, title.cssText);
+    setStyle(page, drafts.cssText);
+    setStyle(page, draftList.cssText);
+    document.body.append(drafts.element);
+
+    draftList.events.addEventListener("count-changed", (e) => {
+        title.setCounts(e.detail);
+    });
+
+    let fetchCount = 0;
+    page.remote.events.addEventListener("fetch-start", () => {
+        fetchCount++;
+        title.setIsSaving(true);
+    });
+    page.remote.events.addEventListener("fetch-end", () => {
+        fetchCount--;
+        if (fetchCount <= 0) {
+            title.setIsSaving(false);
+        }
+    });
+
+    page.drafts.events.addEventListener("drafts-updated", (e) =>
+        draftList.setDrafts(e.detail),
+    );
+}
+
 async function asyncSetup(signal: AbortSignal) {
     await awaitElement(() => document.querySelector("#wfmapmods-side-panel"), {
         signal,
     });
 
     const map = await getGMapObject({ signal });
-    const local = createConfigAccessor(localConfigKey);
     const events = createTypedEventTarget<PageEventMap>();
+    const local = createConfigAccessor(localConfigKey);
+    local.addEventHandler("config-changed", () =>
+        events.dispatchEvent(
+            createTypedCustomEvent("config-changed", undefined),
+        ),
+    );
     const page: PageResource = {
         records: await openRecords(),
+        remote: createRemote(handleAsyncError, 2000),
+        styleElement: document.createElement("style"),
         map,
         defaultAsyncErrorHandler: handleAsyncError,
         overlay: createPoisOverlay(map),
         events,
         local,
         drafts: createDraftsOverlay(map, handleAsyncError),
+        defaultDictionary,
     };
+    document.head.appendChild(page.styleElement);
 
     setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
+    setupDraftManagerDialog(page);
     await setupDraftsOverlay(page.drafts, local);
 }
 

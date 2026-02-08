@@ -1,0 +1,218 @@
+:root {
+    --border-color: #ccc;
+    --selected-background-color: #2563eb;
+    --selected-text-color: #fff;
+    --text-muted: #666;
+    --background-color-light: #f8f9fa;
+    --primary-color: #2563eb;
+    --primary-color-dark: #0056b3;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.search-input {
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.list-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.item {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    min-width: 0;
+    padding: 4px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.item:last-child {
+    border-bottom: none;
+}
+
+.item.selected {
+    background-color: var(--selected-background-color);
+    color: var(--selected-text-color);
+}
+
+.item.selected .item-note {
+    color: var(--selected-text-color);
+}
+
+.item-name {
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+.item-note {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+
+.detail-pane {
+    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.detail-summary {
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 16px;
+}
+
+/* Webkitブラウザのデフォルトマーカーを非表示にする */
+.detail-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* 閉じたときのアイコン */
+.detail-summary::after {
+    content: "+";
+    font-size: 1.5em;
+    line-height: 1;
+    margin-left: 10px;
+}
+
+/* 開いたときのアイコン */
+.detail-pane[open]>.detail-summary::after {
+    content: "−";
+}
+
+.detail-name {
+    flex-grow: 1;
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.detail-description,
+.detail-note,
+.detail-coordinates {
+    margin-bottom: 4px;
+    margin-top: 0;
+    padding: 0 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.search-input,
+.detail-name,
+.detail-description,
+.detail-note,
+.detail-coordinates {
+    border: 1px solid;
+    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;
+
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+:is(.search-input,
+    .detail-name,
+    .detail-description,
+    .detail-note,
+    .detail-coordinates):focus {
+    border-color: revert;
+    background-color: revert;
+}
+
+.detail-content-wrapper {
+    padding: 0 16px 16px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.map-button {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.map-button:hover,
+.create-button:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.create-button {
+    margin-top: 8px;
+    /* Consistent with map-button's top margin */
+    padding: 8px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delete-button {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delete-button:hover {
+    background-color: #c82333;
+}
+
+.template-button {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.template-button:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.template-button.is-template {
+    background-color: #28a745;
+}
+
+.template-button.is-template:hover {
+    background-color: #218838;
+}
+
+.input-error {
+    border: 1px solid red;
+}

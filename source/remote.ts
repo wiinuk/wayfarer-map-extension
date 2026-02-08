@@ -7,8 +7,14 @@ import {
     type ErrorResponse,
     type Route,
 } from "gas-drivetunnel/source/schemas";
-import { newAbortError } from "./standard-extensions";
+import { newAbortError, sleep } from "./standard-extensions";
 import type { LatLng } from "./s2";
+import { createAsyncQueue } from "./async-queue";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
 interface FetchJsonpOptions {
     data?: Record<string, unknown>;
@@ -137,27 +143,84 @@ export interface Draft extends Omit<
     name: string;
 }
 
-export async function getRoutes(
+export async function getDrafts(
     parameter: z.infer<typeof interfaces.getRoutes.parameter>,
     options: RemoteOptions,
 ) {
     return await fetchGet(interfaces.getRoutes, parameter, options);
 }
-export async function setRoute(
-    parameter: z.infer<typeof interfaces.setRoute.parameter>,
-    options: RemoteOptions,
-) {
-    return await fetchGet(interfaces.setRoute, parameter, options);
+type SetParameter = z.infer<typeof interfaces.setRoute.parameter>;
+type DeleteParameter = z.infer<typeof interfaces.deleteRoute.parameter>;
+
+export interface RemoteEventMap {
+    "fetch-start": undefined;
+    "fetch-end": undefined;
 }
-export async function deleteRoute(
-    parameter: z.infer<typeof interfaces.deleteRoute.parameter>,
-    options: RemoteOptions,
-) {
-    return await fetchGet(interfaces.deleteRoute, parameter, options);
+export interface Remote {
+    events: TypedEventTarget<RemoteEventMap>;
+    set(parameter: SetParameter, rootUrl: string): void;
+    delete(parameter: DeleteParameter, rootUrl: string): void;
 }
-export async function clearRoutes(
-    parameter: z.infer<typeof interfaces.clearRoutes.parameter>,
-    options: RemoteOptions,
-) {
-    return await fetchGet(interfaces.clearRoutes, parameter, options);
+export function createRemote(
+    handleAsyncError: (reason: unknown) => void,
+    intervalMs: number,
+): Remote {
+    const events = createTypedEventTarget<RemoteEventMap>();
+    type Command =
+        | {
+              type: "set";
+              parameter: SetParameter;
+              rootUrl: string;
+          }
+        | {
+              type: "delete";
+              parameter: DeleteParameter;
+              rootUrl: string;
+          };
+
+    const queue = createAsyncQueue<Command>(
+        async (commands) => {
+            const map = new Map<string, Command>();
+            for (const command of commands) {
+                const id = command.parameter["route-id"];
+                map.set(id, command);
+            }
+            events.dispatchEvent(
+                createTypedCustomEvent("fetch-start", undefined),
+            );
+            try {
+                for (const command of map.values()) {
+                    const { type, parameter, rootUrl } = command;
+                    switch (type) {
+                        case "set":
+                            await fetchGet(interfaces.setRoute, parameter, {
+                                rootUrl,
+                            });
+                            break;
+                        case "delete":
+                            await fetchGet(interfaces.deleteRoute, parameter, {
+                                rootUrl,
+                            });
+                            break;
+                    }
+                    await sleep(intervalMs);
+                }
+            } finally {
+                events.dispatchEvent(
+                    createTypedCustomEvent("fetch-end", undefined),
+                );
+            }
+        },
+        handleAsyncError,
+        { batchSize: 100 },
+    );
+    return {
+        events,
+        set(parameter, rootUrl) {
+            queue.push({ type: "set", parameter, rootUrl });
+        },
+        delete(parameter, rootUrl) {
+            queue.push({ type: "delete", parameter, rootUrl });
+        },
+    };
 }

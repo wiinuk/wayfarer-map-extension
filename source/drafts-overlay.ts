@@ -6,6 +6,11 @@ import { createScheduler, type Scheduler } from "./dom-extensions";
 import type { LocalConfigAccessor } from "./local-config";
 import classNames, { cssText } from "./drafts-overlay.module.css";
 import type { LatLng } from "./s2";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
 interface DraftWithView {
     readonly draft: Draft;
@@ -76,6 +81,9 @@ function createOptionsCache(config: ViewConfig): ViewOptionsCache {
 
 type DraftId = Draft["id"];
 type DraftViews = Map<DraftId, DraftWithView>;
+export interface DraftsOverlayEventMap {
+    "drafts-updated": readonly Draft[];
+}
 export interface DraftsOverlay {
     readonly map: google.maps.Map;
     readonly config: ViewConfig;
@@ -89,11 +97,22 @@ export interface DraftsOverlay {
     readonly asyncRouteListUpdateScope: (
         scope: (signal: AbortSignal) => Promise<void>,
     ) => void;
+    readonly events: TypedEventTarget<DraftsOverlayEventMap>;
+    updateDraftTitle(draft: Draft): void;
+    updateDraftCoordinates(draft: Draft): void;
+    addDraft(draft: Draft): void;
+    deleteDraft(draftId: Draft["id"]): void;
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
-    // overlay.asyncRouteListUpdateScope((signal) => {
-    //     return updateRouteListElementAsync(overlay, scheduler, signal);
-    // });
+    overlay.asyncRouteListUpdateScope(async (_signal) => {
+        const drafts = [];
+        for (const v of overlay.drafts.values()) {
+            drafts.push(v.draft);
+        }
+        overlay.events.dispatchEvent(
+            createTypedCustomEvent("drafts-updated", drafts),
+        );
+    });
 }
 
 function getPosition(draft: Draft) {
@@ -102,7 +121,7 @@ function getPosition(draft: Draft) {
 function includesIn(bounds: google.maps.LatLngBounds, draft: Draft) {
     return bounds.contains(getPosition(draft));
 }
-function addDraft(overlay: DraftsOverlay, draft: Draft) {
+function addDraftCore(overlay: DraftsOverlay, draft: Draft) {
     overlay.drafts.set(draft.id, {
         draft,
         listView: document.createElement("li"),
@@ -110,6 +129,16 @@ function addDraft(overlay: DraftsOverlay, draft: Draft) {
     });
     notifyDraftListUpdated(overlay);
 }
+
+function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
+    const draftWithView = overlay.drafts.get(draftId);
+    if (draftWithView) {
+        draftWithView.mapView.marker.setMap(null);
+        overlay.drafts.delete(draftId);
+        notifyDraftListUpdated(overlay);
+    }
+}
+
 function createMapView(
     { cachedOptions }: DraftsOverlay,
     draft: remote.Draft,
@@ -293,6 +322,7 @@ export function createDraftsOverlay(
     const drafts: DraftViews = new Map();
     const draftsCanvasOverlay = createCanvasOverlay(drafts, config);
     return {
+        events: createTypedEventTarget(),
         config,
         cachedOptions: createOptionsCache(config),
         map,
@@ -301,6 +331,33 @@ export function createDraftsOverlay(
         addedMapViews: new Set(),
         asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
         asyncRenderDraftsInMapScope: createAsyncCancelScope(asyncErrorHandler),
+        updateDraftTitle(draft: Draft) {
+            const draftWithView = this.drafts.get(draft.id);
+            if (draftWithView) {
+                draftWithView.draft.name = draft.name;
+                draftWithView.mapView.marker.setLabel({
+                    ...draftWithView.mapView.label,
+                    text: draft.name,
+                });
+                notifyMapRangeChanged(this);
+            }
+        },
+        updateDraftCoordinates(this: DraftsOverlay, draft: Draft) {
+            const draftWithView = this.drafts.get(draft.id);
+            if (draftWithView) {
+                draftWithView.draft.coordinates = draft.coordinates;
+                draftWithView.mapView.marker.setPosition(getPosition(draft));
+                notifyMapRangeChanged(this);
+            }
+        },
+        addDraft(this: DraftsOverlay, draft: Draft) {
+            addDraftCore(this, draft);
+            notifyMapRangeChanged(this);
+        },
+        deleteDraft(this: DraftsOverlay, draftId: Draft["id"]) {
+            deleteDraftCore(this, draftId);
+            notifyMapRangeChanged(this);
+        },
     };
 }
 export async function setupDraftsOverlay(
@@ -313,14 +370,14 @@ export async function setupDraftsOverlay(
 
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
-        const { routes } = await remote.getRoutes(
+        const { routes } = await remote.getDrafts(
             {
                 "user-id": userId,
             },
             { rootUrl: apiRoot },
         );
         for (const route of routes) {
-            addDraft(overlay, {
+            overlay.addDraft({
                 ...route,
                 coordinates: parseCoordinates(route.coordinates) as [
                     LatLng,

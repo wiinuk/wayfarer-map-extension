@@ -25,8 +25,8 @@ export function padBounds(bounds: google.maps.LatLngBounds, ratio: number) {
     );
 }
 
-export function parseCoordinates(kmlCoordinatesText: string) {
-    const tokens = kmlCoordinatesText.split(",");
+export function parseCoordinates(coordinatesText: string) {
+    const tokens = coordinatesText.split(",");
     const result: LatLng[] = [];
     for (let i = 1; i < tokens.length; i += 2) {
         result.push({ lat: Number(tokens[i - 1]!), lng: Number(tokens[i]!) });
@@ -35,4 +35,8 @@ export function parseCoordinates(kmlCoordinatesText: string) {
         throw new Error();
     }
     return result as LatLng[];
+}
+
+export function coordinatesToString(coords: readonly LatLng[]): string {
+    return coords.map((ll) => `${ll.lat},${ll.lng}`).join(",");
 }
