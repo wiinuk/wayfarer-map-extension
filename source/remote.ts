@@ -10,6 +10,11 @@ import {
 import { newAbortError, sleep } from "./standard-extensions";
 import type { LatLng } from "./s2";
 import { createAsyncQueue } from "./async-queue";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
 interface FetchJsonpOptions {
     data?: Record<string, unknown>;
@@ -147,7 +152,12 @@ export async function getDrafts(
 type SetParameter = z.infer<typeof interfaces.setRoute.parameter>;
 type DeleteParameter = z.infer<typeof interfaces.deleteRoute.parameter>;
 
+export interface RemoteEventMap {
+    "fetch-start": undefined;
+    "fetch-end": undefined;
+}
 export interface Remote {
+    events: TypedEventTarget<RemoteEventMap>;
     set(parameter: SetParameter, rootUrl: string): void;
     delete(parameter: DeleteParameter, rootUrl: string): void;
 }
@@ -155,6 +165,7 @@ export function createRemote(
     handleAsyncError: (reason: unknown) => void,
     intervalMs: number,
 ): Remote {
+    const events = createTypedEventTarget<RemoteEventMap>();
     type Command =
         | {
               type: "set";
@@ -174,26 +185,37 @@ export function createRemote(
                 const id = command.parameter["route-id"];
                 map.set(id, command);
             }
-            for (const { type, parameter, rootUrl } of map.values()) {
-                switch (type) {
-                    case "set":
-                        await fetchGet(interfaces.setRoute, parameter, {
-                            rootUrl,
-                        });
-                        break;
-                    case "delete":
-                        await fetchGet(interfaces.deleteRoute, parameter, {
-                            rootUrl,
-                        });
-                        break;
+            events.dispatchEvent(
+                createTypedCustomEvent("fetch-start", undefined),
+            );
+            try {
+                for (const command of map.values()) {
+                    const { type, parameter, rootUrl } = command;
+                    switch (type) {
+                        case "set":
+                            await fetchGet(interfaces.setRoute, parameter, {
+                                rootUrl,
+                            });
+                            break;
+                        case "delete":
+                            await fetchGet(interfaces.deleteRoute, parameter, {
+                                rootUrl,
+                            });
+                            break;
+                    }
+                    await sleep(intervalMs);
                 }
+            } finally {
+                events.dispatchEvent(
+                    createTypedCustomEvent("fetch-end", undefined),
+                );
             }
-            await sleep(intervalMs);
         },
         handleAsyncError,
         { batchSize: 100 },
     );
     return {
+        events,
         set(parameter, rootUrl) {
             queue.push({ type: "set", parameter, rootUrl });
         },
