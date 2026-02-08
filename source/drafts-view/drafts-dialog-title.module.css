@@ -1,0 +1,55 @@
+:root {
+    --text-color: #333;
+    --secondary-text-color: #666;
+    --primary-color: #007bff;
+    --background-color-light: #f8f9fa;
+    --border-color: #dee2e6;
+}
+
+.container {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    gap: 10px;
+}
+
+.main-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--text-color);
+    flex-grow: 1;
+}
+
+.counts-element {
+    font-size: 0.9em;
+    color: var(--secondary-text-color);
+    white-space: nowrap;
+}
+
+.saving-indicator {
+    display: none;
+    font-size: 0.85em;
+    color: var(--primary-color);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.saving {
+    display: unset;
+    animation: blink 0.7s infinite steps(1);
+}
+
+@keyframes blink {
+    0% {
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
