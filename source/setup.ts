@@ -100,7 +100,7 @@ function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
         page.defaultDictionary[key]
     );
 }
-function setupDraftManagerWindow(page: PageResource) {
+function setupDraftManagerDialog(page: PageResource) {
     const draftList = createDraftList({
         overlay: page.drafts,
         remote: page.remote,
@@ -151,7 +151,7 @@ async function asyncSetup(signal: AbortSignal) {
 
     setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
-    setupDraftManagerWindow(page);
+    setupDraftManagerDialog(page);
     await setupDraftsOverlay(page.drafts, local);
 }
 
