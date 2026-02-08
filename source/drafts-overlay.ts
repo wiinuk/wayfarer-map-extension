@@ -92,6 +92,8 @@ export interface DraftsOverlay {
     updateList?: (newDrafts: Draft[]) => void;
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
+    addDraft(draft: Draft): void;
+    deleteDraft(draftId: Draft["id"]): void;
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
     overlay.asyncRouteListUpdateScope(async (_signal) => {
@@ -110,7 +112,7 @@ function getPosition(draft: Draft) {
 function includesIn(bounds: google.maps.LatLngBounds, draft: Draft) {
     return bounds.contains(getPosition(draft));
 }
-function addDraft(overlay: DraftsOverlay, draft: Draft) {
+function addDraftCore(overlay: DraftsOverlay, draft: Draft) {
     overlay.drafts.set(draft.id, {
         draft,
         listView: document.createElement("li"),
@@ -118,6 +120,16 @@ function addDraft(overlay: DraftsOverlay, draft: Draft) {
     });
     notifyDraftListUpdated(overlay);
 }
+
+function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
+    const draftWithView = overlay.drafts.get(draftId);
+    if (draftWithView) {
+        draftWithView.mapView.marker.setMap(null);
+        overlay.drafts.delete(draftId);
+        notifyDraftListUpdated(overlay);
+    }
+}
+
 function createMapView(
     { cachedOptions }: DraftsOverlay,
     draft: remote.Draft,
@@ -328,6 +340,14 @@ export function createDraftsOverlay(
                 notifyMapRangeChanged(this);
             }
         },
+        addDraft(this: DraftsOverlay, draft: Draft) {
+            addDraftCore(this, draft);
+            notifyMapRangeChanged(this);
+        },
+        deleteDraft(this: DraftsOverlay, draftId: Draft["id"]) {
+            deleteDraftCore(this, draftId);
+            notifyMapRangeChanged(this);
+        },
     };
 }
 export async function setupDraftsOverlay(
@@ -347,7 +367,7 @@ export async function setupDraftsOverlay(
             { rootUrl: apiRoot },
         );
         for (const route of routes) {
-            addDraft(overlay, {
+            overlay.addDraft({
                 ...route,
                 coordinates: parseCoordinates(route.coordinates) as [
                     LatLng,

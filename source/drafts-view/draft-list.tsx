@@ -5,6 +5,11 @@ import type { LatLng } from "../s2";
 import type { Draft, Remote } from "../remote";
 import type { LocalConfigAccessor } from "../local-config";
 import { coordinatesToString, parseCoordinates } from "../geometry";
+import {
+    applyTemplate,
+    getDraftIsTemplate,
+    setDraftIsTemplate,
+} from "../draft";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
@@ -19,7 +24,7 @@ export function createDraftList({
     local,
     onDraftSelected,
 }: DraftListOptions) {
-    const allDrafts: Draft[] = Array.from(overlay.drafts.values()).map(
+    let allDrafts: Draft[] = Array.from(overlay.drafts.values()).map(
         (view) => view.draft,
     );
     let filteredDrafts: Draft[] = [...allDrafts];
@@ -116,9 +121,55 @@ export function createDraftList({
         overlay.updateDraftCoordinates(selectedDraft);
         saveDraftChanges(selectedDraft);
     });
+    const createButton = (
+        <button class={classNames["create-button"]}>📍新規作成</button>
+    );
+    createButton.addEventListener("click", () => {
+        createNewDraft();
+    });
+    const deleteButton = (
+        <button class={classNames["delete-button"]}>🗑️削除</button>
+    );
+    deleteButton.addEventListener("click", () => {
+        if (!selectedDraft) {
+            alert("削除する候補が選択されていません。");
+            return;
+        }
+        if (confirm(`本当に「${selectedDraft.name}」を削除しますか？`)) {
+            deleteSelectedDraft(selectedDraft.id);
+        }
+    });
     const mapButton = (
         <button class={classNames["map-button"]}>🎯地図で表示</button>
     );
+
+    const deleteSelectedDraft = (draftId: Draft["id"]) => {
+        const { apiRoot, userId } = local.getConfig();
+        if (!userId || !apiRoot) {
+            console.error(
+                "User ID or API Root not available. Cannot delete draft.",
+            );
+            return;
+        }
+
+        overlay.deleteDraft(draftId);
+        allDrafts = allDrafts.filter((d) => d.id !== draftId);
+        filteredDrafts = filteredDrafts.filter((d) => d.id !== draftId);
+
+        if (selectedDraft?.id === draftId) {
+            selectedDraft = null;
+            updateDetailPane();
+            onDraftSelected?.(null);
+        }
+        updateVirtualList();
+
+        remote.delete(
+            {
+                "route-id": draftId,
+            },
+            apiRoot,
+        );
+    };
 
     const detailPane = (
         <details class={classNames["detail-pane"]} open={true}>
@@ -127,6 +178,8 @@ export function createDraftList({
                 {detailDescription}
                 {detailNote}
                 {detailCoordinates}
+                {createButton}
+                {deleteButton}
                 {mapButton}
             </div>
         </details>
@@ -139,6 +192,48 @@ export function createDraftList({
         </div>
     );
 
+    const createNewDraft = () => {
+        const { userId } = local.getConfig();
+        if (!userId) {
+            console.error("User ID not available. Cannot create draft.");
+            return;
+        }
+
+        const center = overlay.map.getCenter();
+        if (!center) return;
+
+        const newDraftId = `draft-${Date.now()}-${Math.floor(
+            Math.random() * 1000000,
+        )}`;
+
+        const newDraft: Draft = {
+            id: newDraftId,
+            type: "route",
+            userId,
+            name: "新しい候補",
+            coordinates: [{ lat: center.lat(), lng: center.lng() }],
+            description: "",
+            note: "",
+            data: {},
+        };
+
+        const templateDraft = allDrafts.find((d) => getDraftIsTemplate(d));
+
+        if (templateDraft) {
+            newDraft.name = applyTemplate(templateDraft.name);
+            newDraft.description = applyTemplate(templateDraft.description);
+            newDraft.note = applyTemplate(templateDraft.note);
+            newDraft.data = structuredClone(templateDraft.data);
+            setDraftIsTemplate(newDraft, false);
+        }
+
+        overlay.addDraft(newDraft);
+        selectedDraft = newDraft;
+        updateDetailPane();
+        onDraftSelected?.(newDraft);
+        saveDraftChanges(newDraft);
+    };
+
     const updateDetailPane = () => {
         if (selectedDraft) {
             detailName.value = selectedDraft.name;
@@ -149,13 +244,15 @@ export function createDraftList({
             );
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
+            deleteButton.style.display = "";
         } else {
-            detailName.textContent = "No draft selected";
+            detailName.value = "";
             detailDescription.value = "";
             detailNote.value = "";
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
+            deleteButton.style.display = "none";
         }
     };
     updateDetailPane();
