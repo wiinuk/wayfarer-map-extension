@@ -54,7 +54,7 @@ export function createDraftList({
                     coordinates: coordinatesToString(draft.coordinates),
                     description: draft.description,
                     note: draft.note,
-                    data: JSON.stringify({ kind: "spot" }),
+                    data: JSON.stringify(draft.data),
                 },
                 apiRoot,
             );
@@ -153,6 +153,29 @@ export function createDraftList({
     const mapButton = (
         <button class={classNames["map-button"]}>🎯地図で表示</button>
     );
+    const templateToggleButton = (
+        <button class={classNames["template-button"]}>📄テンプレート</button>
+    );
+    templateToggleButton.addEventListener("click", () => {
+        if (!selectedDraft) return;
+
+        if (getDraftIsTemplate(selectedDraft)) {
+            setDraftIsTemplate(selectedDraft, false);
+            saveDraftChanges(selectedDraft);
+        } else {
+            const currentTemplate = allDrafts.find((d) =>
+                getDraftIsTemplate(d),
+            );
+            if (currentTemplate) {
+                setDraftIsTemplate(currentTemplate, false);
+                saveDraftChanges(currentTemplate);
+            }
+            setDraftIsTemplate(selectedDraft, true);
+            saveDraftChanges(selectedDraft);
+        }
+        updateVirtualList();
+        updateDetailPane();
+    });
 
     const deleteSelectedDraft = (draftId: Draft["id"]) => {
         const { apiRoot, userId } = local.getConfig();
@@ -192,6 +215,7 @@ export function createDraftList({
                 {createButton}
                 {deleteButton}
                 {mapButton}
+                {templateToggleButton}
             </div>
         </details>
     );
@@ -256,6 +280,16 @@ export function createDraftList({
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
             deleteButton.style.display = "";
+            templateToggleButton.style.display = "";
+            if (getDraftIsTemplate(selectedDraft)) {
+                templateToggleButton.textContent = "📄テンプレート (設定済み)";
+                templateToggleButton.classList.add(classNames["is-template"]);
+            } else {
+                templateToggleButton.textContent = "📄テンプレートに設定";
+                templateToggleButton.classList.remove(
+                    classNames["is-template"],
+                );
+            }
         } else {
             detailName.value = "";
             detailDescription.value = "";
@@ -264,6 +298,7 @@ export function createDraftList({
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
             deleteButton.style.display = "none";
+            templateToggleButton.style.display = "none";
         }
     };
     updateDetailPane();
