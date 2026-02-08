@@ -11,6 +11,17 @@ import {
     setDraftIsTemplate,
 } from "../draft";
 
+function hasTermInString(text: string, term: string) {
+    return text.toLowerCase().includes(term);
+}
+function hasTermInDraft({ name, description, note }: Draft, term: string) {
+    return (
+        hasTermInString(name, term) ||
+        hasTermInString(description, term) ||
+        hasTermInString(note, term)
+    );
+}
+
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
     readonly remote: Remote;
@@ -258,12 +269,13 @@ export function createDraftList({
     updateDetailPane();
 
     const applyFilter = () => {
-        const lowerCaseSearchTerm = searchTerm.toLowerCase();
-        filteredDrafts = allDrafts.filter(
-            (draft) =>
-                draft.name.toLowerCase().includes(lowerCaseSearchTerm) ||
-                draft.description.toLowerCase().includes(lowerCaseSearchTerm),
-        );
+        const searchAndTerms = searchTerm.toLowerCase().match(/[^ ]+/g) ?? [""];
+        filteredDrafts = allDrafts.filter((draft) => {
+            for (const term of searchAndTerms) {
+                if (!hasTermInDraft(draft, term)) return false;
+            }
+            return true;
+        });
         updateVirtualList();
     };
 
