@@ -10,6 +10,10 @@ import {
     getDraftIsTemplate,
     setDraftIsTemplate,
 } from "../draft";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+} from "../typed-event-target";
 
 function hasTermInString(text: string, term: string) {
     return text.toLowerCase().includes(term);
@@ -26,15 +30,12 @@ interface DraftListOptions {
     readonly overlay: DraftsOverlay;
     readonly remote: Remote;
     readonly local: LocalConfigAccessor;
-    readonly onDraftSelected?: (draft: Draft | null) => void;
 }
-
-export function createDraftList({
-    overlay,
-    remote,
-    local,
-    onDraftSelected,
-}: DraftListOptions) {
+interface DraftListEventMap {
+    "draft-selected": Draft | null;
+}
+export function createDraftList({ overlay, remote, local }: DraftListOptions) {
+    const events = createTypedEventTarget<DraftListEventMap>();
     let allDrafts: Draft[] = Array.from(overlay.drafts.values()).map(
         (view) => view.draft,
     );
@@ -193,7 +194,9 @@ export function createDraftList({
         if (selectedDraft?.id === draftId) {
             selectedDraft = null;
             updateDetailPane();
-            onDraftSelected?.(null);
+            events.dispatchEvent(
+                createTypedCustomEvent("draft-selected", null),
+            );
         }
         updateVirtualList();
 
@@ -265,7 +268,9 @@ export function createDraftList({
         overlay.addDraft(newDraft);
         selectedDraft = newDraft;
         updateDetailPane();
-        onDraftSelected?.(newDraft);
+        events.dispatchEvent(
+            createTypedCustomEvent("draft-selected", newDraft),
+        );
         saveDraftChanges(newDraft);
     };
 
@@ -341,7 +346,9 @@ export function createDraftList({
                 item.addEventListener("click", () => {
                     selectedDraft = draft;
                     updateDetailPane();
-                    onDraftSelected?.(draft);
+                    events.dispatchEvent(
+                        createTypedCustomEvent("draft-selected", draft),
+                    );
                     updateVirtualList();
                 });
                 item.addEventListener("dblclick", () => {
@@ -368,9 +375,10 @@ export function createDraftList({
     });
 
     return {
+        events,
         element: container,
         cssText: cssText + "\n" + virtualListCssText,
-        updateDrafts: (newDrafts: readonly Draft[]) => {
+        setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
             applyFilter();
             if (
@@ -379,7 +387,9 @@ export function createDraftList({
             ) {
                 selectedDraft = null;
                 updateDetailPane();
-                onDraftSelected?.(null);
+                events.dispatchEvent(
+                    createTypedCustomEvent("draft-selected", null),
+                );
             }
         },
     };

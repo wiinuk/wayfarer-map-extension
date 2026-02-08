@@ -119,7 +119,9 @@ function setupDraftManagerDialog(page: PageResource) {
         drafts.setTitle(getDictionaryEntry(page, "draftsTitle"));
     });
 
-    page.drafts.updateList = draftList.updateDrafts;
+    page.drafts.events.addEventListener("drafts-updated", (e) =>
+        draftList.setDrafts(e.detail),
+    );
 }
 
 async function asyncSetup(signal: AbortSignal) {

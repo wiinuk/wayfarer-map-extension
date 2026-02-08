@@ -6,6 +6,11 @@ import { createScheduler, type Scheduler } from "./dom-extensions";
 import type { LocalConfigAccessor } from "./local-config";
 import classNames, { cssText } from "./drafts-overlay.module.css";
 import type { LatLng } from "./s2";
+import {
+    createTypedCustomEvent,
+    createTypedEventTarget,
+    type TypedEventTarget,
+} from "./typed-event-target";
 
 interface DraftWithView {
     readonly draft: Draft;
@@ -76,6 +81,9 @@ function createOptionsCache(config: ViewConfig): ViewOptionsCache {
 
 type DraftId = Draft["id"];
 type DraftViews = Map<DraftId, DraftWithView>;
+export interface DraftsOverlayEventMap {
+    "drafts-updated": readonly Draft[];
+}
 export interface DraftsOverlay {
     readonly map: google.maps.Map;
     readonly config: ViewConfig;
@@ -89,7 +97,7 @@ export interface DraftsOverlay {
     readonly asyncRouteListUpdateScope: (
         scope: (signal: AbortSignal) => Promise<void>,
     ) => void;
-    updateList?: (newDrafts: Draft[]) => void;
+    readonly events: TypedEventTarget<DraftsOverlayEventMap>;
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
     addDraft(draft: Draft): void;
@@ -97,12 +105,13 @@ export interface DraftsOverlay {
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
     overlay.asyncRouteListUpdateScope(async (_signal) => {
-        if (overlay.updateList) {
-            const currentDrafts = Array.from(overlay.drafts.values()).map(
-                (view) => view.draft,
-            );
-            overlay.updateList(currentDrafts);
+        const drafts = [];
+        for (const v of overlay.drafts.values()) {
+            drafts.push(v.draft);
         }
+        overlay.events.dispatchEvent(
+            createTypedCustomEvent("drafts-updated", drafts),
+        );
     });
 }
 
@@ -313,6 +322,7 @@ export function createDraftsOverlay(
     const drafts: DraftViews = new Map();
     const draftsCanvasOverlay = createCanvasOverlay(drafts, config);
     return {
+        events: createTypedEventTarget(),
         config,
         cachedOptions: createOptionsCache(config),
         map,
