@@ -8,11 +8,12 @@
     height: var(--initial-height);
     width: var(--initial-width);
 
-    --foreground-color: var(--external-foreground-color, darkgray);
-    --background-color: var(--external-background-color, aliceblue);
+    --foreground-color: var(--external-foreground-color, #717171);
+    --background-color: var(--external-background-color, rgba(247, 251, 255, 0.8));
 
     color: var(--foreground-color);
     background: var(--background-color);
+    backdrop-filter: blur(6px);
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     z-index: 10000;
 
@@ -78,7 +79,6 @@
 }
 
 .titlebar-button::before {
-    background-color: var(--background-color);
     color: var(--foreground-color);
 }
 
