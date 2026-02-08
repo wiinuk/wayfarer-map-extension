@@ -1,6 +1,7 @@
 .dialog {
     --initial-height: min(300px, 50%);
     --initial-width: min(400px, 80%);
+    --border-radius: 6px;
 
     position: fixed;
     top: var(--drag-top, calc(100% - var(--initial-height)));
@@ -16,6 +17,7 @@
     backdrop-filter: blur(6px);
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     z-index: 10000;
+    border-radius: var(--border-radius);
 
     overflow: auto;
     resize: both;
@@ -48,7 +50,10 @@
     user-select: none;
     touch-action: none;
 
-    padding: 0.3em;
+    padding: 2px 4px;
+
+    background-color: #e5e7eb;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
 }
 
 .titlebar-icon {

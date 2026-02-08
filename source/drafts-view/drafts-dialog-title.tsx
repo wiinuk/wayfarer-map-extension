@@ -26,9 +26,9 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
             filteredCount: number;
         }) {
             if (filteredCount !== totalCount) {
-                countsElement.innerText = ` (${filteredCount}/${totalCount}件)`;
+                countsElement.innerText = `${filteredCount}/${totalCount}件`;
             } else {
-                countsElement.innerText = ` (${totalCount}件)`;
+                countsElement.innerText = `${totalCount}件`;
             }
         },
         setIsSaving(isSaving: boolean) {
