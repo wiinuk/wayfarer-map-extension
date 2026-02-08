@@ -33,6 +33,10 @@ interface DraftListOptions {
 }
 interface DraftListEventMap {
     "draft-selected": Draft | null;
+    "count-changed": {
+        totalCount: number;
+        filteredCount: number;
+    };
 }
 export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     const events = createTypedEventTarget<DraftListEventMap>();
@@ -43,23 +47,33 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     let searchTerm: string = "";
     let selectedDraft: Draft | null = null;
 
+    const dispatchCountUpdatedEvent = () => {
+        events.dispatchEvent(
+            createTypedCustomEvent("count-changed", {
+                totalCount: allDrafts.length,
+                filteredCount: filteredDrafts.length,
+            }),
+        );
+    };
+    dispatchCountUpdatedEvent();
+
     const saveDraftChanges = (draft: Draft) => {
         const { apiRoot, userId } = local.getConfig();
-        if (apiRoot && userId) {
-            remote.set(
-                {
-                    type: "route",
-                    "user-id": userId,
-                    "route-id": draft.id,
-                    "route-name": draft.name,
-                    coordinates: coordinatesToString(draft.coordinates),
-                    description: draft.description,
-                    note: draft.note,
-                    data: JSON.stringify(draft.data),
-                },
-                apiRoot,
-            );
-        }
+        if (!apiRoot || !userId) return;
+
+        remote.set(
+            {
+                type: "route",
+                "user-id": userId,
+                "route-id": draft.id,
+                "route-name": draft.name,
+                coordinates: coordinatesToString(draft.coordinates),
+                description: draft.description,
+                note: draft.note,
+                data: JSON.stringify(draft.data),
+            },
+            apiRoot,
+        );
     };
 
     const listContainer = <div class={classNames["list-container"]}></div>;
@@ -137,7 +151,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         <button class={classNames["create-button"]}>📍新規作成</button>
     );
     createButton.addEventListener("click", () => {
-        createNewDraft();
+        addNewDraft();
     });
     const deleteButton = (
         <button class={classNames["delete-button"]}>🗑️削除</button>
@@ -230,7 +244,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         </div>
     );
 
-    const createNewDraft = () => {
+    const addNewDraft = () => {
         const { userId } = local.getConfig();
         if (!userId) {
             console.error("User ID not available. Cannot create draft.");
@@ -268,9 +282,11 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         overlay.addDraft(newDraft);
         selectedDraft = newDraft;
         updateDetailPane();
+        updateVirtualList();
         events.dispatchEvent(
             createTypedCustomEvent("draft-selected", newDraft),
         );
+        dispatchCountUpdatedEvent();
         saveDraftChanges(newDraft);
     };
 
@@ -316,6 +332,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
             }
             return true;
         });
+        dispatchCountUpdatedEvent();
         updateVirtualList();
     };
 

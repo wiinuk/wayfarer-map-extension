@@ -24,6 +24,7 @@ import { createDialog } from "./drafts-view/dialog";
 import { createDraftList } from "./drafts-view/draft-list";
 import jaDictionary from "./locales/ja.json";
 import { createRemote, type Remote } from "./remote";
+import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -107,16 +108,32 @@ function setupDraftManagerDialog(page: PageResource) {
         local: page.local,
     });
 
-    const drafts = createDialog(draftList.element, {
+    const title = createDraftsDialogTitle({
         title: getDictionaryEntry(page, "draftsTitle"),
     });
+    const drafts = createDialog(draftList.element, {
+        title: title.element,
+    });
     drafts.show();
+    setStyle(page, title.cssText);
     setStyle(page, drafts.cssText);
     setStyle(page, draftList.cssText);
     document.body.append(drafts.element);
 
-    page.events.addEventListener("config-changed", () => {
-        drafts.setTitle(getDictionaryEntry(page, "draftsTitle"));
+    draftList.events.addEventListener("count-changed", (e) => {
+        title.setCounts(e.detail);
+    });
+
+    let fetchCount = 0;
+    page.remote.events.addEventListener("fetch-start", () => {
+        fetchCount++;
+        title.setIsSaving(true);
+    });
+    page.remote.events.addEventListener("fetch-end", () => {
+        fetchCount--;
+        if (fetchCount <= 0) {
+            title.setIsSaving(false);
+        }
     });
 
     page.drafts.events.addEventListener("drafts-updated", (e) =>
