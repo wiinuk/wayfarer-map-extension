@@ -1,10 +1,10 @@
 :root {
     --border-color: #ccc;
-    --selected-background-color: #007bff;
+    --selected-background-color: #2563eb;
     --selected-text-color: #fff;
     --text-muted: #666;
     --background-color-light: #f8f9fa;
-    --primary-color: #007bff;
+    --primary-color: #2563eb;
     --primary-color-dark: #0056b3;
 }
 
@@ -129,7 +129,9 @@
 .detail-description,
 .detail-note,
 .detail-coordinates {
-    border: 1px solid white;
+    border: 1px solid;
+    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;
+
     background-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -138,7 +140,7 @@
     .detail-description,
     .detail-note,
     .detail-coordinates):focus {
-    border: revert;
+    border-color: revert;
     background-color: revert;
 }
 
