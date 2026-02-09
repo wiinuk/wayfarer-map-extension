@@ -12,6 +12,7 @@ import {
     getChildCells,
 } from "./typed-s2cell";
 import type { LatLng } from "./s2";
+import { createQueue } from "./queue";
 
 /** ローカルマシンから取得した時間 */
 type ClientDate = number;
@@ -167,10 +168,11 @@ export function getNearlyCellsForBounds<TLevel extends number>(
 ) {
     const result: Cell<TLevel>[] = [];
     const seenCellIds = new Set<CellIdAny>();
-    const remainingCells = [
+    const remainingCells = createQueue<Cell<TLevel>>();
+    remainingCells.enqueue(
         createCellFromCoordinates(B.getCenter(bounds), level),
-    ];
-    for (let cell; (cell = remainingCells.pop()); ) {
+    );
+    for (let cell; (cell = remainingCells.dequeue()); ) {
         const id = cell.toString();
         if (seenCellIds.has(id)) continue;
         seenCellIds.add(id);
@@ -181,7 +183,9 @@ export function getNearlyCellsForBounds<TLevel extends number>(
         }
         if (!B.intersects(bounds, cellBounds)) continue;
         result.push(cell);
-        remainingCells.push(...cell.getNeighbors());
+        for (const neighbor of cell.getNeighbors()) {
+            remainingCells.enqueue(neighbor);
+        }
     }
     return result;
 }

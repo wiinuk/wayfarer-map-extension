@@ -261,11 +261,6 @@ async function renderPoiAndCells(
     }
 
     const nearlyCell14s = getNearlyCellsForBounds(Bounds.fromClass(bounds), 14);
-    nearlyCell14s.sort(
-        (a, b) =>
-            distanceSquared(center, a.getLatLng()) -
-            distanceSquared(center, b.getLatLng()),
-    );
 
     await clearOutOfRangeCell14Markers(page.overlay, scheduler, nearlyCell14s);
 
