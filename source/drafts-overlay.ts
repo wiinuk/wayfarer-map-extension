@@ -365,7 +365,7 @@ export async function setupDraftsOverlay(
     local: LocalConfigAccessor,
 ) {
     const style = document.createElement("style");
-    style.innerText = cssText;
+    style.textContent = cssText;
     document.body.append(style);
 
     const { userId, apiRoot } = local.getConfig();
