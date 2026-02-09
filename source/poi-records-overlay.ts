@@ -14,11 +14,13 @@ import type { PageResource } from "./setup";
 import { createAsyncCancelScope } from "./standard-extensions";
 import type { Cell, Cell14Id, CellId } from "./typed-s2cell";
 import * as Bounds from "./bounds";
+import classNames, { cssText } from "./poi-records-overlay.module.css";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
 }
 export interface PoisOverlay {
+    readonly styleElement: HTMLStyleElement;
     readonly options: ViewOptions;
     readonly map: google.maps.Map;
     readonly cell14IdToAddedViews: Map<
@@ -30,21 +32,21 @@ export interface PoisOverlay {
     >;
 }
 export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
+    const styleElement = document.createElement("style");
+    styleElement.textContent = cssText;
+    document.head.append(styleElement);
+
     const options: ViewOptions = {
         cell17CountMarkerOptions: {
             clickable: false,
             icon: {
-                path: 0,
-                fillColor: "#c54545",
-                fillOpacity: 1,
-                scale: 15,
-                strokeColor: "#ffffff",
-                strokeOpacity: 1,
-                strokeWeight: 2,
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 0,
             },
         },
     };
     return {
+        styleElement,
         options,
         map,
         cell14IdToAddedViews: new Map(),
@@ -186,8 +188,8 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 function renderCell14(overlay: PoisOverlay, cell14: Cell14Statistics) {
-        const entityCount = sumGymAndPokestopCount(cell14);
-const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
+    const entityCount = sumGymAndPokestopCount(cell14);
+    const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(entityCount, coverRate);
     const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
     polygon.setPath(cell14.corner);
@@ -227,6 +229,7 @@ function renderCell17CountLabel(
         color: "rgb(255, 255, 255)",
         fontSize: "20px",
         fontWeight: "400",
+        className: classNames["count-label"],
     });
 }
 async function renderViewsInCell14(
