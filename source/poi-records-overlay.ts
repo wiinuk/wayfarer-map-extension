@@ -140,6 +140,7 @@ const cell14Options = Object.freeze({
     zIndex: baseZIndex + 2,
 } satisfies google.maps.PolygonOptions);
 
+const cell14OptionsEmpty = cell14Options;
 const cell14Options1 = Object.freeze({
     ...cell14Options,
     fillColor: "#dd767625",
@@ -152,6 +153,8 @@ const cell14Options2 = Object.freeze({
 
 function countToCell14Options(count: number) {
     switch (count) {
+        case 0:
+            return cell14OptionsEmpty;
         case 1:
         case 5:
         case 19:
@@ -162,6 +165,20 @@ function countToCell14Options(count: number) {
     }
     return cell14Options;
 }
+function getCell14Options(entityCount: number, coverRate: number) {
+    const options = countToCell14Options(entityCount);
+    if (coverRate === 1) return options;
+    return {
+        ...options,
+        strokeWeight:
+            options.strokeWeight * 2 +
+            options.strokeWeight * 10 * (1 - coverRate),
+        strokePosition: google.maps.StrokePosition.INSIDE,
+        strokeOpacity: 0.3 + 0.4 * coverRate,
+
+        fillColor: "transparent",
+    };
+}
 function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     return (
         (kindToPois.get("GYM")?.length ?? 0) +
@@ -169,10 +186,9 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 function renderCell14(overlay: PoisOverlay, cell14: Cell14Statistics) {
-    if (cell14.pois.size === 0) return;
-
-    const entityCount = sumGymAndPokestopCount(cell14);
-    const options = countToCell14Options(entityCount);
+        const entityCount = sumGymAndPokestopCount(cell14);
+const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
+    const options = getCell14Options(entityCount, coverRate);
     const polygon = allocatePolygonAtMap(overlay, cell14.id, options);
     polygon.setPath(cell14.corner);
 }
