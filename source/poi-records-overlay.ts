@@ -306,13 +306,13 @@ export function setupPoiRecordOverlay(page: PageResource) {
     const enterCancelScope = createAsyncCancelScope(
         page.defaultAsyncErrorHandler,
     );
-    const onRenderNeeded = () => {
+    const render = () => {
         enterCancelScope((signal) => {
             const scheduler = createScheduler(signal);
             return renderPoiAndCells(page, scheduler, signal);
         });
     };
-    page.events.addEventListener("gcs-saved", onRenderNeeded);
-    page.map.addListener("idle", onRenderNeeded);
-    onRenderNeeded();
+    page.events.addEventListener("gcs-saved", render);
+    page.map.addListener("idle", render);
+    render();
 }
