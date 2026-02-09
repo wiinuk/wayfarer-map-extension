@@ -98,7 +98,7 @@ function iteratePoisInCell(
 ) {
     return Idb.iterateValuesOfIndex(store[cellIdsIndexSymbol], cellId, action);
 }
-function iterateCell14sInCell(
+function iterateCellsInCell14(
     store: PoiStore,
     cellId: CellId<14>,
     action: (cell: CellRecord) => Idb.IterationFlow,
@@ -447,7 +447,7 @@ export async function getCell14Stats(
         { signal },
         function* (store) {
             yield* iteratePoisInCell(store, cellId, collectPois);
-            yield* iterateCell14sInCell(store, cellId, collectCells);
+            yield* iterateCellsInCell14(store, cellId, collectCells);
         },
     );
     return cell14;
