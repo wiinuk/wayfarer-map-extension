@@ -283,6 +283,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         }
 
         overlay.addDraft(newDraft);
+        overlay.select(newDraft.id);
         selectedDraft = newDraft;
         updateDetailPane();
         updateVirtualList();

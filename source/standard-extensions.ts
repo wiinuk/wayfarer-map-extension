@@ -9,6 +9,7 @@ export function ignore(..._: unknown[]): void {
     // do nothing
 }
 export type UnwrapPromise<T> = T extends Promise<infer U> ? U : T;
+export type Reference<T> = { contents: T };
 
 const privateTagSymbol = Symbol("privateTagSymbol");
 export type Tagged<TEntity, TTag> = TEntity & {

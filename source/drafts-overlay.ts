@@ -1,6 +1,10 @@
 import * as remote from "./remote";
 import type { Draft } from "./remote";
-import { createAsyncCancelScope, sleep } from "./standard-extensions";
+import {
+    createAsyncCancelScope,
+    sleep,
+    type Reference,
+} from "./standard-extensions";
 import { padBounds, parseCoordinates } from "./geometry";
 import { createScheduler, type Scheduler } from "./dom-extensions";
 import type { LocalConfigAccessor } from "./local-config";
@@ -11,10 +15,13 @@ import {
     createTypedEventTarget,
     type TypedEventTarget,
 } from "./typed-event-target";
+import {
+    createCanvasOverlay,
+    type DraftCanvasOverlay,
+} from "./drafts-canvas-overlay";
 
-interface DraftWithView {
+export interface DraftWithView {
     readonly draft: Draft;
-    readonly listView: HTMLElement;
     readonly mapView: MapView;
 }
 interface MapView {
@@ -22,7 +29,31 @@ interface MapView {
     readonly label: google.maps.MarkerLabel;
 }
 
-interface ViewConfig {
+export interface CircleConfig {
+    /** [m] */
+    readonly radius: number;
+
+    /** css color */
+    readonly strokeColor: string;
+    readonly strokeWeight: number;
+    /** [px] */
+    readonly dashLength: number;
+    /** 点線の、空白を1としたときの点部分の割合 */
+    readonly dashRatio: number;
+}
+export interface PolygonConfig {
+    readonly fill: boolean;
+    readonly fillColor: string;
+
+    /** css color */
+    readonly strokeColor: string;
+    readonly strokeWeight: number;
+    /** [px] */
+    readonly dashLength: number;
+    /** 点線の、空白を1としたときの点部分の割合 */
+    readonly dashRatio: number;
+}
+export interface ViewConfig {
     readonly minDetailZoom: number;
     readonly baseZIndex: number;
     readonly draftMarker: {
@@ -36,12 +67,36 @@ interface ViewConfig {
             readonly className: string;
         };
     };
+    readonly selected: {
+        readonly tooClose: CircleConfig;
+        readonly submissionDistance: CircleConfig;
+        readonly cell: Readonly<Record<`${number}`, PolygonConfig>>;
+    };
 }
 interface ViewOptionsCache {
     readonly draftMarkerOptions: google.maps.MarkerOptions;
     readonly draftMarkerLabel: google.maps.MarkerLabel;
 }
 function createDefaultViewConfig(): ViewConfig {
+    const cell: PolygonConfig = {
+        strokeColor: "rgba(240, 252, 249, 0.7)",
+        strokeWeight: 4,
+        dashLength: 30,
+        dashRatio: 2,
+
+        fillColor: "",
+        fill: false,
+    };
+
+    const cell17: PolygonConfig = {
+        strokeColor: "",
+        strokeWeight: 0,
+        dashLength: 30,
+        dashRatio: 2,
+
+        fillColor: "rgba(240, 252, 249, 0.4)",
+        fill: true,
+    };
     return {
         minDetailZoom: 16,
         baseZIndex: 3100,
@@ -54,6 +109,27 @@ function createDefaultViewConfig(): ViewConfig {
                 fillColor: "#FFFFBB",
                 fontSize: "11px",
                 className: classNames.label,
+            },
+        },
+        selected: {
+            tooClose: {
+                radius: 20,
+                strokeColor: "rgb(240, 252, 249)",
+                strokeWeight: 2,
+                dashLength: 30,
+                dashRatio: 3,
+            },
+            submissionDistance: {
+                radius: 10 * 1000,
+                strokeColor: "rgb(231, 18, 196)",
+                strokeWeight: 5,
+                dashLength: 50,
+                dashRatio: 3,
+            },
+            cell: {
+                14: cell,
+                16: cell,
+                17: cell17,
             },
         },
     };
@@ -79,8 +155,8 @@ function createOptionsCache(config: ViewConfig): ViewOptionsCache {
     };
 }
 
-type DraftId = Draft["id"];
-type DraftViews = Map<DraftId, DraftWithView>;
+export type DraftId = Draft["id"];
+export type DraftViews = Map<DraftId, DraftWithView>;
 export interface DraftsOverlayEventMap {
     "drafts-updated": readonly Draft[];
     "selected-draft-updated": Draft;
@@ -91,7 +167,7 @@ export interface DraftsOverlay {
     readonly cachedOptions: ViewOptionsCache;
     readonly addedMapViews: Set<MapView>;
     readonly drafts: DraftViews;
-    selectedDraftId: DraftId | null;
+    readonly selectedDraftId: Reference<DraftId | null>;
     readonly draftsCanvasOverlay: DraftCanvasOverlay;
     readonly asyncRenderDraftsInMapScope: (
         scope: (signal: AbortSignal) => Promise<void>,
@@ -119,7 +195,7 @@ function notifyDraftListUpdated(overlay: DraftsOverlay) {
 }
 
 function getPosition(draft: Draft) {
-    return draft.coordinates[0]!;
+    return draft.coordinates[0];
 }
 function includesIn(bounds: google.maps.LatLngBounds, draft: Draft) {
     return bounds.contains(getPosition(draft));
@@ -127,7 +203,6 @@ function includesIn(bounds: google.maps.LatLngBounds, draft: Draft) {
 function addDraftCore(overlay: DraftsOverlay, draft: Draft) {
     overlay.drafts.set(draft.id, {
         draft,
-        listView: document.createElement("li"),
         mapView: createMapView(overlay, draft),
     });
     notifyDraftListUpdated(overlay);
@@ -138,8 +213,16 @@ function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
     if (draftWithView) {
         draftWithView.mapView.marker.setMap(null);
         overlay.drafts.delete(draftId);
+        if (overlay.selectedDraftId.contents === draftId) {
+            overlay.selectedDraftId.contents = null;
+            updateSelectedView(overlay);
+        }
         notifyDraftListUpdated(overlay);
     }
+}
+
+function updateSelectedView(overlay: DraftsOverlay) {
+    overlay.draftsCanvasOverlay.draw();
 }
 
 function createMapView(overlay: DraftsOverlay, draft: remote.Draft): MapView {
@@ -173,14 +256,14 @@ function createMapView(overlay: DraftsOverlay, draft: remote.Draft): MapView {
     };
 }
 
-function isNeedDetail({ map, config }: DraftsOverlay) {
+export function isNeedDetail(map: google.maps.Map, config: ViewConfig) {
     return config.minDetailZoom <= (map.getZoom() ?? 0);
 }
 function updateMapView(
     overlay: DraftsOverlay,
     { mapView, draft }: DraftWithView,
 ) {
-    const needDetail = isNeedDetail(overlay);
+    const needDetail = isNeedDetail(overlay.map, overlay.config);
     const hasDetail = mapView.marker.getMap() != null;
     if (needDetail !== hasDetail) {
         if (needDetail) {
@@ -189,7 +272,7 @@ function updateMapView(
             mapView.marker.setLabel(null);
         }
     }
-    mapView.marker.setDraggable(overlay.selectedDraftId === draft.id);
+    mapView.marker.setDraggable(overlay.selectedDraftId.contents === draft.id);
 }
 function deleteDetailView(overlay: DraftsOverlay, view: MapView) {
     overlay.addedMapViews.delete(view);
@@ -202,11 +285,8 @@ async function renderDraftsInMap(overlay: DraftsOverlay, scheduler: Scheduler) {
     if (bounds == null) return;
 
     // 詳細表示かどうか
-    const needDetail = isNeedDetail(overlay);
-    const hasDetail = overlay.draftsCanvasOverlay.getMap() == null;
-    if (needDetail !== hasDetail) {
-        overlay.draftsCanvasOverlay.setMap(needDetail ? null : map);
-    }
+    const needDetail = isNeedDetail(overlay.map, overlay.config);
+
     // 簡易表示の場合
     if (!needDetail) {
         // 詳細表示を削除
@@ -257,98 +337,25 @@ function notifyMapRangeChanged(overlay: DraftsOverlay) {
     });
 }
 
-type DraftCanvasOverlay = ReturnType<typeof createCanvasOverlay>;
-function createCanvasOverlay(drafts: DraftViews, config: ViewConfig) {
-    class CanvasOverlay extends google.maps.OverlayView {
-        private _canvas: HTMLCanvasElement;
-        constructor(
-            private _drafts: DraftViews,
-            private _config: ViewConfig,
-        ) {
-            super();
-            this._canvas = document.createElement("canvas");
-            this._canvas.style.position = "absolute";
-        }
-
-        // Overlay が地図に追加された時に呼ばれる
-        override onAdd() {
-            const panes = this.getPanes()!;
-            panes.overlayLayer.appendChild(this._canvas);
-        }
-        override onRemove() {
-            if (this._canvas.parentNode) {
-                this._canvas.parentNode.removeChild(this._canvas);
-            }
-        }
-
-        // 地図が動いたりズームしたりする度に呼ばれる
-        override draw() {
-            const projection = this.getProjection();
-            if (!projection) return;
-
-            const map = this.getMap();
-            if (!(map instanceof google.maps.Map)) return;
-
-            const bounds = map.getBounds()!;
-            const sw = projection.fromLatLngToDivPixel(bounds.getSouthWest())!;
-            const ne = projection.fromLatLngToDivPixel(bounds.getNorthEast())!;
-
-            // Canvas のサイズと位置を現在の表示範囲に合わせる
-            const canvas = this._canvas;
-            canvas.style.left = sw.x + "px";
-            canvas.style.top = ne.y + "px";
-            canvas.width = ne.x - sw.x;
-            canvas.height = sw.y - ne.y;
-
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 各POIを描画
-            const strokeStyle = this._config.draftMarker.strokeColor;
-            const fillStyle = this._config.draftMarker.fillColor;
-            const radius = this._config.draftMarker.scale;
-            const lineWidth = this._config.draftMarker.strokeWeight;
-
-            for (const draft of this._drafts.values()) {
-                const position = draft.draft.coordinates[0];
-                const pixel = projection.fromLatLngToDivPixel(position)!;
-
-                // Canvas内の相対座標に変換
-                const x = pixel.x - sw.x;
-                const y = pixel.y - ne.y;
-
-                // 描画処理
-                ctx.beginPath();
-                ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                ctx.fillStyle = fillStyle;
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
-                ctx.lineWidth = lineWidth;
-                ctx.strokeStyle = strokeStyle;
-                ctx.stroke();
-            }
-        }
-    }
-    return new CanvasOverlay(drafts, config);
-}
-
 export function createDraftsOverlay(
     map: google.maps.Map,
     asyncErrorHandler: (reason: unknown) => void,
 ): DraftsOverlay {
     const config = createDefaultViewConfig();
     const drafts: DraftViews = new Map();
-    const draftsCanvasOverlay = createCanvasOverlay(drafts, config);
+    const selectedDraftId = { contents: null };
+    const draftsCanvasOverlay = createCanvasOverlay(
+        drafts,
+        config,
+        selectedDraftId,
+    );
     return {
         events: createTypedEventTarget(),
         config,
         cachedOptions: createOptionsCache(config),
         map,
         drafts,
-        selectedDraftId: null,
+        selectedDraftId,
         draftsCanvasOverlay,
         addedMapViews: new Set(),
         asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
@@ -369,6 +376,9 @@ export function createDraftsOverlay(
             if (draftWithView) {
                 draftWithView.draft.coordinates = draft.coordinates;
                 draftWithView.mapView.marker.setPosition(getPosition(draft));
+                if (this.selectedDraftId.contents === draft.id) {
+                    updateSelectedView(this);
+                }
                 notifyMapRangeChanged(this);
             }
         },
@@ -384,7 +394,9 @@ export function createDraftsOverlay(
             const draft = this.drafts.get(draftId)?.draft;
             if (draft == null) return;
 
-            this.selectedDraftId = draft.id;
+            this.selectedDraftId.contents = draft.id;
+            updateSelectedView(this);
+
             this.events.dispatchEvent(
                 createTypedCustomEvent("selected-draft-updated", draft),
             );
@@ -400,6 +412,8 @@ export async function setupDraftsOverlay(
     const style = document.createElement("style");
     style.textContent = cssText;
     document.body.append(style);
+
+    overlay.draftsCanvasOverlay.setMap(overlay.map);
 
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
