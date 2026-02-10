@@ -83,6 +83,7 @@ type DraftId = Draft["id"];
 type DraftViews = Map<DraftId, DraftWithView>;
 export interface DraftsOverlayEventMap {
     "drafts-updated": readonly Draft[];
+    "draft-selected": Draft;
 }
 export interface DraftsOverlay {
     readonly map: google.maps.Map;
@@ -140,16 +141,21 @@ function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
 }
 
 function createMapView(
-    { cachedOptions }: DraftsOverlay,
+    overlay: DraftsOverlay,
     draft: remote.Draft,
 ): MapView {
     const label: google.maps.MarkerLabel = {
-        ...cachedOptions.draftMarkerLabel,
+        ...overlay.cachedOptions.draftMarkerLabel,
         text: draft.name,
     };
-    const marker = new google.maps.Marker(cachedOptions.draftMarkerOptions);
+    const marker = new google.maps.Marker(overlay.cachedOptions.draftMarkerOptions);
     marker.setPosition(getPosition(draft));
     marker.setLabel(label);
+    marker.addListener("click", () => {
+        overlay.events.dispatchEvent(
+            createTypedCustomEvent("draft-selected", draft),
+        );
+    });
     return {
         label,
         marker,

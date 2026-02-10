@@ -47,6 +47,15 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     let searchTerm: string = "";
     let selectedDraft: Draft | null = null;
 
+    overlay.events.addEventListener("draft-selected", (event) => {
+        selectedDraft = event.detail;
+        updateDetailPane();
+        updateVirtualList();
+        events.dispatchEvent(
+            createTypedCustomEvent("draft-selected", selectedDraft),
+        );
+    });
+
     const dispatchCountUpdatedEvent = () => {
         events.dispatchEvent(
             createTypedCustomEvent("count-changed", {
