@@ -363,6 +363,7 @@ export function createDraftsOverlay(
 export async function setupDraftsOverlay(
     overlay: DraftsOverlay,
     local: LocalConfigAccessor,
+    scheduler: Scheduler,
 ) {
     const style = document.createElement("style");
     style.textContent = cssText;
@@ -377,6 +378,7 @@ export async function setupDraftsOverlay(
             { rootUrl: apiRoot },
         );
         for (const route of routes) {
+            await scheduler.yield();
             overlay.addDraft({
                 ...route,
                 coordinates: parseCoordinates(route.coordinates) as [

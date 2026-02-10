@@ -25,14 +25,21 @@ export interface Scheduler {
 
 function createSchedulerByAnimationFrame(
     signal: AbortSignal,
-    thresholdMs = 10,
+    thresholdMs: number,
 ): Scheduler {
     let startTime = performance.now();
-    let lastHandle: number | undefined;
+    let lastHandle: number | null = null;
 
-    signal.addEventListener("abort", () => {
-        if (lastHandle != null) cancelAnimationFrame(lastHandle);
-    });
+    signal.addEventListener(
+        "abort",
+        () => {
+            if (lastHandle != null) {
+                cancelAnimationFrame(lastHandle);
+                lastHandle = null;
+            }
+        },
+        { once: true },
+    );
 
     return {
         get isYieldRequested() {
