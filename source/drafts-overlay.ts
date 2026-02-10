@@ -83,7 +83,7 @@ type DraftId = Draft["id"];
 type DraftViews = Map<DraftId, DraftWithView>;
 export interface DraftsOverlayEventMap {
     "drafts-updated": readonly Draft[];
-    "draft-selected": Draft;
+    "selected-draft-updated": Draft;
 }
 export interface DraftsOverlay {
     readonly map: google.maps.Map;
@@ -91,6 +91,7 @@ export interface DraftsOverlay {
     readonly cachedOptions: ViewOptionsCache;
     readonly addedMapViews: Set<MapView>;
     readonly drafts: DraftViews;
+    selectedDraftId: DraftId | null;
     readonly draftsCanvasOverlay: DraftCanvasOverlay;
     readonly asyncRenderDraftsInMapScope: (
         scope: (signal: AbortSignal) => Promise<void>,
@@ -103,6 +104,7 @@ export interface DraftsOverlay {
     updateDraftCoordinates(draft: Draft): void;
     addDraft(draft: Draft): void;
     deleteDraft(draftId: Draft["id"]): void;
+    select(id: string): void;
 }
 function notifyDraftListUpdated(overlay: DraftsOverlay) {
     overlay.asyncRouteListUpdateScope(async (_signal) => {
@@ -140,20 +142,29 @@ function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
     }
 }
 
-function createMapView(
-    overlay: DraftsOverlay,
-    draft: remote.Draft,
-): MapView {
+function createMapView(overlay: DraftsOverlay, draft: remote.Draft): MapView {
     const label: google.maps.MarkerLabel = {
         ...overlay.cachedOptions.draftMarkerLabel,
         text: draft.name,
     };
-    const marker = new google.maps.Marker(overlay.cachedOptions.draftMarkerOptions);
+    const marker = new google.maps.Marker(
+        overlay.cachedOptions.draftMarkerOptions,
+    );
     marker.setPosition(getPosition(draft));
     marker.setLabel(label);
     marker.addListener("click", () => {
+        overlay.select(draft.id);
+    });
+    marker.addListener("dragend", () => {
+        const newPosition = marker.getPosition();
+        if (newPosition == null) return;
+
+        draft.coordinates = [
+            { lat: newPosition.lat(), lng: newPosition.lng() },
+        ] as [LatLng, ...LatLng[]];
+        overlay.updateDraftCoordinates(draft);
         overlay.events.dispatchEvent(
-            createTypedCustomEvent("draft-selected", draft),
+            createTypedCustomEvent("selected-draft-updated", draft),
         );
     });
     return {
@@ -165,7 +176,10 @@ function createMapView(
 function isNeedDetail({ map, config }: DraftsOverlay) {
     return config.minDetailZoom <= (map.getZoom() ?? 0);
 }
-function updateMapView(overlay: DraftsOverlay, { mapView }: DraftWithView) {
+function updateMapView(
+    overlay: DraftsOverlay,
+    { mapView, draft }: DraftWithView,
+) {
     const needDetail = isNeedDetail(overlay);
     const hasDetail = mapView.marker.getMap() != null;
     if (needDetail !== hasDetail) {
@@ -175,6 +189,7 @@ function updateMapView(overlay: DraftsOverlay, { mapView }: DraftWithView) {
             mapView.marker.setLabel(null);
         }
     }
+    mapView.marker.setDraggable(overlay.selectedDraftId === draft.id);
 }
 function deleteDetailView(overlay: DraftsOverlay, view: MapView) {
     overlay.addedMapViews.delete(view);
@@ -333,6 +348,7 @@ export function createDraftsOverlay(
         cachedOptions: createOptionsCache(config),
         map,
         drafts,
+        selectedDraftId: null,
         draftsCanvasOverlay,
         addedMapViews: new Set(),
         asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
@@ -362,6 +378,16 @@ export function createDraftsOverlay(
         },
         deleteDraft(this: DraftsOverlay, draftId: Draft["id"]) {
             deleteDraftCore(this, draftId);
+            notifyMapRangeChanged(this);
+        },
+        select(draftId: Draft["id"]) {
+            const draft = this.drafts.get(draftId)?.draft;
+            if (draft == null) return;
+
+            this.selectedDraftId = draft.id;
+            this.events.dispatchEvent(
+                createTypedCustomEvent("selected-draft-updated", draft),
+            );
             notifyMapRangeChanged(this);
         },
     };

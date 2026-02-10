@@ -32,7 +32,6 @@ interface DraftListOptions {
     readonly local: LocalConfigAccessor;
 }
 interface DraftListEventMap {
-    "draft-selected": Draft | null;
     "count-changed": {
         totalCount: number;
         filteredCount: number;
@@ -47,13 +46,11 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     let searchTerm: string = "";
     let selectedDraft: Draft | null = null;
 
-    overlay.events.addEventListener("draft-selected", (event) => {
-        selectedDraft = event.detail;
+    overlay.events.addEventListener("selected-draft-updated", ({ detail }) => {
+        selectedDraft = detail;
         updateDetailPane();
         updateVirtualList();
-        events.dispatchEvent(
-            createTypedCustomEvent("draft-selected", selectedDraft),
-        );
+        saveDraftChanges(detail);
     });
 
     const dispatchCountUpdatedEvent = () => {
@@ -217,9 +214,6 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         if (selectedDraft?.id === draftId) {
             selectedDraft = null;
             updateDetailPane();
-            events.dispatchEvent(
-                createTypedCustomEvent("draft-selected", null),
-            );
         }
         updateVirtualList();
 
@@ -292,9 +286,6 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         selectedDraft = newDraft;
         updateDetailPane();
         updateVirtualList();
-        events.dispatchEvent(
-            createTypedCustomEvent("draft-selected", newDraft),
-        );
         dispatchCountUpdatedEvent();
         saveDraftChanges(newDraft);
     };
@@ -371,10 +362,8 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
 
                 item.addEventListener("click", () => {
                     selectedDraft = draft;
+                    overlay.select(draft.id);
                     updateDetailPane();
-                    events.dispatchEvent(
-                        createTypedCustomEvent("draft-selected", draft),
-                    );
                     updateVirtualList();
                 });
                 item.addEventListener("dblclick", () => {
@@ -413,9 +402,6 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
             ) {
                 selectedDraft = null;
                 updateDetailPane();
-                events.dispatchEvent(
-                    createTypedCustomEvent("draft-selected", null),
-                );
             }
         },
     };
