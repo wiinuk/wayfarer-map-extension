@@ -46,11 +46,24 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     let searchTerm: string = "";
     let selectedDraft: Draft | null = null;
 
-    overlay.events.addEventListener("selected-draft-updated", ({ detail }) => {
-        selectedDraft = detail;
+    overlay.events.addEventListener("selection-changed", ({ detail: id }) => {
+        if (id == null) {
+            selectedDraft = null;
+        } else {
+            const draft = allDrafts.find((x) => x.id === id);
+            if (draft == null) return;
+            selectedDraft = draft;
+        }
         updateDetailPane();
         updateVirtualList();
-        saveDraftChanges(detail);
+    });
+    overlay.events.addEventListener("draft-updated", ({ detail: id }) => {
+        const draft = allDrafts.find((x) => x.id === id);
+        if (draft == null) return;
+
+        updateDetailPane();
+        updateVirtualList();
+        saveDraftChanges(draft);
     });
 
     const dispatchCountUpdatedEvent = () => {

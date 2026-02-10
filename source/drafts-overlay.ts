@@ -159,7 +159,8 @@ export type DraftId = Draft["id"];
 export type DraftViews = Map<DraftId, DraftWithView>;
 export interface DraftsOverlayEventMap {
     "drafts-updated": readonly Draft[];
-    "selected-draft-updated": Draft;
+    "draft-updated": DraftId;
+    "selection-changed": DraftId | null;
 }
 export interface DraftsOverlay {
     readonly map: google.maps.Map;
@@ -247,7 +248,7 @@ function createMapView(overlay: DraftsOverlay, draft: remote.Draft): MapView {
         ] as [LatLng, ...LatLng[]];
         overlay.updateDraftCoordinates(draft);
         overlay.events.dispatchEvent(
-            createTypedCustomEvent("selected-draft-updated", draft),
+            createTypedCustomEvent("draft-updated", draft.id),
         );
     });
     return {
@@ -398,7 +399,7 @@ export function createDraftsOverlay(
             updateSelectedView(this);
 
             this.events.dispatchEvent(
-                createTypedCustomEvent("selected-draft-updated", draft),
+                createTypedCustomEvent("selection-changed", draft.id),
             );
             notifyMapRangeChanged(this);
         },
