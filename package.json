@@ -22,7 +22,8 @@
     "debug": "node build.mjs --watch --debug",
     "test": "vitest run",
     "lint": "eslint . --ext .ts",
-    "lint:fix": "eslint . --ext .ts --fix"
+    "lint:fix": "eslint . --ext .ts --fix",
+    "check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
