@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.3.2
+// @version      0.3.3
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -16786,30 +16786,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText4 = ':root {\n    --border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7: #ccc;\n    --selected-background-color-b59470ea5d34b63da9dbef81116a274d9cee371d: #2563eb;\n    --selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac: #fff;\n    --text-muted-8116c6342b1ab5b58be65a16520ac5899f72ad8d: #666;\n    --background-color-light-c68549e1de8377e7492d8c432246b4faba145b6a: #f8f9fa;\n    --primary-color-c35d0ee321fe42aae3aacca35e71fde694eb6a1b: #2563eb;\n    --primary-color-dark-bc5f35f85b592b9573176b324b72689218678f75: #0056b3;\n}\n\n.container-5f8aaa3665c0e7077188ba7eb8620776564dd9f5 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n}\n\n.input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d:focus {\n    border-color: revert;\n    background-color: revert;\n}\n\n.input-error-3c07ef060421a1c1df2000263f1c58d674c862a9 {\n    border: 1px solid red;\n}\n\n.search-input-90284019d3a4e2898d0af36d4e89dd230d293eb9 {\n    padding: 8px;\n    margin-bottom: 8px;\n    border-radius: 4px;\n    border-color: var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    /* Override input-field border-color */\n    background-color: transparent;\n    /* Override input-field background-color */\n}\n\n.list-container-c7e1205264b118c34c0ca20d61445168ae34478b {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    border-radius: 4px;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745:last-child {\n    border-bottom: none;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745.selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211 {\n    background-color: var(--selected-background-color-b59470ea5d34b63da9dbef81116a274d9cee371d);\n    color: var(--selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac);\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745.selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211 .item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba {\n    color: var(--selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac);\n}\n\n.item-name-847df8e3d1dc20375a9435b9c3d396cf7249fd15 {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba {\n    font-size: 0.8em;\n    color: var(--text-muted-8116c6342b1ab5b58be65a16520ac5899f72ad8d);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n\n\n.detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304[open]>.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::after {\n    content: "\u2212";\n}\n\n.detail-name-779bb05b4685e30ff9d6224cfc3d5a2ce49da17c {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-c9b818f1fbe164226e95086b895120fd49dda07e,\n.detail-note-58befd1d3b05d946148582e8d6ca6a0e3925e2e5,\n.detail-coordinates-b4fbdb5db35847ca212d89f61f279ab834c5e405 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-a850c7f7d99733159a8f76a2009d68f5edd9bf81 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c,\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633 {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633 {\n    background-color: var(--primary-color-c35d0ee321fe42aae3aacca35e71fde694eb6a1b);\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a:hover,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c:hover,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5:hover,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633:hover {\n    background-color: var(--primary-color-dark-bc5f35f85b592b9573176b324b72689218678f75);\n}\n\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58 {\n    background-color: #dc3545;\n}\n\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58:hover {\n    background-color: #c82333;\n}\n\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5.is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48 {\n    background-color: #28a745;\n}\n\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5.is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48:hover {\n    background-color: #218838;\n}\n\n.input-error-3c07ef060421a1c1df2000263f1c58d674c862a9 {\n    border: 1px solid red;\n    background-color: #c82333;\n}';
+  var cssText4 = ':root {\n    --border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1: #ccc;\n    --selected-background-color-d7f64ef7b890bbee7594cf5bc100828d41a3dd1f: #2563eb;\n    --selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4: #fff;\n    --text-muted-bf5a19b1afbc0854f0a50ce10012b81f9883028b: #666;\n    --background-color-light-312fa40164e25efde6a346554297557cd49e68a2: #f8f9fa;\n    --primary-color-0ecf8e681c0883ab213d2c7c6a40d94bda12b44a: #2563eb;\n    --primary-color-dark-7390d1dc3790bb3c7a619222dfda25647e8f625a: #0056b3;\n}\n\n.container-a8e27d697d0bc425baf3dc2c5242337e753177a8 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216:focus {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.input-error-a3d58ba035f3034ca9a070c9fc80243539479b90 {\n    border: 1px solid red;\n}\n\n.search-input-8382bbc6e67a7ef46f07fa2f9de75722fbfdc642 {\n    padding: 8px;\n    margin-bottom: 8px;\n    border-radius: 4px;\n}\n\n.list-container-ce7be2434a7bb81b1d987632aa71b41a61e94948 {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    border-radius: 4px;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf:last-child {\n    border-bottom: none;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf.selected-bc18875271f8766e50b7f8a87e3580ff887f8f69 {\n    background-color: var(--selected-background-color-d7f64ef7b890bbee7594cf5bc100828d41a3dd1f);\n    color: var(--selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4);\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf.selected-bc18875271f8766e50b7f8a87e3580ff887f8f69 .item-note-7b19d49cc782813c2c4430282830d4592546b811 {\n    color: var(--selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4);\n}\n\n.item-name-8b4812ea97d1ea2711e4a9ccf6d6ed4ec6fa9d87 {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-7b19d49cc782813c2c4430282830d4592546b811 {\n    font-size: 0.8em;\n    color: var(--text-muted-bf5a19b1afbc0854f0a50ce10012b81f9883028b);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9[open] > .detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::after {\n    content: "\u2212";\n}\n\n.detail-name-ba6028060f6ac583f1a090d3d621f7e2838c59b7 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-4cc3c15a0fd85d0cbdc664b3d9ba1aeb48e207fc,\n.detail-note-bebf9fd1e3f2d012bad93b70c10582b9bc286ccc,\n.detail-coordinates-6bdc32729f5f8243f746b936016d369867ca41d5 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-9cdfbd2c49202411e49954e145abab5307d92d79 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3,\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc {\n    background-color: var(--primary-color-0ecf8e681c0883ab213d2c7c6a40d94bda12b44a);\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7:hover,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3:hover,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234:hover,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc:hover {\n    background-color: var(--primary-color-dark-7390d1dc3790bb3c7a619222dfda25647e8f625a);\n}\n\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1 {\n    background-color: #dc3545;\n}\n\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1:hover {\n    background-color: #c82333;\n}\n\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234.is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9 {\n    background-color: #28a745;\n}\n\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234.is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9:hover {\n    background-color: #218838;\n}\n\n.input-error-a3d58ba035f3034ca9a070c9fc80243539479b90 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
   var draft_list_default = {
-    container: "container-5f8aaa3665c0e7077188ba7eb8620776564dd9f5",
-    "input-field": "input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d",
-    "input-error": "input-error-3c07ef060421a1c1df2000263f1c58d674c862a9",
-    "search-input": "search-input-90284019d3a4e2898d0af36d4e89dd230d293eb9",
-    "list-container": "list-container-c7e1205264b118c34c0ca20d61445168ae34478b",
-    item: "item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745",
-    selected: "selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211",
-    "item-note": "item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba",
-    "item-name": "item-name-847df8e3d1dc20375a9435b9c3d396cf7249fd15",
-    "detail-pane": "detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304",
-    "detail-summary": "detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0",
-    "detail-name": "detail-name-779bb05b4685e30ff9d6224cfc3d5a2ce49da17c",
-    "detail-description": "detail-description-c9b818f1fbe164226e95086b895120fd49dda07e",
-    "detail-note": "detail-note-58befd1d3b05d946148582e8d6ca6a0e3925e2e5",
-    "detail-coordinates": "detail-coordinates-b4fbdb5db35847ca212d89f61f279ab834c5e405",
-    "detail-content-wrapper": "detail-content-wrapper-a850c7f7d99733159a8f76a2009d68f5edd9bf81",
-    "map-button": "map-button-77dbd7da545c04be969bb398574b70d8e5eb320a",
-    "create-button": "create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c",
-    "delete-button": "delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58",
-    "template-button": "template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5",
-    "config-button": "config-button-f979e1101ee92ad64292a17617e67cf353137633",
-    "is-template": "is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48"
+    container: "container-a8e27d697d0bc425baf3dc2c5242337e753177a8",
+    "input-field": "input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216",
+    "input-error": "input-error-a3d58ba035f3034ca9a070c9fc80243539479b90",
+    "search-input": "search-input-8382bbc6e67a7ef46f07fa2f9de75722fbfdc642",
+    "list-container": "list-container-ce7be2434a7bb81b1d987632aa71b41a61e94948",
+    item: "item-dbe64dceaaaccd57dbe04af327db992280635bcf",
+    selected: "selected-bc18875271f8766e50b7f8a87e3580ff887f8f69",
+    "item-note": "item-note-7b19d49cc782813c2c4430282830d4592546b811",
+    "item-name": "item-name-8b4812ea97d1ea2711e4a9ccf6d6ed4ec6fa9d87",
+    "detail-pane": "detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9",
+    "detail-summary": "detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b",
+    "detail-name": "detail-name-ba6028060f6ac583f1a090d3d621f7e2838c59b7",
+    "detail-description": "detail-description-4cc3c15a0fd85d0cbdc664b3d9ba1aeb48e207fc",
+    "detail-note": "detail-note-bebf9fd1e3f2d012bad93b70c10582b9bc286ccc",
+    "detail-coordinates": "detail-coordinates-6bdc32729f5f8243f746b936016d369867ca41d5",
+    "detail-content-wrapper": "detail-content-wrapper-9cdfbd2c49202411e49954e145abab5307d92d79",
+    "map-button": "map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7",
+    "create-button": "create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3",
+    "delete-button": "delete-button-27f9ef387904083464a03e980a246c11a491a4f1",
+    "template-button": "template-button-80a3eb211221ef1108e4bda1a5194790c46cf234",
+    "config-button": "config-button-1307b5b58b3594065b5da7f8f52057969ff228bc",
+    "is-template": "is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -16943,33 +16943,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/local-config-view/local-config-view.module.css
-  var cssText6 = ".container-c62d6e0c3e210898192422f7fb258483ab77e0e9 {\n    box-sizing: border-box;\n}\n\n.container-c62d6e0c3e210898192422f7fb258483ab77e0e9 {\n    width: 100%;\n    height: 100%;\n    padding: 24px;\n    color: #1f2937;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n}\n\n.form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a {\n    width: 100%;\n    margin-bottom: 18px;\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 0;\n}\n\n.form-scroll-b2cf2eefef663ac2ff02824923c4160cde7e3457 {\n    overflow-y: auto;\n    padding-right: 4px;\n    margin-right: -4px;\n    flex: 1 1 auto;\n}\n\n.form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a {\n    width: 100%;\n    margin-bottom: 18px;\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 0;\n}\n\n.label-bf72448e9d0369cd055e1aee1c9b0c62c76fcb32 {\n    font-size: 13px;\n    font-weight: 500;\n    margin-bottom: 6px;\n    color: #374151;\n}\n\n.input-86fe48169ab027adf4946272fc89101bb3189e58,\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964 {\n    width: 100%;\n    border: 1px solid #e5e7eb;\n    background-color: #ffffff;\n    border-radius: 8px;\n    padding: 10px 12px;\n    font-size: 14px;\n    color: #111827;\n    outline: none;\n    transition:\n        border-color 0.2s ease,\n        box-shadow 0.2s ease;\n}\n\n.input-86fe48169ab027adf4946272fc89101bb3189e58:focus,\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964:focus {\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.checkbox-c909268d5493d4606046e4ea8961381adb395b99 {\n    width: 16px;\n    height: 16px;\n    margin-right: 8px;\n    vertical-align: middle;\n}\n\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964 {\n    min-height: 120px;\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27 {\n    margin-top: auto;\n    font-size: 13px;\n    color: #6b7280;\n    padding-top: 10px;\n    border-radius: 8px;\n    transition:\n        background-color 0.2s ease,\n        color 0.2s ease,\n        border-color 0.2s ease;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27.success-30d06bfba90eaf460cf2304492e405b7e07d3c8a {\n    color: #065f46;\n    background-color: #ecfdf5;\n    border: 1px solid #a7f3d0;\n    padding: 10px 12px;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27.error-fa216ae567a10838ba97d1e17b7cbf42b00b77d8 {\n    color: #7f1d1d;\n    background-color: #fef2f2;\n    border: 1px solid #fecaca;\n    padding: 10px 12px;\n}\n";
+  var cssText6 = ".container-f1dab241a09bb3df58f56a71a1860677b51f2515 {\n    box-sizing: border-box;\n}\n\n.container-f1dab241a09bb3df58f56a71a1860677b51f2515 {\n    width: 100%;\n    height: 100%;\n    padding: 24px;\n    color: #1f2937;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n}\n\n.form-scroll-2e3ac2fd8bc51e6f171db04ef7d943ff85b90020 {\n    overflow-y: auto;\n    padding-right: 4px;\n    margin-right: -4px;\n    flex: 1 1 auto;\n}\n\n.status-message-c256dff5faa609e9d6ec55dc16d17267529c8bdc {\n    margin-top: auto;\n    font-size: 13px;\n    color: #6b7280;\n    padding-top: 10px;\n    border-radius: 8px;\n    transition:\n        background-color 0.2s ease,\n        color 0.2s ease,\n        border-color 0.2s ease;\n}\n\n.status-message-c256dff5faa609e9d6ec55dc16d17267529c8bdc.success-2e73314ef49e2ec643b73bff4583ac0097498f92 {\n    color: #065f46;\n    background-color: #ecfdf5;\n    border: 1px solid #a7f3d0;\n    padding: 10px 12px;\n}\n\n.status-message-c256dff5faa609e9d6ec55dc16d17267529c8bdc.error-683e02068e71c66e6211aa9a1b8738688ff5ad26 {\n    color: #7f1d1d;\n    background-color: #fef2f2;\n    border: 1px solid #fecaca;\n    padding: 10px 12px;\n}\n";
   var local_config_view_default = {
-    container: "container-c62d6e0c3e210898192422f7fb258483ab77e0e9",
-    "form-group": "form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a",
-    "form-scroll": "form-scroll-b2cf2eefef663ac2ff02824923c4160cde7e3457",
-    label: "label-bf72448e9d0369cd055e1aee1c9b0c62c76fcb32",
-    input: "input-86fe48169ab027adf4946272fc89101bb3189e58",
-    textarea: "textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964",
-    checkbox: "checkbox-c909268d5493d4606046e4ea8961381adb395b99",
-    "status-message": "status-message-cecf7e1257498b94a046e071577eeb62b65d1f27",
-    success: "success-30d06bfba90eaf460cf2304492e405b7e07d3c8a",
-    error: "error-fa216ae567a10838ba97d1e17b7cbf42b00b77d8"
+    container: "container-f1dab241a09bb3df58f56a71a1860677b51f2515",
+    "form-scroll": "form-scroll-2e3ac2fd8bc51e6f171db04ef7d943ff85b90020",
+    "status-message": "status-message-c256dff5faa609e9d6ec55dc16d17267529c8bdc",
+    success: "success-2e73314ef49e2ec643b73bff4583ac0097498f92",
+    error: "error-683e02068e71c66e6211aa9a1b8738688ff5ad26"
   };
 
   // source/local-config-view/item-input.module.css
-  var cssText7 = ".container-1da15c2e0d6731b82a642e081c3e0807bd915a50 {\r\n    box-sizing: border-box;\r\n}\r\n\r\n.container-1da15c2e0d6731b82a642e081c3e0807bd915a50 {\r\n    width: 100%;\r\n    height: 100%;\r\n    padding: 24px;\r\n    color: #1f2937;\r\n    display: flex;\r\n    flex-direction: column;\r\n    overflow: hidden;\r\n}\r\n\r\n.form-group-e6f953b3202fc1e43c5281df331a702899914712 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.form-scroll-9707e048810969273055773f749e3a25d18be844 {\r\n    overflow-y: auto;\r\n    padding-right: 4px;\r\n    margin-right: -4px;\r\n    flex: 1 1 auto;\r\n}\r\n\r\n.form-group-e6f953b3202fc1e43c5281df331a702899914712 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.label-54722aec84d4e49a5a9d34f40dc16ab9b179f27c {\r\n    font-size: 13px;\r\n    font-weight: 500;\r\n    margin-bottom: 6px;\r\n    color: #374151;\r\n}\r\n\r\n.input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52,\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82 {\r\n    width: 100%;\r\n    border: 1px solid #e5e7eb;\r\n    background-color: #ffffff;\r\n    border-radius: 8px;\r\n    padding: 10px 12px;\r\n    font-size: 14px;\r\n    color: #111827;\r\n    outline: none;\r\n    transition:\r\n        border-color 0.2s ease,\r\n        box-shadow 0.2s ease;\r\n}\r\n\r\n.input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52:focus,\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82:focus {\r\n    border-color: #cbd5e1;\r\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\r\n}\r\n\r\n.checkbox-6e6d5788ae8882a4e46ebee5990a77357a2bad4c {\r\n    width: 16px;\r\n    height: 16px;\r\n    margin-right: 8px;\r\n    vertical-align: middle;\r\n}\r\n\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82 {\r\n    min-height: 120px;\r\n    resize: vertical;\r\n    line-height: 1.5;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d {\r\n    margin-top: auto;\r\n    font-size: 13px;\r\n    color: #6b7280;\r\n    padding-top: 10px;\r\n    border-radius: 8px;\r\n    transition:\r\n        background-color 0.2s ease,\r\n        color 0.2s ease,\r\n        border-color 0.2s ease;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d.success-b0f443b2bcb8e5579741dc1f7c65d6e477022f78 {\r\n    color: #065f46;\r\n    background-color: #ecfdf5;\r\n    border: 1px solid #a7f3d0;\r\n    padding: 10px 12px;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d.error-d04cc5eac77c5f4861c21be22b8a913e693f221a {\r\n    color: #7f1d1d;\r\n    background-color: #fef2f2;\r\n    border: 1px solid #fecaca;\r\n    padding: 10px 12px;\r\n}\r\n";
+  var cssText7 = ".form-group-cfa8be85397d8b9a9d394fdc2406560b09e4e980 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.form-group-cfa8be85397d8b9a9d394fdc2406560b09e4e980 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.label-42a78d369278a82175c3d5b1fbe984b43b575a9c {\r\n    font-size: 13px;\r\n    font-weight: 500;\r\n    margin-bottom: 6px;\r\n    color: #374151;\r\n}\r\n\r\n.input-af84d180c49ec0031f14fd6aa82406c5b965484c,\r\n.textarea-0ac0e29e175fbd1d5b8ec95c007f6ace13309ebf {\r\n    width: 100%;\r\n    border: 1px solid #e5e7eb;\r\n    background-color: #ffffff;\r\n    border-radius: 8px;\r\n    padding: 10px 12px;\r\n    font-size: 14px;\r\n    color: #111827;\r\n    outline: none;\r\n    transition:\r\n        border-color 0.2s ease,\r\n        box-shadow 0.2s ease;\r\n}\r\n\r\n.input-af84d180c49ec0031f14fd6aa82406c5b965484c:focus,\r\n.textarea-0ac0e29e175fbd1d5b8ec95c007f6ace13309ebf:focus {\r\n    border-color: #cbd5e1;\r\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\r\n}\r\n\r\n.checkbox-0681e13a0a1078a3f1d4571eaad54d5c8e324cfb {\r\n    width: 16px;\r\n    height: 16px;\r\n    margin-right: 8px;\r\n    vertical-align: middle;\r\n}\r\n\r\n.textarea-0ac0e29e175fbd1d5b8ec95c007f6ace13309ebf {\r\n    min-height: 120px;\r\n    resize: vertical;\r\n    line-height: 1.5;\r\n}\r\n";
   var item_input_default = {
-    container: "container-1da15c2e0d6731b82a642e081c3e0807bd915a50",
-    "form-group": "form-group-e6f953b3202fc1e43c5281df331a702899914712",
-    "form-scroll": "form-scroll-9707e048810969273055773f749e3a25d18be844",
-    label: "label-54722aec84d4e49a5a9d34f40dc16ab9b179f27c",
-    input: "input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52",
-    textarea: "textarea-ddac2b70190c228138ed33923699ca64d4635d82",
-    checkbox: "checkbox-6e6d5788ae8882a4e46ebee5990a77357a2bad4c",
-    "status-message": "status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d",
-    success: "success-b0f443b2bcb8e5579741dc1f7c65d6e477022f78",
-    error: "error-d04cc5eac77c5f4861c21be22b8a913e693f221a"
+    "form-group": "form-group-cfa8be85397d8b9a9d394fdc2406560b09e4e980",
+    label: "label-42a78d369278a82175c3d5b1fbe984b43b575a9c",
+    input: "input-af84d180c49ec0031f14fd6aa82406c5b965484c",
+    textarea: "textarea-0ac0e29e175fbd1d5b8ec95c007f6ace13309ebf",
+    checkbox: "checkbox-0681e13a0a1078a3f1d4571eaad54d5c8e324cfb"
   };
 
   // source/local-config-view/item-input-string.tsx
@@ -16985,10 +16975,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       ] }) }),
       inputContainer
     ] });
-    const onChanged = () => {
-      const value = getValue2();
-      events.dispatchEvent(createTypedCustomEvent("changed", value));
-    };
+    const onChanged = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
     enabledCheckbox.addEventListener("change", () => {
       const isChecked = enabledCheckbox.checked;
       input.disabled = !isChecked;
@@ -17047,7 +17034,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       }
     }
-    const onChange = () => events.dispatchEvent(createTypedCustomEvent("changed", getValue2()));
+    const onChange = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
     enabledCheckbox.addEventListener("change", () => {
       const isChecked = enabledCheckbox.checked;
       textarea.disabled = !isChecked;
@@ -17208,34 +17195,47 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       cssText: virtualListCssText
     } = createVirtualList();
     listContainer.append(virtualListElement);
-    const searchInput = /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "search",
-        class: draft_list_default["search-input"],
-        placeholder: "Search drafts..."
-      }
+    const searchInput = /* @__PURE__ */ jsx("input", { type: "search", placeholder: "Search drafts..." });
+    searchInput.classList.add(
+      draft_list_default["search-input"],
+      draft_list_default["input-field"]
     );
-    const detailName = /* @__PURE__ */ jsx("input", { type: "text", class: draft_list_default["detail-name"], value: "" });
+    const detailName = /* @__PURE__ */ jsx("input", { type: "text", value: "" });
+    detailName.classList.add(
+      draft_list_default["detail-name"],
+      draft_list_default["input-field"]
+    );
     detailName.addEventListener("input", (event) => {
       if (!selectedDraft) return;
       selectedDraft.name = event.target.value;
       overlay.updateDraftTitle(selectedDraft);
       saveDraftChanges(selectedDraft);
     });
-    const detailDescription = /* @__PURE__ */ jsx("textarea", { class: draft_list_default["detail-description"], value: "" });
+    const detailDescription = /* @__PURE__ */ jsx("textarea", { value: "" });
+    detailDescription.classList.add(
+      draft_list_default["detail-description"],
+      draft_list_default["input-field"]
+    );
     detailDescription.addEventListener("input", (event) => {
       if (!selectedDraft) return;
       selectedDraft.description = event.target.value;
       saveDraftChanges(selectedDraft);
     });
     const detailNote = /* @__PURE__ */ jsx("textarea", { class: draft_list_default["detail-note"], value: "" });
+    detailNote.classList.add(
+      draft_list_default["detail-note"],
+      draft_list_default["input-field"]
+    );
     detailNote.addEventListener("input", (event) => {
       if (!selectedDraft) return;
       selectedDraft.note = event.target.value;
       saveDraftChanges(selectedDraft);
     });
-    const detailCoordinates = /* @__PURE__ */ jsx("input", { type: "text", class: draft_list_default["detail-coordinates"], value: "" });
+    const detailCoordinates = /* @__PURE__ */ jsx("input", { type: "text", value: "" });
+    detailCoordinates.classList.add(
+      draft_list_default["detail-coordinates"],
+      draft_list_default["input-field"]
+    );
     detailCoordinates.addEventListener("input", (event) => {
       if (!selectedDraft) return;
       const textarea = event.target;
