@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.3.3
+// @version      0.3.4
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -16043,12 +16043,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function includesIn(bounds, draft) {
     return bounds.contains(getPosition(draft));
   }
-  function addDraftCore(overlay, draft) {
+  function addDraft(overlay, draft) {
     overlay.drafts.set(draft.id, {
       draft,
       mapView: createMapView(overlay, draft)
     });
-    notifyDraftListUpdated(overlay);
   }
   function deleteDraftCore(overlay, draftId) {
     const draftWithView = overlay.drafts.get(draftId);
@@ -16198,8 +16197,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           notifyMapRangeChanged(this);
         }
       },
+      async addDrafts(drafts2, scheduler) {
+        for (const draft of drafts2) {
+          await scheduler.yield();
+          addDraft(this, draft);
+        }
+        notifyDraftListUpdated(this);
+        notifyMapRangeChanged(this);
+      },
       addDraft(draft) {
-        addDraftCore(this, draft);
+        addDraft(this, draft);
+        notifyDraftListUpdated(this);
         notifyMapRangeChanged(this);
       },
       deleteDraft(draftId) {
@@ -16223,6 +16231,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     style.textContent = cssText2;
     document.body.append(style);
     overlay.draftsCanvasOverlay.setMap(overlay.map);
+    overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
+    notifyMapRangeChanged(overlay);
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
       const { routes } = await getDrafts(
@@ -16231,18 +16241,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         },
         { rootUrl: apiRoot }
       );
-      for (const route of routes) {
-        await scheduler.yield();
-        overlay.addDraft({
-          ...route,
-          coordinates: parseCoordinates(route.coordinates),
-          id: route.routeId,
-          name: route.routeName
-        });
-      }
+      const drafts = routes.map((route) => ({
+        ...route,
+        coordinates: parseCoordinates(route.coordinates),
+        id: route.routeId,
+        name: route.routeName
+      }));
+      await overlay.addDrafts(drafts, scheduler);
     }
-    overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
-    notifyMapRangeChanged(overlay);
   }
 
   // inline-worker:__inline-worker
