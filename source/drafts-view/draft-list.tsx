@@ -401,16 +401,30 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
 
                 item.append(nameDiv, noteDiv);
 
-                item.addEventListener("click", () => {
-                    selectedDraft = draft;
+                const onClick = () => {
                     overlay.select(draft.id);
                     updateDetailPane();
                     updateVirtualList();
-                });
-                item.addEventListener("dblclick", () => {
+                };
+                const onDblclick = () => {
                     if (draft) {
                         overlay.map.setCenter(draft.coordinates[0]);
                     }
+                };
+
+                // firefox で click と dblclick が干渉するので対策
+                let clickTimer: ReturnType<typeof setTimeout> | null = null;
+                item.addEventListener("click", () => {
+                    clickTimer = setTimeout(() => {
+                        selectedDraft = draft;
+                        onClick();
+                        clickTimer = null;
+                    }, 0);
+                });
+                item.addEventListener("dblclick", () => {
+                    if (clickTimer !== null) clearTimeout(clickTimer);
+                    clickTimer = null;
+                    onDblclick();
                 });
                 return item;
             },
