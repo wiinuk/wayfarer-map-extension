@@ -5,6 +5,7 @@ import {
 } from "./typed-event-target";
 
 export type LocalConfigAccessor = ReturnType<typeof createConfigAccessor>;
+export type Config = ReturnType<LocalConfigAccessor["getConfig"]>;
 export function createConfigAccessor(key: string) {
     const ConfigV1Schema = zod
         .strictObject({
