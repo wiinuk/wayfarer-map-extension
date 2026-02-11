@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.3.1
+// @version      0.3.2
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -15098,15 +15098,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var zod_default = external_exports;
 
   // source/local-config.ts
+  var ConfigSchema = zod_default.strictObject({
+    version: zod_default.literal("1"),
+    userId: zod_default.string().optional(),
+    apiRoot: zod_default.string().optional(),
+    dictionaries: zod_default.record(zod_default.string(), zod_default.record(zod_default.string(), zod_default.string())).optional()
+  }).readonly();
   function createConfigAccessor(key) {
-    const ConfigV1Schema = zod_default.strictObject({
-      version: zod_default.literal("1"),
-      userId: zod_default.string().optional(),
-      apiRoot: zod_default.string().optional(),
-      dictionaries: zod_default.record(zod_default.string(), zod_default.record(zod_default.string(), zod_default.string())).optional()
-    }).readonly();
-    const ConfigSchema = ConfigV1Schema;
-    const eventTarget = createTypedEventTarget();
+    const events = createTypedEventTarget();
     return {
       getConfig() {
         const jsonText = localStorage.getItem(key);
@@ -15119,13 +15118,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       },
       setConfig(config2) {
         localStorage.setItem(key, JSON.stringify(config2));
-        eventTarget.dispatchEvent(
+        events.dispatchEvent(
           createTypedCustomEvent("config-changed", config2)
         );
       },
-      addEventHandler(type, listener) {
-        eventTarget.addEventListener(type, listener);
-      }
+      events
     };
   }
 
@@ -16789,245 +16786,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText4 = `:root {
-    --border-color-153bdca4962b91115ecc9c9100a8042d015a5a42: #ccc;
-    --selected-background-color-5e1cb070b08adc44996c7cfb3d3ab7c010b7dfb4: #2563eb;
-    --selected-text-color-2697f27c8008f2c6a61e8d597c8a5c6cbae4f986: #fff;
-    --text-muted-bc3605a654b28f6ae2d6eb697e8fb67eb3046e3a: #666;
-    --background-color-light-14c875c4cb2d382eaba7651f987d40a07ed864be: #f8f9fa;
-    --primary-color-200e89af44e5f7a4382cc5cdb936d7b6365b36e4: #2563eb;
-    --primary-color-dark-bc0ad8c6a4ff153b24621c8eef907a18538c27de: #0056b3;
-}
-
-.container-313065728ad86ea4eb712fa7c61743c1677b1f11 {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.search-input-7db3ae85c75e64d33541570a829d4f38260bcd2d {
-    padding: 8px;
-    margin-bottom: 8px;
-    border: 1px solid var(--border-color-153bdca4962b91115ecc9c9100a8042d015a5a42);
-    border-radius: 4px;
-}
-
-.list-container-162fbb26ae044d4fd3272ac8c596a81d39e0bd15 {
-    flex-grow: 1;
-    overflow-y: auto;
-    border: 1px solid var(--border-color-153bdca4962b91115ecc9c9100a8042d015a5a42);
-    border-radius: 4px;
-}
-
-.item-16028e21f42fa97433470b46dfd6cc31711d2a7d {
-    height: 100%;
-    display: flex;
-    align-items: center;
-    flex-grow: 1;
-    min-width: 0;
-    padding: 4px;
-    border-bottom: 1px solid var(--border-color-153bdca4962b91115ecc9c9100a8042d015a5a42);
-    cursor: pointer;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-.item-16028e21f42fa97433470b46dfd6cc31711d2a7d:last-child {
-    border-bottom: none;
-}
-
-.item-16028e21f42fa97433470b46dfd6cc31711d2a7d.selected-d28433a0a55ef26797c3ac104c1d90d6ecb33486 {
-    background-color: var(--selected-background-color-5e1cb070b08adc44996c7cfb3d3ab7c010b7dfb4);
-    color: var(--selected-text-color-2697f27c8008f2c6a61e8d597c8a5c6cbae4f986);
-}
-
-.item-16028e21f42fa97433470b46dfd6cc31711d2a7d.selected-d28433a0a55ef26797c3ac104c1d90d6ecb33486 .item-note-9d6688ee823df3e46c171db8476942b9c84c3ea9 {
-    color: var(--selected-text-color-2697f27c8008f2c6a61e8d597c8a5c6cbae4f986);
-}
-
-.item-name-9ca2686bbdb7bcd64a2aabda55d758b8b0e82c9e {
-    font-weight: bold;
-    flex-shrink: 0;
-    margin-right: 4px;
-}
-
-.item-note-9d6688ee823df3e46c171db8476942b9c84c3ea9 {
-    font-size: 0.8em;
-    color: var(--text-muted-bc3605a654b28f6ae2d6eb697e8fb67eb3046e3a);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-
-
-.detail-pane-562c8a5616f73bedde894fc9ed77f6f58a56ab92 {
-    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border-color-153bdca4962b91115ecc9c9100a8042d015a5a42);
-    border-radius: 4px;
-    flex-shrink: 0;
-    padding: 0;
-}
-
-.detail-summary-36bec806df5fd148b2e76ee499637f89da9dfb01 {
-    list-style: none;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    padding: 16px;
-}
-
-/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */
-.detail-summary-36bec806df5fd148b2e76ee499637f89da9dfb01::-webkit-details-marker {
-    display: none;
-}
-
-/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */
-.detail-summary-36bec806df5fd148b2e76ee499637f89da9dfb01::after {
-    content: "+";
-    font-size: 1.5em;
-    line-height: 1;
-    margin-left: 10px;
-}
-
-/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */
-.detail-pane-562c8a5616f73bedde894fc9ed77f6f58a56ab92[open]>.detail-summary-36bec806df5fd148b2e76ee499637f89da9dfb01::after {
-    content: "\u2212";
-}
-
-.detail-name-1c4e0bc14b08543cd6e636c1ee027502cea2df15 {
-    flex-grow: 1;
-    font-size: 1.2em;
-    font-weight: bold;
-    margin-bottom: 0;
-}
-
-.detail-description-3478389503056556c2628903ea95a36d878cef1b,
-.detail-note-590ea7534d99f7c1dd54020519f6e256b4a5fb51,
-.detail-coordinates-c9bd6deca00791eb9f10aaf49128ff4a70ef72d2 {
-    margin-bottom: 4px;
-    margin-top: 0;
-    padding: 0 0;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.search-input-7db3ae85c75e64d33541570a829d4f38260bcd2d,
-.detail-name-1c4e0bc14b08543cd6e636c1ee027502cea2df15,
-.detail-description-3478389503056556c2628903ea95a36d878cef1b,
-.detail-note-590ea7534d99f7c1dd54020519f6e256b4a5fb51,
-.detail-coordinates-c9bd6deca00791eb9f10aaf49128ff4a70ef72d2 {
-    border: 1px solid;
-    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;
-
-    background-color: rgba(255, 255, 255, 0.25);
-}
-
-:is(.search-input-7db3ae85c75e64d33541570a829d4f38260bcd2d,
-    .detail-name-1c4e0bc14b08543cd6e636c1ee027502cea2df15,
-    .detail-description-3478389503056556c2628903ea95a36d878cef1b,
-    .detail-note-590ea7534d99f7c1dd54020519f6e256b4a5fb51,
-    .detail-coordinates-c9bd6deca00791eb9f10aaf49128ff4a70ef72d2):focus {
-    border-color: revert;
-    background-color: revert;
-}
-
-.detail-content-wrapper-a251348d38d63ee8a250faedb12cff67737b903c {
-    padding: 0 16px 16px 16px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.map-button-ec75627dd1e4d2d595235911109ec4bed560c8af {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background-color: var(--primary-color-200e89af44e5f7a4382cc5cdb936d7b6365b36e4);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.map-button-ec75627dd1e4d2d595235911109ec4bed560c8af:hover,
-.create-button-2b470818347dda7d1eace575387a3c2a37acf340:hover {
-    background-color: var(--primary-color-dark-bc0ad8c6a4ff153b24621c8eef907a18538c27de);
-}
-
-.create-button-2b470818347dda7d1eace575387a3c2a37acf340 {
-    margin-top: 8px;
-    /* Consistent with map-button's top margin */
-    padding: 8px 12px;
-    background-color: var(--primary-color-200e89af44e5f7a4382cc5cdb936d7b6365b36e4);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.delete-button-fe86f5860e2a38336992ebec279d42dd6d504fc9 {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.delete-button-fe86f5860e2a38336992ebec279d42dd6d504fc9:hover {
-    background-color: #c82333;
-}
-
-.template-button-9ad7b525367cb9981ef791f3e1d5118d1cb9913d {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background-color: var(--primary-color-200e89af44e5f7a4382cc5cdb936d7b6365b36e4);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.template-button-9ad7b525367cb9981ef791f3e1d5118d1cb9913d:hover {
-    background-color: var(--primary-color-dark-bc0ad8c6a4ff153b24621c8eef907a18538c27de);
-}
-
-.template-button-9ad7b525367cb9981ef791f3e1d5118d1cb9913d.is-template-ffc367bf7263cf9af9f7a0789ce42d77a3627e1b {
-    background-color: #28a745;
-}
-
-.template-button-9ad7b525367cb9981ef791f3e1d5118d1cb9913d.is-template-ffc367bf7263cf9af9f7a0789ce42d77a3627e1b:hover {
-    background-color: #218838;
-}
-
-.input-error-2f2f930bbb2bde8c8ffabda83fb63b77989c11e2 {
-    border: 1px solid red;
-}`;
+  var cssText4 = ':root {\n    --border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7: #ccc;\n    --selected-background-color-b59470ea5d34b63da9dbef81116a274d9cee371d: #2563eb;\n    --selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac: #fff;\n    --text-muted-8116c6342b1ab5b58be65a16520ac5899f72ad8d: #666;\n    --background-color-light-c68549e1de8377e7492d8c432246b4faba145b6a: #f8f9fa;\n    --primary-color-c35d0ee321fe42aae3aacca35e71fde694eb6a1b: #2563eb;\n    --primary-color-dark-bc5f35f85b592b9573176b324b72689218678f75: #0056b3;\n}\n\n.container-5f8aaa3665c0e7077188ba7eb8620776564dd9f5 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n}\n\n.input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d:focus {\n    border-color: revert;\n    background-color: revert;\n}\n\n.input-error-3c07ef060421a1c1df2000263f1c58d674c862a9 {\n    border: 1px solid red;\n}\n\n.search-input-90284019d3a4e2898d0af36d4e89dd230d293eb9 {\n    padding: 8px;\n    margin-bottom: 8px;\n    border-radius: 4px;\n    border-color: var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    /* Override input-field border-color */\n    background-color: transparent;\n    /* Override input-field background-color */\n}\n\n.list-container-c7e1205264b118c34c0ca20d61445168ae34478b {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    border-radius: 4px;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745:last-child {\n    border-bottom: none;\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745.selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211 {\n    background-color: var(--selected-background-color-b59470ea5d34b63da9dbef81116a274d9cee371d);\n    color: var(--selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac);\n}\n\n.item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745.selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211 .item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba {\n    color: var(--selected-text-color-e5615c238a7d6335048d39fd232bc73ae85057ac);\n}\n\n.item-name-847df8e3d1dc20375a9435b9c3d396cf7249fd15 {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba {\n    font-size: 0.8em;\n    color: var(--text-muted-8116c6342b1ab5b58be65a16520ac5899f72ad8d);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n\n\n.detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-6ead99f4df65bd0fc5b29cf84ac14ec1a2a793d7);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304[open]>.detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0::after {\n    content: "\u2212";\n}\n\n.detail-name-779bb05b4685e30ff9d6224cfc3d5a2ce49da17c {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-c9b818f1fbe164226e95086b895120fd49dda07e,\n.detail-note-58befd1d3b05d946148582e8d6ca6a0e3925e2e5,\n.detail-coordinates-b4fbdb5db35847ca212d89f61f279ab834c5e405 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-a850c7f7d99733159a8f76a2009d68f5edd9bf81 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c,\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633 {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633 {\n    background-color: var(--primary-color-c35d0ee321fe42aae3aacca35e71fde694eb6a1b);\n}\n\n.map-button-77dbd7da545c04be969bb398574b70d8e5eb320a:hover,\n.create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c:hover,\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5:hover,\n.config-button-f979e1101ee92ad64292a17617e67cf353137633:hover {\n    background-color: var(--primary-color-dark-bc5f35f85b592b9573176b324b72689218678f75);\n}\n\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58 {\n    background-color: #dc3545;\n}\n\n.delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58:hover {\n    background-color: #c82333;\n}\n\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5.is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48 {\n    background-color: #28a745;\n}\n\n.template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5.is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48:hover {\n    background-color: #218838;\n}\n\n.input-error-3c07ef060421a1c1df2000263f1c58d674c862a9 {\n    border: 1px solid red;\n    background-color: #c82333;\n}';
   var draft_list_default = {
-    container: "container-313065728ad86ea4eb712fa7c61743c1677b1f11",
-    "search-input": "search-input-7db3ae85c75e64d33541570a829d4f38260bcd2d",
-    "list-container": "list-container-162fbb26ae044d4fd3272ac8c596a81d39e0bd15",
-    item: "item-16028e21f42fa97433470b46dfd6cc31711d2a7d",
-    selected: "selected-d28433a0a55ef26797c3ac104c1d90d6ecb33486",
-    "item-note": "item-note-9d6688ee823df3e46c171db8476942b9c84c3ea9",
-    "item-name": "item-name-9ca2686bbdb7bcd64a2aabda55d758b8b0e82c9e",
-    "detail-pane": "detail-pane-562c8a5616f73bedde894fc9ed77f6f58a56ab92",
-    "detail-summary": "detail-summary-36bec806df5fd148b2e76ee499637f89da9dfb01",
-    "detail-name": "detail-name-1c4e0bc14b08543cd6e636c1ee027502cea2df15",
-    "detail-description": "detail-description-3478389503056556c2628903ea95a36d878cef1b",
-    "detail-note": "detail-note-590ea7534d99f7c1dd54020519f6e256b4a5fb51",
-    "detail-coordinates": "detail-coordinates-c9bd6deca00791eb9f10aaf49128ff4a70ef72d2",
-    "detail-content-wrapper": "detail-content-wrapper-a251348d38d63ee8a250faedb12cff67737b903c",
-    "map-button": "map-button-ec75627dd1e4d2d595235911109ec4bed560c8af",
-    "create-button": "create-button-2b470818347dda7d1eace575387a3c2a37acf340",
-    "delete-button": "delete-button-fe86f5860e2a38336992ebec279d42dd6d504fc9",
-    "template-button": "template-button-9ad7b525367cb9981ef791f3e1d5118d1cb9913d",
-    "is-template": "is-template-ffc367bf7263cf9af9f7a0789ce42d77a3627e1b",
-    "input-error": "input-error-2f2f930bbb2bde8c8ffabda83fb63b77989c11e2"
+    container: "container-5f8aaa3665c0e7077188ba7eb8620776564dd9f5",
+    "input-field": "input-field-d8a941329dd324f25fa7930f4d931bd9a3648f2d",
+    "input-error": "input-error-3c07ef060421a1c1df2000263f1c58d674c862a9",
+    "search-input": "search-input-90284019d3a4e2898d0af36d4e89dd230d293eb9",
+    "list-container": "list-container-c7e1205264b118c34c0ca20d61445168ae34478b",
+    item: "item-0cebce7b2233f533c1ea4b15f8c3a62b2a802745",
+    selected: "selected-09ec6ca7fe5cf7915c553eba724d80678a0e1211",
+    "item-note": "item-note-c38603c95c0184bcc10e9ac7fc23183c67a7e2ba",
+    "item-name": "item-name-847df8e3d1dc20375a9435b9c3d396cf7249fd15",
+    "detail-pane": "detail-pane-1e9f3dfafb03328004c970b9b341e4829068e304",
+    "detail-summary": "detail-summary-b292b9e7aca6f9092633fcdfd5f70adea1df39d0",
+    "detail-name": "detail-name-779bb05b4685e30ff9d6224cfc3d5a2ce49da17c",
+    "detail-description": "detail-description-c9b818f1fbe164226e95086b895120fd49dda07e",
+    "detail-note": "detail-note-58befd1d3b05d946148582e8d6ca6a0e3925e2e5",
+    "detail-coordinates": "detail-coordinates-b4fbdb5db35847ca212d89f61f279ab834c5e405",
+    "detail-content-wrapper": "detail-content-wrapper-a850c7f7d99733159a8f76a2009d68f5edd9bf81",
+    "map-button": "map-button-77dbd7da545c04be969bb398574b70d8e5eb320a",
+    "create-button": "create-button-03d424da49fd2688cb2c449e7e8507471fa2fa6c",
+    "delete-button": "delete-button-8f47c81fd1cf2b86fd4a8e96687fb3e0e9bd9d58",
+    "template-button": "template-button-b9f660a31c668c6d198c75fcdae619c5bdbd43f5",
+    "config-button": "config-button-f979e1101ee92ad64292a17617e67cf353137633",
+    "is-template": "is-template-192b94a78e8b6cb69f4e839704a446deb5b0bf48"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -17158,6 +16940,206 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       interpolationPattern,
       (interpolation, variableName) => resolve?.(variableName) ?? resolveStandardVariable(variableName) ?? interpolation
     );
+  }
+
+  // source/local-config-view/local-config-view.module.css
+  var cssText6 = ".container-c62d6e0c3e210898192422f7fb258483ab77e0e9 {\n    box-sizing: border-box;\n}\n\n.container-c62d6e0c3e210898192422f7fb258483ab77e0e9 {\n    width: 100%;\n    height: 100%;\n    padding: 24px;\n    color: #1f2937;\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n}\n\n.form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a {\n    width: 100%;\n    margin-bottom: 18px;\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 0;\n}\n\n.form-scroll-b2cf2eefef663ac2ff02824923c4160cde7e3457 {\n    overflow-y: auto;\n    padding-right: 4px;\n    margin-right: -4px;\n    flex: 1 1 auto;\n}\n\n.form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a {\n    width: 100%;\n    margin-bottom: 18px;\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 0;\n}\n\n.label-bf72448e9d0369cd055e1aee1c9b0c62c76fcb32 {\n    font-size: 13px;\n    font-weight: 500;\n    margin-bottom: 6px;\n    color: #374151;\n}\n\n.input-86fe48169ab027adf4946272fc89101bb3189e58,\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964 {\n    width: 100%;\n    border: 1px solid #e5e7eb;\n    background-color: #ffffff;\n    border-radius: 8px;\n    padding: 10px 12px;\n    font-size: 14px;\n    color: #111827;\n    outline: none;\n    transition:\n        border-color 0.2s ease,\n        box-shadow 0.2s ease;\n}\n\n.input-86fe48169ab027adf4946272fc89101bb3189e58:focus,\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964:focus {\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.checkbox-c909268d5493d4606046e4ea8961381adb395b99 {\n    width: 16px;\n    height: 16px;\n    margin-right: 8px;\n    vertical-align: middle;\n}\n\n.textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964 {\n    min-height: 120px;\n    resize: vertical;\n    line-height: 1.5;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27 {\n    margin-top: auto;\n    font-size: 13px;\n    color: #6b7280;\n    padding-top: 10px;\n    border-radius: 8px;\n    transition:\n        background-color 0.2s ease,\n        color 0.2s ease,\n        border-color 0.2s ease;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27.success-30d06bfba90eaf460cf2304492e405b7e07d3c8a {\n    color: #065f46;\n    background-color: #ecfdf5;\n    border: 1px solid #a7f3d0;\n    padding: 10px 12px;\n}\n\n.status-message-cecf7e1257498b94a046e071577eeb62b65d1f27.error-fa216ae567a10838ba97d1e17b7cbf42b00b77d8 {\n    color: #7f1d1d;\n    background-color: #fef2f2;\n    border: 1px solid #fecaca;\n    padding: 10px 12px;\n}\n";
+  var local_config_view_default = {
+    container: "container-c62d6e0c3e210898192422f7fb258483ab77e0e9",
+    "form-group": "form-group-dd517e7d6e97b690b3f67b0da67b481e943d648a",
+    "form-scroll": "form-scroll-b2cf2eefef663ac2ff02824923c4160cde7e3457",
+    label: "label-bf72448e9d0369cd055e1aee1c9b0c62c76fcb32",
+    input: "input-86fe48169ab027adf4946272fc89101bb3189e58",
+    textarea: "textarea-8a8e2a1e7ab2a1786c6e3d80508a7b888d453964",
+    checkbox: "checkbox-c909268d5493d4606046e4ea8961381adb395b99",
+    "status-message": "status-message-cecf7e1257498b94a046e071577eeb62b65d1f27",
+    success: "success-30d06bfba90eaf460cf2304492e405b7e07d3c8a",
+    error: "error-fa216ae567a10838ba97d1e17b7cbf42b00b77d8"
+  };
+
+  // source/local-config-view/item-input.module.css
+  var cssText7 = ".container-1da15c2e0d6731b82a642e081c3e0807bd915a50 {\r\n    box-sizing: border-box;\r\n}\r\n\r\n.container-1da15c2e0d6731b82a642e081c3e0807bd915a50 {\r\n    width: 100%;\r\n    height: 100%;\r\n    padding: 24px;\r\n    color: #1f2937;\r\n    display: flex;\r\n    flex-direction: column;\r\n    overflow: hidden;\r\n}\r\n\r\n.form-group-e6f953b3202fc1e43c5281df331a702899914712 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.form-scroll-9707e048810969273055773f749e3a25d18be844 {\r\n    overflow-y: auto;\r\n    padding-right: 4px;\r\n    margin-right: -4px;\r\n    flex: 1 1 auto;\r\n}\r\n\r\n.form-group-e6f953b3202fc1e43c5281df331a702899914712 {\r\n    width: 100%;\r\n    margin-bottom: 18px;\r\n    display: flex;\r\n    flex-direction: column;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.label-54722aec84d4e49a5a9d34f40dc16ab9b179f27c {\r\n    font-size: 13px;\r\n    font-weight: 500;\r\n    margin-bottom: 6px;\r\n    color: #374151;\r\n}\r\n\r\n.input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52,\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82 {\r\n    width: 100%;\r\n    border: 1px solid #e5e7eb;\r\n    background-color: #ffffff;\r\n    border-radius: 8px;\r\n    padding: 10px 12px;\r\n    font-size: 14px;\r\n    color: #111827;\r\n    outline: none;\r\n    transition:\r\n        border-color 0.2s ease,\r\n        box-shadow 0.2s ease;\r\n}\r\n\r\n.input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52:focus,\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82:focus {\r\n    border-color: #cbd5e1;\r\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\r\n}\r\n\r\n.checkbox-6e6d5788ae8882a4e46ebee5990a77357a2bad4c {\r\n    width: 16px;\r\n    height: 16px;\r\n    margin-right: 8px;\r\n    vertical-align: middle;\r\n}\r\n\r\n.textarea-ddac2b70190c228138ed33923699ca64d4635d82 {\r\n    min-height: 120px;\r\n    resize: vertical;\r\n    line-height: 1.5;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d {\r\n    margin-top: auto;\r\n    font-size: 13px;\r\n    color: #6b7280;\r\n    padding-top: 10px;\r\n    border-radius: 8px;\r\n    transition:\r\n        background-color 0.2s ease,\r\n        color 0.2s ease,\r\n        border-color 0.2s ease;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d.success-b0f443b2bcb8e5579741dc1f7c65d6e477022f78 {\r\n    color: #065f46;\r\n    background-color: #ecfdf5;\r\n    border: 1px solid #a7f3d0;\r\n    padding: 10px 12px;\r\n}\r\n\r\n.status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d.error-d04cc5eac77c5f4861c21be22b8a913e693f221a {\r\n    color: #7f1d1d;\r\n    background-color: #fef2f2;\r\n    border: 1px solid #fecaca;\r\n    padding: 10px 12px;\r\n}\r\n";
+  var item_input_default = {
+    container: "container-1da15c2e0d6731b82a642e081c3e0807bd915a50",
+    "form-group": "form-group-e6f953b3202fc1e43c5281df331a702899914712",
+    "form-scroll": "form-scroll-9707e048810969273055773f749e3a25d18be844",
+    label: "label-54722aec84d4e49a5a9d34f40dc16ab9b179f27c",
+    input: "input-e5497e7b4e4cde8da43f9fb0af68d24aa531ff52",
+    textarea: "textarea-ddac2b70190c228138ed33923699ca64d4635d82",
+    checkbox: "checkbox-6e6d5788ae8882a4e46ebee5990a77357a2bad4c",
+    "status-message": "status-message-a5b94b397e93e5d92349d85787ddf80f9ec82f2d",
+    success: "success-b0f443b2bcb8e5579741dc1f7c65d6e477022f78",
+    error: "error-d04cc5eac77c5f4861c21be22b8a913e693f221a"
+  };
+
+  // source/local-config-view/item-input-string.tsx
+  function createStringItemInput(label) {
+    const events = createTypedEventTarget();
+    const input = /* @__PURE__ */ jsx("input", { type: "text", class: item_input_default["input"] });
+    const enabledCheckbox = /* @__PURE__ */ jsx("input", { type: "checkbox", class: item_input_default["checkbox"] });
+    const inputContainer = /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsx("label", { class: item_input_default["label"], children: input }) });
+    const element = /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsxs("label", { class: item_input_default["label"], children: [
+        enabledCheckbox,
+        /* @__PURE__ */ jsx("span", { children: label })
+      ] }) }),
+      inputContainer
+    ] });
+    const onChanged = () => {
+      const value = getValue2();
+      events.dispatchEvent(createTypedCustomEvent("changed", value));
+    };
+    enabledCheckbox.addEventListener("change", () => {
+      const isChecked = enabledCheckbox.checked;
+      input.disabled = !isChecked;
+      inputContainer.style.display = isChecked ? "" : "none";
+      onChanged();
+    });
+    input.addEventListener("input", onChanged);
+    function setValue(value) {
+      const hasUserId = value !== void 0;
+      enabledCheckbox.checked = hasUserId;
+      input.disabled = !hasUserId;
+      inputContainer.style.display = hasUserId ? "" : "none";
+      input.value = hasUserId ? value ?? "" : "";
+    }
+    function getValue2() {
+      if (enabledCheckbox.checked) {
+        return input.value;
+      }
+    }
+    return {
+      element,
+      cssText: cssText7,
+      events,
+      setValue,
+      getValue: getValue2
+    };
+  }
+
+  // source/local-config-view/item-input-json.tsx
+  function createJsonItemInput(label) {
+    const events = createTypedEventTarget();
+    const textarea = /* @__PURE__ */ jsx("textarea", { class: item_input_default["textarea"] });
+    const enabledCheckbox = /* @__PURE__ */ jsx("input", { type: "checkbox", class: item_input_default["checkbox"] });
+    const inputContainer = /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsx("label", { class: item_input_default["label"], children: textarea }) });
+    const element = /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsxs("label", { class: item_input_default["label"], children: [
+        enabledCheckbox,
+        /* @__PURE__ */ jsx("span", { children: label })
+      ] }) }),
+      inputContainer
+    ] });
+    function setValue(value) {
+      const hasValue = value !== void 0;
+      enabledCheckbox.checked = hasValue;
+      textarea.disabled = !hasValue;
+      inputContainer.style.display = hasValue ? "" : "none";
+      textarea.value = hasValue ? JSON.stringify(value, null, 2) : "";
+    }
+    function getValue2() {
+      if (enabledCheckbox.checked) {
+        try {
+          const parsedJson = JSON.parse(textarea.value);
+          return parsedJson;
+        } catch {
+          throw new Error("Invalid JSON. Please check the syntax.");
+        }
+      }
+    }
+    const onChange = () => events.dispatchEvent(createTypedCustomEvent("changed", getValue2()));
+    enabledCheckbox.addEventListener("change", () => {
+      const isChecked = enabledCheckbox.checked;
+      textarea.disabled = !isChecked;
+      inputContainer.style.display = isChecked ? "" : "none";
+      onChange();
+    });
+    textarea.addEventListener("input", onChange);
+    return {
+      element,
+      cssText: cssText7,
+      events,
+      setValue,
+      getValue: getValue2
+    };
+  }
+
+  // source/local-config-view/local-config-view.tsx
+  function debounce(f, ms) {
+    let timeout;
+    const debounced = (...args) => {
+      if (timeout !== void 0) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(() => {
+        timeout = void 0;
+        f(...args);
+      }, ms);
+    };
+    const cancel = () => {
+      if (timeout !== void 0) {
+        clearTimeout(timeout);
+        timeout = void 0;
+      }
+    };
+    return {
+      debounced,
+      cancel
+    };
+  }
+  function createLocalConfigView(configAccessor) {
+    const userIdInput = createStringItemInput("User ID");
+    const apiRootInput = createStringItemInput("API Root");
+    const dictionariesInput = createJsonItemInput("Dictionaries(JSON)");
+    const statusMessageElement = /* @__PURE__ */ jsx("div", { class: local_config_view_default["status-message"], children: "Loading configuration..." });
+    const element = /* @__PURE__ */ jsxs("div", { class: local_config_view_default["container"], children: [
+      /* @__PURE__ */ jsxs("div", { class: local_config_view_default["form-scroll"], children: [
+        userIdInput.element,
+        apiRootInput.element,
+        dictionariesInput.element
+      ] }),
+      statusMessageElement
+    ] });
+    const loadConfig = () => {
+      const currentConfig = configAccessor.getConfig();
+      userIdInput.setValue(currentConfig.userId);
+      apiRootInput.setValue(currentConfig.apiRoot);
+      dictionariesInput.setValue(currentConfig.dictionaries);
+    };
+    const { debounced: saveConfig } = debounce(() => {
+      statusMessageElement.textContent = "Changes pending...";
+      statusMessageElement.className = local_config_view_default["status-message"];
+      try {
+        let newConfig = {
+          version: "1"
+        };
+        newConfig = { ...newConfig, userId: userIdInput.getValue() };
+        newConfig = { ...newConfig, apiRoot: apiRootInput.getValue() };
+        newConfig = {
+          ...newConfig,
+          dictionaries: dictionariesInput.getValue()
+        };
+        ConfigSchema.parse(newConfig);
+        configAccessor.setConfig(newConfig);
+        statusMessageElement.textContent = "Saved successfully!";
+        statusMessageElement.classList.add(local_config_view_default.success);
+      } catch (error48) {
+        let errorMessage = "Unknown error";
+        if (error48 instanceof Error) {
+          errorMessage = error48.message;
+        }
+        statusMessageElement.textContent = `Error saving configuration: ${errorMessage}`;
+        statusMessageElement.classList.add(local_config_view_default.error);
+      }
+    }, 500);
+    userIdInput.events.addEventListener("changed", saveConfig);
+    apiRootInput.events.addEventListener("changed", saveConfig);
+    dictionariesInput.events.addEventListener("changed", saveConfig);
+    loadConfig();
+    return {
+      element,
+      cssText: cssText6 + "\n" + userIdInput.cssText
+    };
   }
 
   // source/drafts-view/draft-list.tsx
@@ -17309,6 +17291,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       updateVirtualList();
       updateDetailPane();
     });
+    const configView = createLocalConfigView(local);
+    const configDialog = createDialog(configView.element, { title: "\u8A2D\u5B9A" });
+    const configButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["config-button"], children: "\u2699\uFE0F\u8A2D\u5B9A" });
+    configButton.addEventListener("click", () => {
+      configDialog.show();
+    });
     const deleteSelectedDraft = (draftId) => {
       const { apiRoot, userId } = local.getConfig();
       if (!userId || !apiRoot) {
@@ -17341,7 +17329,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         createButton,
         deleteButton,
         mapButton,
-        templateToggleButton
+        templateToggleButton,
+        configButton
       ] })
     ] });
     const container = /* @__PURE__ */ jsxs("div", { class: draft_list_default["container"], children: [
@@ -17478,7 +17467,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return {
       events,
       element: container,
-      cssText: cssText4 + "\n" + virtualListCssText,
+      cssText: cssText4 + "\n" + virtualListCssText + "\n" + configView.cssText,
       setDrafts(newDrafts) {
         allDrafts.splice(0, allDrafts.length, ...newDrafts);
         applyFilter();
@@ -17496,7 +17485,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/drafts-dialog-title.module.css
-  var cssText6 = ":root {\n    --text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775: #333;\n    --secondary-text-color-c88c241e3e9dff445419faaa4706bc53f2523a10: #666;\n    --primary-color-097b59c4345164dddaffcad02c4c8ddccc2c7b37: #007bff;\n    --background-color-light-fd6505c60f777052b6ccc18b815980e62162d336: #f8f9fa;\n    --border-color-befc560a2e1702ae92e76a8e5e4cf42fd8f7738a: #dee2e6;\n}\n\n.container-f6012b09aebd14a8e9809333f1fb45f14f6e5ff4 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-befc560a2e1702ae92e76a8e5e4cf42fd8f7738a);\n    color: var(--text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775);\n    gap: 10px;\n}\n\n.main-title-741bd9ff4b0040f7d0c5e7d7efb85c1a8b6d1879 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775);\n    flex-grow: 1;\n}\n\n.counts-element-9ea97e3f401e87ed37f908e2a27f8a11cbce2fae {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-c88c241e3e9dff445419faaa4706bc53f2523a10);\n    white-space: nowrap;\n}\n\n.saving-indicator-a377b153f788f9f07875f13636a0e952671d0caf {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-097b59c4345164dddaffcad02c4c8ddccc2c7b37);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-1b8e8e9cb04187861afa28fbeb0203f3dc43ef3c {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}";
+  var cssText8 = ":root {\n    --text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775: #333;\n    --secondary-text-color-c88c241e3e9dff445419faaa4706bc53f2523a10: #666;\n    --primary-color-097b59c4345164dddaffcad02c4c8ddccc2c7b37: #007bff;\n    --background-color-light-fd6505c60f777052b6ccc18b815980e62162d336: #f8f9fa;\n    --border-color-befc560a2e1702ae92e76a8e5e4cf42fd8f7738a: #dee2e6;\n}\n\n.container-f6012b09aebd14a8e9809333f1fb45f14f6e5ff4 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-befc560a2e1702ae92e76a8e5e4cf42fd8f7738a);\n    color: var(--text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775);\n    gap: 10px;\n}\n\n.main-title-741bd9ff4b0040f7d0c5e7d7efb85c1a8b6d1879 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-33b32e7016d08dd8a93957c680c6d39e19bb8775);\n    flex-grow: 1;\n}\n\n.counts-element-9ea97e3f401e87ed37f908e2a27f8a11cbce2fae {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-c88c241e3e9dff445419faaa4706bc53f2523a10);\n    white-space: nowrap;\n}\n\n.saving-indicator-a377b153f788f9f07875f13636a0e952671d0caf {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-097b59c4345164dddaffcad02c4c8ddccc2c7b37);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-1b8e8e9cb04187861afa28fbeb0203f3dc43ef3c {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}";
   var drafts_dialog_title_default = {
     container: "container-f6012b09aebd14a8e9809333f1fb45f14f6e5ff4",
     "main-title": "main-title-741bd9ff4b0040f7d0c5e7d7efb85c1a8b6d1879",
@@ -17506,7 +17495,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/indicator.module.css
-  var cssText7 = ".loader-e6c9dee3428d8656dfaaeeb28c2f92f03d4e0d7a {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(circle, rgba(59, 130, 246, 0.95) 0%, rgba(96, 165, 250, 0.6) 45%, rgba(147, 197, 253, 0.25) 75%, transparent 100%);\n    box-shadow: 0 0 4px rgba(96, 165, 250, 0.8), 0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-9471cd9a4a1ae594b557369c30e4e3a633757484, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-a5d69140181f384ae25a9ff3e8d5a8070799f91a .orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-c8772ecd3448e7e57f52b6a4ce4129596861e6b6 .orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    animation: endFade 0.4s ease-in forwards;\n}";
+  var cssText9 = ".loader-e6c9dee3428d8656dfaaeeb28c2f92f03d4e0d7a {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(circle, rgba(59, 130, 246, 0.95) 0%, rgba(96, 165, 250, 0.6) 45%, rgba(147, 197, 253, 0.25) 75%, transparent 100%);\n    box-shadow: 0 0 4px rgba(96, 165, 250, 0.8), 0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-9471cd9a4a1ae594b557369c30e4e3a633757484, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-a5d69140181f384ae25a9ff3e8d5a8070799f91a .orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-c8772ecd3448e7e57f52b6a4ce4129596861e6b6 .orb-6f99ccdcafeae04b4c6b97dc347e5ffa4d88526c {\n    animation: endFade 0.4s ease-in forwards;\n}";
   var variables3 = {
     "--pulseDur": "--pulseDur-9471cd9a4a1ae594b557369c30e4e3a633757484"
   };
@@ -17580,7 +17569,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     stopCommunication();
     return {
       element: loader,
-      cssText: cssText7,
+      cssText: cssText9,
       start: startCommunication,
       stop: stopCommunication
     };
@@ -17599,7 +17588,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     let currentSaving;
     return {
       element,
-      cssText: cssText6 + "\n" + indicator.cssText,
+      cssText: cssText8 + "\n" + indicator.cssText,
       setCounts({
         totalCount,
         filteredCount
@@ -17653,8 +17642,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       workerApi.onGcsReceived(url2.toString(), responseText).catch(handleAsyncError);
     });
   }
-  function setStyle(page, cssText8) {
-    page.styleElement.textContent += cssText8 + "\n";
+  function setStyle(page, cssText10) {
+    page.styleElement.textContent += cssText10 + "\n";
   }
   function getDictionaryEntry(page, key) {
     const lang = navigator.language;
@@ -17703,7 +17692,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const map2 = await getGMapObject({ signal });
     const events = createTypedEventTarget();
     const local = createConfigAccessor(localConfigKey);
-    local.addEventHandler(
+    local.events.addEventListener(
       "config-changed",
       () => events.dispatchEvent(
         createTypedCustomEvent("config-changed", void 0)
