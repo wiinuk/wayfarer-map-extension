@@ -12,68 +12,11 @@
     overflow: hidden;
 }
 
-.form-group {
-    width: 100%;
-    margin-bottom: 18px;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
 .form-scroll {
     overflow-y: auto;
     padding-right: 4px;
     margin-right: -4px;
     flex: 1 1 auto;
-}
-
-.form-group {
-    width: 100%;
-    margin-bottom: 18px;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.label {
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 6px;
-    color: #374151;
-}
-
-.input,
-.textarea {
-    width: 100%;
-    border: 1px solid #e5e7eb;
-    background-color: #ffffff;
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-size: 14px;
-    color: #111827;
-    outline: none;
-    transition:
-        border-color 0.2s ease,
-        box-shadow 0.2s ease;
-}
-
-.input:focus,
-.textarea:focus {
-    border-color: #cbd5e1;
-    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);
-}
-
-.checkbox {
-    width: 16px;
-    height: 16px;
-    margin-right: 8px;
-    vertical-align: middle;
-}
-
-.textarea {
-    min-height: 120px;
-    resize: vertical;
-    line-height: 1.5;
 }
 
 .status-message {

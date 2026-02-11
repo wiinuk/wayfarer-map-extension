@@ -1,30 +1,9 @@
-.container {
-    box-sizing: border-box;
-}
-
-.container {
-    width: 100%;
-    height: 100%;
-    padding: 24px;
-    color: #1f2937;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
 .form-group {
     width: 100%;
     margin-bottom: 18px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-}
-
-.form-scroll {
-    overflow-y: auto;
-    padding-right: 4px;
-    margin-right: -4px;
-    flex: 1 1 auto;
 }
 
 .form-group {
@@ -74,30 +53,4 @@
     min-height: 120px;
     resize: vertical;
     line-height: 1.5;
-}
-
-.status-message {
-    margin-top: auto;
-    font-size: 13px;
-    color: #6b7280;
-    padding-top: 10px;
-    border-radius: 8px;
-    transition:
-        background-color 0.2s ease,
-        color 0.2s ease,
-        border-color 0.2s ease;
-}
-
-.status-message.success {
-    color: #065f46;
-    background-color: #ecfdf5;
-    border: 1px solid #a7f3d0;
-    padding: 10px 12px;
-}
-
-.status-message.error {
-    color: #7f1d1d;
-    background-color: #fef2f2;
-    border: 1px solid #fecaca;
-    padding: 10px 12px;
 }
