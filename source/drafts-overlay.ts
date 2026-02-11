@@ -180,6 +180,7 @@ export interface DraftsOverlay {
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
     addDraft(draft: Draft): void;
+    addDrafts(draft: Iterable<Draft>, scheduler: Scheduler): Promise<void>;
     deleteDraft(draftId: Draft["id"]): void;
     select(id: string): void;
 }
@@ -201,12 +202,11 @@ function getPosition(draft: Draft) {
 function includesIn(bounds: google.maps.LatLngBounds, draft: Draft) {
     return bounds.contains(getPosition(draft));
 }
-function addDraftCore(overlay: DraftsOverlay, draft: Draft) {
+function addDraft(overlay: DraftsOverlay, draft: Draft) {
     overlay.drafts.set(draft.id, {
         draft,
         mapView: createMapView(overlay, draft),
     });
-    notifyDraftListUpdated(overlay);
 }
 
 function deleteDraftCore(overlay: DraftsOverlay, draftId: Draft["id"]) {
@@ -361,7 +361,7 @@ export function createDraftsOverlay(
         addedMapViews: new Set(),
         asyncRouteListUpdateScope: createAsyncCancelScope(asyncErrorHandler),
         asyncRenderDraftsInMapScope: createAsyncCancelScope(asyncErrorHandler),
-        updateDraftTitle(draft: Draft) {
+        updateDraftTitle(draft) {
             const draftWithView = this.drafts.get(draft.id);
             if (draftWithView) {
                 draftWithView.draft.name = draft.name;
@@ -372,7 +372,7 @@ export function createDraftsOverlay(
                 notifyMapRangeChanged(this);
             }
         },
-        updateDraftCoordinates(this: DraftsOverlay, draft: Draft) {
+        updateDraftCoordinates(draft) {
             const draftWithView = this.drafts.get(draft.id);
             if (draftWithView) {
                 draftWithView.draft.coordinates = draft.coordinates;
@@ -383,15 +383,24 @@ export function createDraftsOverlay(
                 notifyMapRangeChanged(this);
             }
         },
-        addDraft(this: DraftsOverlay, draft: Draft) {
-            addDraftCore(this, draft);
+        async addDrafts(drafts, scheduler) {
+            for (const draft of drafts) {
+                await scheduler.yield();
+                addDraft(this, draft);
+            }
+            notifyDraftListUpdated(this);
             notifyMapRangeChanged(this);
         },
-        deleteDraft(this: DraftsOverlay, draftId: Draft["id"]) {
+        addDraft(draft) {
+            addDraft(this, draft);
+            notifyDraftListUpdated(this);
+            notifyMapRangeChanged(this);
+        },
+        deleteDraft(draftId) {
             deleteDraftCore(this, draftId);
             notifyMapRangeChanged(this);
         },
-        select(draftId: Draft["id"]) {
+        select(draftId) {
             const draft = this.drafts.get(draftId)?.draft;
             if (draft == null) return;
 
@@ -416,6 +425,9 @@ export async function setupDraftsOverlay(
 
     overlay.draftsCanvasOverlay.setMap(overlay.map);
 
+    overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
+    notifyMapRangeChanged(overlay);
+
     const { userId, apiRoot } = local.getConfig();
     if (userId && apiRoot) {
         const { routes } = await remote.getDrafts(
@@ -424,19 +436,15 @@ export async function setupDraftsOverlay(
             },
             { rootUrl: apiRoot },
         );
-        for (const route of routes) {
-            await scheduler.yield();
-            overlay.addDraft({
-                ...route,
-                coordinates: parseCoordinates(route.coordinates) as [
-                    LatLng,
-                    ...LatLng[],
-                ],
-                id: route.routeId,
-                name: route.routeName,
-            });
-        }
+        const drafts = routes.map((route) => ({
+            ...route,
+            coordinates: parseCoordinates(route.coordinates) as [
+                LatLng,
+                ...LatLng[],
+            ],
+            id: route.routeId,
+            name: route.routeName,
+        }));
+        await overlay.addDrafts(drafts, scheduler);
     }
-    overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
-    notifyMapRangeChanged(overlay);
 }
