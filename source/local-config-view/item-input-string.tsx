@@ -5,7 +5,7 @@ import {
 import classNames, { cssText } from "./item-input.module.css";
 
 interface OptionalStringConfigEventMap {
-    changed: string | undefined;
+    changed: undefined;
 }
 export function createStringItemInput(label: string) {
     const events = createTypedEventTarget<OptionalStringConfigEventMap>();
@@ -36,10 +36,9 @@ export function createStringItemInput(label: string) {
         </>
     );
 
-    const onChanged = () => {
-        const value = getValue();
-        events.dispatchEvent(createTypedCustomEvent("changed", value));
-    };
+    const onChanged = () =>
+        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
+
     enabledCheckbox.addEventListener("change", () => {
         const isChecked = enabledCheckbox.checked;
         input.disabled = !isChecked;

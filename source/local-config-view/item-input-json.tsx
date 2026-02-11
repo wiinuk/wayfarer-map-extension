@@ -6,7 +6,7 @@ import classNames, { cssText } from "./item-input.module.css";
 
 export type Json = null | number | string | Json[] | { [k: string]: Json };
 export function createJsonItemInput(label: string) {
-    const events = createTypedEventTarget<{ changed: Json | undefined }>();
+    const events = createTypedEventTarget<{ changed: undefined }>();
 
     const textarea = (
         <textarea class={classNames["textarea"]}></textarea>
@@ -51,7 +51,7 @@ export function createJsonItemInput(label: string) {
         }
     }
     const onChange = () =>
-        events.dispatchEvent(createTypedCustomEvent("changed", getValue()));
+        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
     enabledCheckbox.addEventListener("change", () => {
         const isChecked = enabledCheckbox.checked;
         textarea.disabled = !isChecked;
