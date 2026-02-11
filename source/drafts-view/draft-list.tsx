@@ -106,17 +106,19 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     listContainer.append(virtualListElement);
 
     const searchInput = (
-        <input
-            type="search"
-            class={classNames["search-input"]}
-            placeholder="Search drafts..."
-        />
+        <input type="search" placeholder="Search drafts..." />
     ) as HTMLInputElement;
+    searchInput.classList.add(
+        classNames["search-input"],
+        classNames["input-field"],
+    );
 
-    const detailName = (
-        <input type="text" class={classNames["detail-name"]} value="" />
-    ) as HTMLInputElement;
+    const detailName = (<input type="text" value="" />) as HTMLInputElement;
 
+    detailName.classList.add(
+        classNames["detail-name"],
+        classNames["input-field"],
+    );
     detailName.addEventListener("input", (event: Event) => {
         if (!selectedDraft) return;
         selectedDraft.name = (event.target as HTMLInputElement).value;
@@ -125,9 +127,13 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     });
 
     const detailDescription = (
-        <textarea class={classNames["detail-description"]} value=""></textarea>
+        <textarea value=""></textarea>
     ) as HTMLTextAreaElement;
 
+    detailDescription.classList.add(
+        classNames["detail-description"],
+        classNames["input-field"],
+    );
     detailDescription.addEventListener("input", (event: Event) => {
         if (!selectedDraft) return;
         selectedDraft.description = (event.target as HTMLTextAreaElement).value;
@@ -136,15 +142,23 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     const detailNote = (
         <textarea class={classNames["detail-note"]} value=""></textarea>
     ) as HTMLTextAreaElement;
+    detailNote.classList.add(
+        classNames["detail-note"],
+        classNames["input-field"],
+    );
     detailNote.addEventListener("input", (event: Event) => {
         if (!selectedDraft) return;
         selectedDraft.note = (event.target as HTMLTextAreaElement).value;
         saveDraftChanges(selectedDraft);
     });
     const detailCoordinates = (
-        <input type="text" class={classNames["detail-coordinates"]} value="" />
+        <input type="text" value="" />
     ) as HTMLInputElement;
 
+    detailCoordinates.classList.add(
+        classNames["detail-coordinates"],
+        classNames["input-field"],
+    );
     detailCoordinates.addEventListener("input", (event: Event) => {
         if (!selectedDraft) return;
         const textarea = event.target as HTMLTextAreaElement;
