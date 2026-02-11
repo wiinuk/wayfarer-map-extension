@@ -5,24 +5,21 @@ import {
 } from "./typed-event-target";
 
 export type LocalConfigAccessor = ReturnType<typeof createConfigAccessor>;
-export type Config = ReturnType<LocalConfigAccessor["getConfig"]>;
+
+export const ConfigSchema = zod
+    .strictObject({
+        version: zod.literal("1"),
+        userId: zod.string().optional(),
+        apiRoot: zod.string().optional(),
+        dictionaries: zod
+            .record(zod.string(), zod.record(zod.string(), zod.string()))
+            .optional(),
+    })
+    .readonly();
+
+export type Config = zod.infer<typeof ConfigSchema>;
+
 export function createConfigAccessor(key: string) {
-    const ConfigV1Schema = zod
-        .strictObject({
-            version: zod.literal("1"),
-            userId: zod.string().optional(),
-            apiRoot: zod.string().optional(),
-            dictionaries: zod
-                .record(zod.string(), zod.record(zod.string(), zod.string()))
-                .optional(),
-        })
-        .readonly();
-
-    type ConfigV1 = zod.infer<typeof ConfigV1Schema>;
-
-    const ConfigSchema = ConfigV1Schema;
-    type Config = ConfigV1;
-
     const events = createTypedEventTarget<{ "config-changed": Config }>();
     return {
         getConfig(): Config {

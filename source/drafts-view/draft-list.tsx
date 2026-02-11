@@ -14,6 +14,8 @@ import {
     createTypedCustomEvent,
     createTypedEventTarget,
 } from "../typed-event-target";
+import { createDialog } from "./dialog";
+import { createLocalConfigView } from "../local-config-view/local-config-view";
 
 function hasTermInString(text: string, term: string) {
     return text.toLowerCase().includes(term);
@@ -211,6 +213,16 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         updateDetailPane();
     });
 
+    const configView = createLocalConfigView(local);
+    const configDialog = createDialog(configView.element, { title: "設定" });
+
+    const configButton = (
+        <button class={classNames["config-button"]}>⚙️設定</button>
+    );
+    configButton.addEventListener("click", () => {
+        configDialog.show();
+    });
+
     const deleteSelectedDraft = (draftId: Draft["id"]) => {
         const { apiRoot, userId } = local.getConfig();
         if (!userId || !apiRoot) {
@@ -249,6 +261,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
                 {deleteButton}
                 {mapButton}
                 {templateToggleButton}
+                {configButton}
             </div>
         </details>
     );
@@ -406,7 +419,8 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     return {
         events,
         element: container,
-        cssText: cssText + "\n" + virtualListCssText,
+        cssText:
+            cssText + "\n" + virtualListCssText + "\n" + configView.cssText,
         setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
             applyFilter();
