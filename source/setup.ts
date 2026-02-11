@@ -150,7 +150,7 @@ async function asyncSetup(signal: AbortSignal) {
     const map = await getGMapObject({ signal });
     const events = createTypedEventTarget<PageEventMap>();
     const local = createConfigAccessor(localConfigKey);
-    local.addEventHandler("config-changed", () =>
+    local.events.addEventListener("config-changed", () =>
         events.dispatchEvent(
             createTypedCustomEvent("config-changed", undefined),
         ),

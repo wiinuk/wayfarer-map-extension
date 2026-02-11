@@ -2,7 +2,6 @@ import zod from "zod";
 import {
     createTypedCustomEvent,
     createTypedEventTarget,
-    type TypedCustomEvent,
 } from "./typed-event-target";
 
 export type LocalConfigAccessor = ReturnType<typeof createConfigAccessor>;
@@ -23,7 +22,7 @@ export function createConfigAccessor(key: string) {
     const ConfigSchema = ConfigV1Schema;
     type Config = ConfigV1;
 
-    const eventTarget = createTypedEventTarget<{ "config-changed": Config }>();
+    const events = createTypedEventTarget<{ "config-changed": Config }>();
     return {
         getConfig(): Config {
             const jsonText = localStorage.getItem(key);
@@ -36,17 +35,10 @@ export function createConfigAccessor(key: string) {
         },
         setConfig(config: Config) {
             localStorage.setItem(key, JSON.stringify(config));
-            eventTarget.dispatchEvent(
+            events.dispatchEvent(
                 createTypedCustomEvent("config-changed", config),
             );
         },
-        addEventHandler(
-            type: "config-changed",
-            listener: (
-                event: TypedCustomEvent<"config-changed", Config>,
-            ) => void,
-        ) {
-            eventTarget.addEventListener(type, listener);
-        },
+        events,
     };
 }
