@@ -14,11 +14,29 @@
     height: 100%;
 }
 
+.input-field {
+    border: 1px solid;
+    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+.input-field:focus {
+    border-color: revert;
+    background-color: revert;
+}
+
+.input-error {
+    border: 1px solid red;
+}
+
 .search-input {
     padding: 8px;
     margin-bottom: 8px;
-    border: 1px solid var(--border-color);
     border-radius: 4px;
+    border-color: var(--border-color);
+    /* Override input-field border-color */
+    background-color: transparent;
+    /* Override input-field background-color */
 }
 
 .list-container {
@@ -118,30 +136,9 @@
 .detail-note,
 .detail-coordinates {
     margin-bottom: 4px;
-    margin-top: 0;
-    padding: 0 0;
+    padding: 0;
     width: 100%;
     box-sizing: border-box;
-}
-
-.search-input,
-.detail-name,
-.detail-description,
-.detail-note,
-.detail-coordinates {
-    border: 1px solid;
-    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;
-
-    background-color: rgba(255, 255, 255, 0.25);
-}
-
-:is(.search-input,
-    .detail-name,
-    .detail-description,
-    .detail-note,
-    .detail-coordinates):focus {
-    border-color: revert;
-    background-color: revert;
 }
 
 .detail-content-wrapper {
@@ -151,58 +148,39 @@
     gap: 8px;
 }
 
-.map-button {
+.map-button,
+.create-button,
+.delete-button,
+.template-button,
+.config-button {
     margin-top: 8px;
     padding: 8px 12px;
-    background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.map-button,
+.create-button,
+.template-button,
+.config-button {
+    background-color: var(--primary-color);
 }
 
 .map-button:hover,
-.create-button:hover {
+.create-button:hover,
+.template-button:hover,
+.config-button:hover {
     background-color: var(--primary-color-dark);
 }
 
-.create-button {
-    margin-top: 8px;
-    /* Consistent with map-button's top margin */
-    padding: 8px 12px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
 .delete-button {
-    margin-top: 8px;
-    padding: 8px 12px;
     background-color: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
 }
 
 .delete-button:hover {
     background-color: #c82333;
-}
-
-.template-button {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.template-button:hover {
-    background-color: var(--primary-color-dark);
 }
 
 .template-button.is-template {
@@ -215,4 +193,5 @@
 
 .input-error {
     border: 1px solid red;
+    background-color: #c82333;
 }
