@@ -61,6 +61,36 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
         <textarea class={classNames["textarea"]}></textarea>
     ) as HTMLTextAreaElement;
 
+    const dictionariesEnabledCheckbox = (
+        <input type="checkbox" class={classNames["checkbox"]} />
+    ) as HTMLInputElement;
+
+    const userIdEnabledCheckbox = (
+        <input type="checkbox" class={classNames["checkbox"]} />
+    ) as HTMLInputElement;
+
+    const userIdInputContainer = (
+        <div class={classNames["form-group"]}>
+            <label class={classNames["label"]}>{userIdInput}</label>
+        </div>
+    ) as HTMLDivElement;
+
+    const apiRootEnabledCheckbox = (
+        <input type="checkbox" class={classNames["checkbox"]} />
+    ) as HTMLInputElement;
+
+    const apiRootInputContainer = (
+        <div class={classNames["form-group"]}>
+            <label class={classNames["label"]}>{apiRootInput}</label>
+        </div>
+    ) as HTMLDivElement;
+
+    const dictionariesInputContainer = (
+        <div class={classNames["form-group"]}>
+            <label class={classNames["label"]}>{dictionariesTextarea}</label>
+        </div>
+    ) as HTMLDivElement;
+
     const statusMessageElement = (
         <div class={classNames["status-message"]}>Loading configuration...</div>
     ) as HTMLDivElement;
@@ -70,24 +100,27 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
             <div class={classNames["form-scroll"]}>
                 <div class={classNames["form-group"]}>
                     <label class={classNames["label"]}>
-                        User ID
-                        {userIdInput}
+                        {userIdEnabledCheckbox}
+                        <span>User ID</span>
                     </label>
                 </div>
+                {userIdInputContainer}
 
                 <div class={classNames["form-group"]}>
                     <label class={classNames["label"]}>
-                        API Root URL
-                        {apiRootInput}
+                        {apiRootEnabledCheckbox}
+                        <span>API Root</span>
                     </label>
                 </div>
+                {apiRootInputContainer}
 
                 <div class={classNames["form-group"]}>
                     <label class={classNames["label"]}>
-                        Dictionaries (JSON)
-                        {dictionariesTextarea}
+                        {dictionariesEnabledCheckbox}
+                        <span>Dictionaries(JSON)</span>
                     </label>
                 </div>
+                {dictionariesInputContainer}
             </div>
             {statusMessageElement}
         </div>
@@ -95,13 +128,28 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
 
     const loadConfig = () => {
         const currentConfig = configAccessor.getConfig();
-        userIdInput.value = currentConfig.userId ?? "";
-        apiRootInput.value = currentConfig.apiRoot ?? "";
-        dictionariesTextarea.value = JSON.stringify(
-            currentConfig.dictionaries,
-            null,
-            2,
-        );
+
+        const hasUserId = currentConfig.userId !== undefined;
+        userIdEnabledCheckbox.checked = hasUserId;
+        userIdInput.disabled = !hasUserId;
+        userIdInputContainer.style.display = hasUserId ? "" : "none";
+        userIdInput.value = hasUserId ? (currentConfig.userId ?? "") : "";
+
+        const hasApiRoot = currentConfig.apiRoot !== undefined;
+        apiRootEnabledCheckbox.checked = hasApiRoot;
+        apiRootInput.disabled = !hasApiRoot;
+        apiRootInputContainer.style.display = hasApiRoot ? "" : "none";
+        apiRootInput.value = hasApiRoot ? (currentConfig.apiRoot ?? "") : "";
+
+        const hasDictionaries = currentConfig.dictionaries !== undefined;
+        dictionariesEnabledCheckbox.checked = hasDictionaries;
+        dictionariesTextarea.disabled = !hasDictionaries;
+        dictionariesInputContainer.style.display = hasDictionaries
+            ? ""
+            : "none";
+        dictionariesTextarea.value = hasDictionaries
+            ? JSON.stringify(currentConfig.dictionaries, null, 2)
+            : "";
     };
 
     const { debounced: saveConfig } = debounce(() => {
@@ -109,12 +157,39 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
         statusMessageElement.className = classNames["status-message"];
 
         try {
-            const newConfig: Config = {
+            let newConfig: Config = {
                 version: "1",
-                userId: userIdInput.value,
-                apiRoot: apiRootInput.value,
-                dictionaries: JSON.parse(dictionariesTextarea.value),
             };
+
+            if (userIdEnabledCheckbox.checked) {
+                newConfig = {
+                    ...newConfig,
+                    userId: userIdInput.value,
+                };
+            }
+
+            if (apiRootEnabledCheckbox.checked) {
+                newConfig = {
+                    ...newConfig,
+                    apiRoot: apiRootInput.value,
+                };
+            }
+
+            if (dictionariesEnabledCheckbox.checked) {
+                try {
+                    const parsedDictionaries = JSON.parse(
+                        dictionariesTextarea.value,
+                    );
+                    newConfig = {
+                        ...newConfig,
+                        dictionaries: parsedDictionaries,
+                    };
+                } catch {
+                    throw new Error(
+                        "Invalid Dictionaries JSON. Please check the syntax.",
+                    );
+                }
+            }
 
             ConfigSchema.parse(newConfig);
 
@@ -149,6 +224,27 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
             }
         }
     }, 500);
+
+    dictionariesEnabledCheckbox.addEventListener("change", () => {
+        const isChecked = dictionariesEnabledCheckbox.checked;
+        dictionariesTextarea.disabled = !isChecked;
+        dictionariesInputContainer.style.display = isChecked ? "" : "none";
+        saveConfig();
+    });
+
+    userIdEnabledCheckbox.addEventListener("change", () => {
+        const isChecked = userIdEnabledCheckbox.checked;
+        userIdInput.disabled = !isChecked;
+        userIdInputContainer.style.display = isChecked ? "" : "none";
+        saveConfig();
+    });
+
+    apiRootEnabledCheckbox.addEventListener("change", () => {
+        const isChecked = apiRootEnabledCheckbox.checked;
+        apiRootInput.disabled = !isChecked;
+        apiRootInputContainer.style.display = isChecked ? "" : "none";
+        saveConfig();
+    });
 
     userIdInput.addEventListener("input", saveConfig);
     apiRootInput.addEventListener("input", saveConfig);

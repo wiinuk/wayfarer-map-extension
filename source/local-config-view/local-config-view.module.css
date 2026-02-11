@@ -63,6 +63,13 @@
     box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);
 }
 
+.checkbox {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
 .textarea {
     min-height: 120px;
     resize: vertical;
