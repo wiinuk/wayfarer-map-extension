@@ -123,14 +123,16 @@ async function build() {
             building = true;
             try {
                 if (!debugMode) {
+                    const tscPassed = await runTsc();
+                    if (!tscPassed) {
+                        console.error(
+                            "Build aborted due to TypeScript errors.",
+                        );
+                        return;
+                    }
                     const lintPassed = await runEslint();
                     if (!lintPassed) {
                         console.error("Build aborted due to linting errors.");
-                        return;
-                    }
-                    const tscPassed = await runTsc();
-                    if (!tscPassed) {
-                        console.error("Build aborted due to TypeScript errors.");
                         return;
                     }
                 }
@@ -167,14 +169,14 @@ async function build() {
         // keep process alive
         process.stdin.resume();
     } else {
-        const lintPassed = await runEslint();
-        if (!lintPassed) {
-            console.error("Build aborted due to linting errors.");
-            process.exit(1);
-        }
         const tscPassed = await runTsc();
         if (!tscPassed) {
             console.error("Build aborted due to TypeScript errors.");
+            process.exit(1);
+        }
+        const lintPassed = await runEslint();
+        if (!lintPassed) {
+            console.error("Build aborted due to linting errors.");
             process.exit(1);
         }
         await esbuild.build(baseOptions);
