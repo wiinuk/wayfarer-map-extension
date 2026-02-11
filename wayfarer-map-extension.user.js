@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.3.4
+// @version      0.3.5
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -17444,16 +17444,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           noteDiv.className = draft_list_default["item-note"];
           noteDiv.textContent = draft.note;
           item.append(nameDiv, noteDiv);
-          item.addEventListener("click", () => {
-            selectedDraft = draft;
+          const onClick = () => {
             overlay.select(draft.id);
             updateDetailPane();
             updateVirtualList();
-          });
-          item.addEventListener("dblclick", () => {
+          };
+          const onDblclick = () => {
             if (draft) {
               overlay.map.setCenter(draft.coordinates[0]);
             }
+          };
+          let clickTimer = null;
+          item.addEventListener("click", () => {
+            clickTimer = setTimeout(() => {
+              selectedDraft = draft;
+              onClick();
+              clickTimer = null;
+            }, 0);
+          });
+          item.addEventListener("dblclick", () => {
+            if (clickTimer !== null) clearTimeout(clickTimer);
+            clickTimer = null;
+            onDblclick();
           });
           return item;
         }
