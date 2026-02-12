@@ -13,6 +13,7 @@ import {
 } from "./typed-s2cell";
 import type { LatLng } from "./s2";
 import { createQueue } from "./queue";
+import { gcsCellLevel, type GcsCellLevel } from "./gcs-recorder";
 
 /** ローカルマシンから取得した時間 */
 type ClientDate = number;
@@ -222,24 +223,27 @@ function mergePoi(
     };
 }
 
-export interface CellWithPois {
-    readonly cell: Cell<15>;
+export interface CellWithPois<TLevel extends number> {
+    readonly cell: Cell<TLevel>;
     readonly pois: readonly Poi[];
 }
 
 export async function updateRecordsOfReceivedPoisInCells(
     records: PoiRecords,
-    cell15IdToPois: ReadonlyMap<CellId<15>, CellWithPois>,
+    cellIdToPois: ReadonlyMap<CellId<GcsCellLevel>, CellWithPois<GcsCellLevel>>,
     bounds: readonly LatLngBounds[],
     fetchDate: number,
     signal: AbortSignal,
 ) {
-    const emptyCell15s = new Map<CellId<15>, { cell: Cell<15> }>();
+    const emptyCells = new Map<
+        CellId<GcsCellLevel>,
+        { cell: Cell<GcsCellLevel> }
+    >();
     for (const bound of bounds) {
-        for (const cell of getNearlyCellsForBounds(bound, 15)) {
+        for (const cell of getNearlyCellsForBounds(bound, gcsCellLevel)) {
             const cellId = cell.toString();
-            if (cell15IdToPois.has(cellId)) continue;
-            emptyCell15s.set(cellId, { cell });
+            if (cellIdToPois.has(cellId)) continue;
+            emptyCells.set(cellId, { cell });
         }
     }
     await enterTransactionScope(
@@ -247,34 +251,29 @@ export async function updateRecordsOfReceivedPoisInCells(
         "readwrite",
         { signal },
         function* (store) {
-            yield* deleteRemovedPoiRecords(store, cell15IdToPois);
-            yield* updatePoiRecords(cell15IdToPois, store, fetchDate);
+            yield* deleteRemovedPoiRecords(store, cellIdToPois);
+            yield* updatePoiRecords(cellIdToPois, store, fetchDate);
 
             // 全面が取得されたセル17を更新
-            yield* updateCell17s(
-                store,
-                cell15IdToPois,
-                emptyCell15s,
-                fetchDate,
-            );
+            yield* updateCell17s(store, cellIdToPois, emptyCells, fetchDate);
         },
     );
 }
-function* deleteRemovedPoiRecords(
+function* deleteRemovedPoiRecords<TLevel extends number>(
     store: PoiStore<"readwrite">,
-    receivedCellToPois: ReadonlyMap<CellId<15>, CellWithPois>,
+    receivedCellToPois: ReadonlyMap<CellId<TLevel>, CellWithPois<TLevel>>,
 ) {
     const removedPoiIds = [];
-    for (const [cell15Id, { pois: receivedPois }] of receivedCellToPois) {
+    for (const [cellId, { pois: receivedPois }] of receivedCellToPois) {
         const receivedPoiIds = new Set<string>();
         for (const receivedPoi of receivedPois) {
             receivedPoiIds.add(receivedPoi.poiId);
         }
-        const recordedPoisInCell15 = yield* Idb.getAllOfIndex(
+        const recordedPoisInCell = yield* Idb.getAllOfIndex(
             store[cellIdsIndexSymbol],
-            cell15Id,
+            cellId,
         );
-        for (const { guid } of recordedPoisInCell15) {
+        for (const { guid } of recordedPoisInCell) {
             if (receivedPoiIds.has(guid)) continue;
             removedPoiIds.push(guid);
         }
@@ -282,14 +281,14 @@ function* deleteRemovedPoiRecords(
     yield* Idb.bulkDelete(store[poisSymbol], removedPoiIds);
 }
 
-function* updatePoiRecords(
-    cell15IdToPois: ReadonlyMap<CellId<15>, CellWithPois>,
+function* updatePoiRecords<TLevel extends number>(
+    cellIdToPois: ReadonlyMap<CellId<TLevel>, CellWithPois<TLevel>>,
     store: PoiStore<"readwrite">,
     fetchDate: number,
 ) {
     const receivedPoiIds = [];
     const receivedPois: Poi[] = [];
-    for (const { pois } of cell15IdToPois.values()) {
+    for (const { pois } of cellIdToPois.values()) {
         for (const poi of pois) {
             receivedPoiIds.push(poi.poiId);
             receivedPois.push(poi);
@@ -307,27 +306,29 @@ function* updatePoiRecords(
 
 function* updateCell17s(
     store: PoiStore<"readwrite">,
-    cell15IdToPois: ReadonlyMap<CellId<15>, CellWithPois>,
-    emptyCell15s: ReadonlyMap<CellId<15>, { cell: Cell<15> }>,
+    cellIdToPois: ReadonlyMap<CellId<14>, CellWithPois<14>>,
+    emptyCells: ReadonlyMap<CellId<14>, { cell: Cell<14> }>,
     fetchDate: number,
 ) {
     const newCell17s: CellRecord[] = [];
-    for (const { cell: cell15 } of [
-        ...cell15IdToPois.values(),
-        ...emptyCell15s.values(),
+    for (const { cell: cell14 } of [
+        ...cellIdToPois.values(),
+        ...emptyCells.values(),
     ]) {
-        for (const cell16 of getChildCells(cell15)) {
-            for (const cell17 of getChildCells(cell16)) {
-                const coordinates = cell17.getLatLng();
-                newCell17s.push({
-                    cellId: cell17.toString(),
-                    centerLat: coordinates.lat,
-                    centerLng: coordinates.lng,
-                    level: cell17.level,
-                    ancestorIds: [getCellId(coordinates, 14)],
-                    firstFetchDate: fetchDate,
-                    lastFetchDate: fetchDate,
-                } satisfies CellRecord);
+        for (const cell15 of getChildCells(cell14)) {
+            for (const cell16 of getChildCells(cell15)) {
+                for (const cell17 of getChildCells(cell16)) {
+                    const coordinates = cell17.getLatLng();
+                    newCell17s.push({
+                        cellId: cell17.toString(),
+                        centerLat: coordinates.lat,
+                        centerLng: coordinates.lng,
+                        level: cell17.level,
+                        ancestorIds: [getCellId(coordinates, 14)],
+                        firstFetchDate: fetchDate,
+                        lastFetchDate: fetchDate,
+                    } satisfies CellRecord);
+                }
             }
         }
     }

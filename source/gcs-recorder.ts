@@ -42,9 +42,15 @@ async function processGcsRequests(
     events.dispatchEvent(createTypedCustomEvent("gcs-saved", undefined));
 }
 
+export const gcsCellLevel = 14;
+export type GcsCellLevel = typeof gcsCellLevel;
+
 type Gcs = Awaited<ReturnType<typeof parseGcsLogs>>;
 async function parseGcsLogs(logs: readonly GcsLog[], scheduler: Scheduler) {
-    const cells = new Map<CellId<15>, CellWithPois>();
+    const cells = new Map<
+        CellId<typeof gcsCellLevel>,
+        CellWithPois<GcsCellLevel>
+    >();
     const bounds = [];
     for (const { queries, responseText } of logs) {
         await scheduler.yield();
@@ -55,11 +61,10 @@ async function parseGcsLogs(logs: readonly GcsLog[], scheduler: Scheduler) {
         bounds.push(Bounds.fromSwNe(bound.sw, bound.ne));
 
         for (const { metadata, pois } of response.result.data) {
-            const expectedLevel = 15;
-            if (metadata.s2CellLevel !== expectedLevel) continue;
+            if (metadata.s2CellLevel !== gcsCellLevel) continue;
 
             const cell = tokenToCell(
-                metadata.s2CellId as S2Token<typeof expectedLevel>,
+                metadata.s2CellId as S2Token<GcsCellLevel>,
             );
             const cellId = cell.toString();
             cells.set(cellId, { pois, cell });
