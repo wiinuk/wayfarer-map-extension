@@ -17,6 +17,7 @@ import {
 import { createDialog } from "./dialog";
 import { createLocalConfigView } from "../local-config-view/local-config-view";
 import { createFilterBar } from "./query-view/filter-bar";
+import { styleSetter } from "../dom-extensions";
 
 function hasTermInString(text: string, term: string) {
     return text.toLowerCase().includes(term);
@@ -40,7 +41,11 @@ interface DraftListEventMap {
         filteredCount: number;
     };
 }
+
+const setStyle = styleSetter(cssText);
 export function createDraftList({ overlay, remote, local }: DraftListOptions) {
+setStyle();
+
     const events = createTypedEventTarget<DraftListEventMap>();
     let allDrafts: Draft[] = Array.from(overlay.drafts.values()).map(
         (view) => view.draft,
@@ -98,11 +103,8 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         );
     };
 
-    const {
-        element: virtualListElement,
-        setItems: setVirtualListItems,
-        cssText: virtualListCssText,
-    } = createVirtualList();
+    const { element: virtualListElement, setItems: setVirtualListItems } =
+createVirtualList();
 
     const filterInput = createFilterBar();
 
@@ -462,15 +464,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     return {
         events,
         element: container,
-        cssText:
-            cssText +
-            "\n" +
-            virtualListCssText +
-            "\n" +
-            configView.cssText +
-            "\n" +
-            filterInput.cssText,
-        setDrafts(newDrafts: readonly Draft[]) {
+                setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
             applyFilter();
             if (

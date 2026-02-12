@@ -1,3 +1,4 @@
+import { styleSetter } from "../dom-extensions";
 import classNames, { cssText, variables } from "./dialog.module.css";
 
 function makeDraggable(
@@ -61,10 +62,14 @@ function makeDraggable(
     adjustSize();
 }
 
+const setStyle = styleSetter(cssText);
+
 export function createDialog(
     innerElement: HTMLElement,
     options?: { title?: string | HTMLElement },
 ) {
+    setStyle();
+
     const titleSpan = (
         <div class={classNames["titlebar-title"]}>{options?.title ?? ""}</div>
     );
@@ -131,7 +136,6 @@ export function createDialog(
     return {
         show,
         hide,
-        cssText,
         element: dialogElement,
         setTitle(title: string | HTMLElement) {
             titleSpan.innerHTML = "";

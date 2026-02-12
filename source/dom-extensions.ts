@@ -78,3 +78,15 @@ export function createScheduler(signal: AbortSignal, thresholdMs = 10) {
     if (isWebWorker()) return createWorkerScheduler();
     return createSchedulerByAnimationFrame(signal, thresholdMs);
 }
+
+export function styleSetter(cssText: string) {
+    let done = false;
+    return () => {
+        if (!done) {
+            done = true;
+            const sheet = new CSSStyleSheet();
+            sheet.replaceSync(cssText);
+            document.adoptedStyleSheets.push(sheet);
+        }
+    };
+}

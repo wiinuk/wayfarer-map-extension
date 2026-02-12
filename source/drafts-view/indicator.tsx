@@ -1,5 +1,10 @@
+import { styleSetter } from "../dom-extensions";
 import classNames, { variables, cssText } from "./indicator.module.css";
+const setStyle = styleSetter(cssText);
+
 export function createIndicator() {
+    setStyle();
+
     const loader = (
         <div class={classNames.loader} aria-label="Communicating">
             <div class={classNames.orb}></div>
@@ -81,7 +86,6 @@ export function createIndicator() {
     stopCommunication();
     return {
         element: loader,
-        cssText,
         start: startCommunication,
         stop: stopCommunication,
     };

@@ -91,10 +91,6 @@ function setupWorkerRecorder(events: PageEventTarget) {
     });
 }
 
-function setStyle(page: PageResource, cssText: string) {
-    page.styleElement.textContent += cssText + "\n";
-}
-
 function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
     const lang = navigator.language;
     return (
@@ -116,9 +112,6 @@ function setupDraftManagerDialog(page: PageResource) {
         title: title.element,
     });
     drafts.show();
-    setStyle(page, title.cssText);
-    setStyle(page, drafts.cssText);
-    setStyle(page, draftList.cssText);
     document.body.append(drafts.element);
 
     draftList.events.addEventListener("count-changed", (e) => {

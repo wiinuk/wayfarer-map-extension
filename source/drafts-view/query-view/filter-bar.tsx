@@ -1,10 +1,15 @@
+import { styleSetter } from "../../dom-extensions";
 import {
     createTypedCustomEvent,
     createTypedEventTarget,
 } from "../../typed-event-target";
 import classNames, { cssText } from "./filter-bar.module.css";
 
+const setStyle = styleSetter(cssText);
+
 export function createFilterBar() {
+    setStyle();
+
     const events = createTypedEventTarget<{
         "input-changed": undefined;
         "click-list-button": undefined;
@@ -62,5 +67,5 @@ export function createFilterBar() {
     function getValue() {
         return input.value;
     }
-    return { element, cssText, events, getValue };
+    return { element, events, getValue };
 }

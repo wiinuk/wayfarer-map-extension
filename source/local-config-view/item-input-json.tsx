@@ -1,11 +1,15 @@
+import { styleSetter } from "../dom-extensions";
 import {
     createTypedEventTarget,
     createTypedCustomEvent,
 } from "../typed-event-target";
 import classNames, { cssText } from "./item-input.module.css";
+const setStyle = styleSetter(cssText);
 
 export type Json = null | number | string | Json[] | { [k: string]: Json };
 export function createJsonItemInput(label: string) {
+    setStyle();
+
     const events = createTypedEventTarget<{ changed: undefined }>();
 
     const dispatchChange = () =>
@@ -68,7 +72,6 @@ export function createJsonItemInput(label: string) {
 
     return {
         element,
-        cssText,
         events,
         setValue,
         getValue,

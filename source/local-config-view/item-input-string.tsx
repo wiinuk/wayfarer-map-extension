@@ -1,13 +1,18 @@
+import { styleSetter } from "../dom-extensions";
 import {
     createTypedCustomEvent,
     createTypedEventTarget,
 } from "../typed-event-target";
 import classNames, { cssText } from "./item-input.module.css";
 
+const setStyle = styleSetter(cssText);
+
 interface OptionalStringConfigEventMap {
     changed: undefined;
 }
 export function createStringItemInput(label: string) {
+    setStyle();
+
     const events = createTypedEventTarget<OptionalStringConfigEventMap>();
 
     const dispatchChanged = () =>
@@ -66,7 +71,6 @@ export function createStringItemInput(label: string) {
     }
     return {
         element,
-        cssText,
         events,
         setValue,
         getValue,

@@ -1,4 +1,7 @@
+import { styleSetter } from "../dom-extensions";
 import classNames, { cssText, variables } from "./virtual-list.module.css";
+
+const setStyle = styleSetter(cssText);
 
 export interface VirtualElements {
     /** px */
@@ -16,6 +19,8 @@ function createEmptyElements(): VirtualElements {
     };
 }
 export function createVirtualList() {
+    setStyle();
+
     const list = <ul class={classNames["list"]}></ul>;
     const listSpacer = <div class={classNames["list-spacer"]}>{list}</div>;
     const listWindow = (
@@ -78,7 +83,6 @@ export function createVirtualList() {
 
     return {
         element: listWindow,
-        cssText,
         setItems,
     };
 }

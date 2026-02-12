@@ -1,6 +1,6 @@
 // spell-checker: ignore Pois POKESTOP Lngs
 
-import { createScheduler, type Scheduler } from "./dom-extensions";
+import { createScheduler, styleSetter, type Scheduler } from "./dom-extensions";
 import type { EntityKind } from "./gcs-schema";
 import { distanceSquared, toLatLngLiteral } from "./geometry";
 import {
@@ -15,12 +15,12 @@ import { createAsyncCancelScope } from "./standard-extensions";
 import type { Cell, Cell14Id, CellId } from "./typed-s2cell";
 import * as Bounds from "./bounds";
 import classNames, { cssText } from "./poi-records-overlay.module.css";
+const setStyle = styleSetter(cssText);
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
 }
 export interface PoisOverlay {
-    readonly styleElement: HTMLStyleElement;
     readonly options: ViewOptions;
     readonly map: google.maps.Map;
     readonly cell14IdToAddedViews: Map<
@@ -32,9 +32,7 @@ export interface PoisOverlay {
     >;
 }
 export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
-    const styleElement = document.createElement("style");
-    styleElement.textContent = cssText;
-    document.head.append(styleElement);
+    setStyle();
 
     const options: ViewOptions = {
         cell17CountMarkerOptions: {
@@ -46,7 +44,6 @@ export function createPoisOverlay(map: google.maps.Map): PoisOverlay {
         },
     };
     return {
-        styleElement,
         options,
         map,
         cell14IdToAddedViews: new Map(),

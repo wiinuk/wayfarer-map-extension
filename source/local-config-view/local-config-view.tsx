@@ -6,6 +6,9 @@ import {
 } from "../local-config";
 import { createStringItemInput } from "./item-input-string";
 import { createJsonItemInput } from "./item-input-json";
+import { styleSetter } from "../dom-extensions";
+
+const setStyle = styleSetter(cssText);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function debounce<F extends (this: unknown, ...args: any[]) => any>(
@@ -39,6 +42,8 @@ function debounce<F extends (this: unknown, ...args: any[]) => any>(
 }
 
 export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
+    setStyle();
+
     const userIdInput = createStringItemInput("User ID");
     const apiRootInput = createStringItemInput("API Root");
     const dictionariesInput = createJsonItemInput("Dictionaries(JSON)");
@@ -107,6 +112,5 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
 
     return {
         element,
-        cssText: cssText + "\n" + userIdInput.cssText,
     };
 }

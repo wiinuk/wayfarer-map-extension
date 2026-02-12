@@ -1,7 +1,10 @@
+import { styleSetter } from "../dom-extensions";
 import classNames, { cssText } from "./drafts-dialog-title.module.css";
 import { createIndicator } from "./indicator";
+const setStyle = styleSetter(cssText);
 
 export function createDraftsDialogTitle({ title }: { title: string }) {
+    setStyle();
     const mainTitleElement = (
         <div class={classNames["main-title"]}>{title}</div>
     );
@@ -17,7 +20,6 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
     let currentSaving: boolean | undefined;
     return {
         element,
-        cssText: cssText + "\n" + indicator.cssText,
         setCounts({
             totalCount,
             filteredCount,

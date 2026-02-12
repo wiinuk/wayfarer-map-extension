@@ -6,7 +6,7 @@ import {
     type Reference,
 } from "./standard-extensions";
 import { padBounds, parseCoordinates } from "./geometry";
-import { createScheduler, type Scheduler } from "./dom-extensions";
+import { createScheduler, styleSetter, type Scheduler } from "./dom-extensions";
 import type { LocalConfigAccessor } from "./local-config";
 import classNames, { cssText } from "./drafts-overlay.module.css";
 import type { LatLng } from "./s2";
@@ -414,14 +414,14 @@ export function createDraftsOverlay(
         },
     };
 }
+
+const setStyle = styleSetter(cssText);
 export async function setupDraftsOverlay(
     overlay: DraftsOverlay,
     local: LocalConfigAccessor,
     scheduler: Scheduler,
 ) {
-    const style = document.createElement("style");
-    style.textContent = cssText;
-    document.body.append(style);
+    setStyle();
 
     overlay.draftsCanvasOverlay.setMap(overlay.map);
 
