@@ -15,7 +15,7 @@ type valueOf<record> = record[keyof record];
 type getOr<
     defaultResult,
     record,
-    key extends string | number | symbol
+    key extends string | number | symbol,
 > = key extends keyof record ? record[key] : defaultResult;
 
 type getOrUndefined<record, key extends string | number | symbol> = getOr<
@@ -42,34 +42,31 @@ type TypeName = JSONSchema4TypeName | JSONSchema6TypeName | JSONSchema7TypeName;
 type TypeNames = TypeName | TypeName[];
 type parseWithTypeNames<
     schema extends Schema,
-    names extends TypeNames | undefined
+    names extends TypeNames | undefined,
 > = names extends undefined
     ? unknown
     : names extends "string"
-    ? string
-    : names extends "number"
-    ? number
-    : names extends "integer"
-    ? number
-    : names extends "boolean"
-    ? boolean
-    : names extends "null"
-    ? null
-    : names extends "any"
-    ? unknown
-    : names extends "object"
-    ? parseObject<schema>
-    : // "array"
-      // TypeName[]
-      notImplemented;
+      ? string
+      : names extends "number"
+        ? number
+        : names extends "integer"
+          ? number
+          : names extends "boolean"
+            ? boolean
+            : names extends "null"
+              ? null
+              : names extends "any"
+                ? unknown
+                : names extends "object"
+                  ? parseObject<schema>
+                  : // "array"
+                    // TypeName[]
+                    notImplemented;
 
-type parseObject<schema extends Schema> = getOr<
-    [],
-    schema,
-    "required"
-> extends []
-    ? parseProperties<nullishOr<{}, schema["properties"]>>
-    : notImplemented;
+type parseObject<schema extends Schema> =
+    getOr<[], schema, "required"> extends []
+        ? parseProperties<nullishOr<{}, schema["properties"]>>
+        : notImplemented;
 
 type parseProperties<properties extends NonNullable<Schema["properties"]>> = {
     [k in keyof properties]?: parseSchemaDefinition<properties[k]>;

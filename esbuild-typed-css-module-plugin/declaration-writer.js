@@ -31,7 +31,7 @@ const writeIfChanged = async (fs, path, contents) => {
 exports.writeDeclarationAndMapFile = async function (
     cssPath,
     cssContents,
-    globals = {}
+    globals = {},
 ) {
     const { fs, console } = Globals.fill(globals);
     const declarationPath = cssPath + ".d.ts";

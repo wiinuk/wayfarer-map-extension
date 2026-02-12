@@ -45,7 +45,7 @@ const addDeclaration = (
     nameKind,
     name,
     declaration,
-    cssTextHash
+    cssTextHash,
 ) => {
     let symbol = nameToSymbol.get(name);
     if (symbol == null) {
@@ -96,7 +96,7 @@ const modularize = (source) => {
     const positionToLineAndCharacter = (position) =>
         computeLineAndCharacterOfPosition(
             (lineStarts ??= computeLineStarts(source)),
-            position
+            position,
         );
 
     /** @type {Map<string, NameSymbol>} */
@@ -148,7 +148,7 @@ const modularize = (source) => {
                 nameKind,
                 token.data,
                 declaration,
-                cssTextHash
+                cssTextHash,
             );
             newCssText += source.slice(sliceStart, sliceEnd);
             newCssText += symbol.uniqueId;

@@ -10,7 +10,10 @@
     width: var(--initial-width);
 
     --foreground-color: var(--external-foreground-color, #717171);
-    --background-color: var(--external-background-color, rgba(247, 251, 255, 0.8));
+    --background-color: var(
+        --external-background-color,
+        rgba(247, 251, 255, 0.8)
+    );
 
     color: var(--foreground-color);
     background: var(--background-color);
