@@ -18,6 +18,7 @@ import { createDialog } from "./dialog";
 import { createLocalConfigView } from "../local-config-view/local-config-view";
 import { createFilterBar } from "./query-view/filter-bar";
 import { styleSetter } from "../dom-extensions";
+import { createSourceList } from "./query-view/source-list";
 
 function hasTermInString(text: string, term: string) {
     return text.toLowerCase().includes(term);
@@ -42,17 +43,167 @@ interface DraftListEventMap {
     };
 }
 
+export interface QuerySource {
+    readonly id: string;
+    readonly contents: string;
+}
+export interface SourcesWithSelection {
+    readonly sources: readonly [QuerySource, ...QuerySource[]];
+    readonly selectedIndex: number | null;
+}
+
+function newFreshId(baseName: string, definedIds: readonly string[]) {
+    const names = new Set(definedIds);
+    for (let i = 2; ; i++) {
+        const id = `${baseName}${i}`;
+        if (!names.has(id)) return id;
+    }
+}
+
+type Drop<
+    T extends readonly unknown[],
+    N extends number,
+    Acc extends unknown[] = [],
+> = Acc["length"] extends N
+    ? T
+    : T extends readonly [unknown, ...infer Rest]
+      ? Drop<Rest, N, [...Acc, unknown]>
+      : [];
+
+function toSpliced<
+    const T extends readonly unknown[],
+    D extends number,
+    const I extends unknown[],
+>(array: T, start: number, deleteCount: D, ...items: I) {
+    const result = [...array];
+    result.splice(start, deleteCount, ...items);
+    return result as Drop<[...T, ...I], D>;
+}
+
+type AtLeast<
+    T,
+    L extends number,
+    Acc extends unknown[] = [],
+> = Acc["length"] extends L ? [...Acc, ...T[]] : AtLeast<T, L, [...Acc, T]>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MatchReadonly<Input, Target> = Input extends any[]
+    ? Target
+    : Readonly<Target>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasMinLength<T extends readonly any[], L extends number>(
+    items: T,
+    length: L,
+): items is T & MatchReadonly<T, AtLeast<T[number], L>> {
+    return items.length >= length;
+}
+
+function isTrivial(
+    { id, contents }: QuerySource,
+    { sources }: SourcesWithSelection,
+) {
+    return (
+        contents === "" ||
+        contents.length <= 1 ||
+        sources.find((s) => s.id !== id && s.contents === contents)
+    );
+}
+
 const setStyle = styleSetter(cssText);
 export function createDraftList({ overlay, remote, local }: DraftListOptions) {
-setStyle();
+    setStyle();
 
     const events = createTypedEventTarget<DraftListEventMap>();
     let allDrafts: Draft[] = Array.from(overlay.drafts.values()).map(
         (view) => view.draft,
     );
     let filteredDrafts: Draft[] = [...allDrafts];
-    let searchTerm: string = "";
     let selectedDraft: Draft | null = null;
+    let currentSources: SourcesWithSelection = local.getConfig().sources || {
+        selectedIndex: 0,
+        sources: [{ id: "source0", contents: "" }],
+    };
+
+    const sourceList = createSourceList({ initialList: currentSources });
+    const sourceListDialog = createDialog(sourceList.element, {
+        title: "検索一覧",
+    });
+
+    sourceList.events.addEventListener("select", ({ detail: index }) => {
+        setCurrentSourcesAndNotify({
+            ...currentSources,
+            selectedIndex: index,
+        });
+    });
+    sourceList.events.addEventListener("delete", ({ detail: index }) => {
+        const oldSource = currentSources.sources[index];
+        if (oldSource == null || !hasMinLength(currentSources.sources, 2)) {
+            return;
+        }
+        const oldSources: readonly [
+            QuerySource,
+            QuerySource,
+            ...QuerySource[],
+        ] = currentSources.sources;
+
+        if (
+            !isTrivial(oldSource, currentSources) &&
+            !confirm(
+                `本当に ${JSON.stringify(oldSource.contents)} (id: ${JSON.stringify(oldSource.id)}) を削除しますか？`,
+            )
+        ) {
+            return;
+        }
+
+        const newSources = toSpliced(oldSources, index, 1);
+        const newIndex =
+            currentSources.sources.length === 0
+                ? null
+                : currentSources.sources.length <= index + 1
+                  ? index - 1
+                  : index;
+
+        setCurrentSourcesAndNotify({
+            ...currentSources,
+            selectedIndex: newIndex,
+            sources: newSources,
+        });
+    });
+    sourceList.events.addEventListener("add", () => {
+        const id = newFreshId(
+            "source",
+            currentSources.sources.map((s) => s.id),
+        );
+        const contents = getSelectedSource() ?? "";
+        const newSource = { id, contents };
+        const index =
+            currentSources.selectedIndex === null
+                ? 0
+                : currentSources.selectedIndex + 1;
+        const sources = toSpliced(currentSources.sources, index, 0, newSource);
+
+        setCurrentSourcesAndNotify({
+            ...currentSources,
+            selectedIndex: index,
+            sources,
+        });
+    });
+
+    function setCurrentSourcesAndNotify(newSources: typeof currentSources) {
+        currentSources = newSources;
+        sourceList.setSources(currentSources);
+
+        // 選択中のソースが更新されたかもしれないので処理
+        filterInput.setValue(getSelectedSource() ?? "");
+        applyFilter();
+
+        local.setConfig({ ...local.getConfig(), sources: currentSources });
+    }
+    function getSelectedSource() {
+        return currentSources.sources[currentSources.selectedIndex ?? -1]
+            ?.contents;
+    }
 
     overlay.events.addEventListener("selection-changed", ({ detail: id }) => {
         if (id == null) {
@@ -104,13 +255,29 @@ setStyle();
     };
 
     const { element: virtualListElement, setItems: setVirtualListItems } =
-createVirtualList();
+        createVirtualList();
 
-    const filterInput = createFilterBar();
+    const filterInput = createFilterBar({ value: getSelectedSource() ?? "" });
 
+    function setSelectedSource(newContents: string) {
+        const index = currentSources.selectedIndex ?? -1;
+        const source = currentSources.sources[index];
+        if (source == null) return;
+
+        const sources = toSpliced(currentSources.sources, index, 1, {
+            ...source,
+            contents: newContents,
+        }) as QuerySource[] as [QuerySource, ...QuerySource[]]; // 削除して追加するので元と同じ
+
+        setCurrentSourcesAndNotify({ ...currentSources, sources });
+    }
     filterInput.events.addEventListener("input-changed", () => {
-        searchTerm = filterInput.getValue();
+        setSelectedSource(filterInput.getValue());
         applyFilter();
+    });
+
+    filterInput.events.addEventListener("click-list-button", () => {
+        sourceListDialog.show();
     });
 
     const detailName = (
@@ -394,7 +561,9 @@ createVirtualList();
     updateDetailPane();
 
     const applyFilter = () => {
-        const searchAndTerms = searchTerm.toLowerCase().match(/[^ ]+/g) ?? [""];
+        const searchAndTerms = getSelectedSource()
+            ?.toLowerCase()
+            .match(/[^ ]+/g) ?? [""];
         filteredDrafts = allDrafts.filter((draft) => {
             for (const term of searchAndTerms) {
                 if (!hasTermInDraft(draft, term)) return false;
@@ -464,7 +633,7 @@ createVirtualList();
     return {
         events,
         element: container,
-                setDrafts(newDrafts: readonly Draft[]) {
+        setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
             applyFilter();
             if (

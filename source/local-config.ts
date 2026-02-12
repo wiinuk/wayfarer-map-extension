@@ -6,11 +6,29 @@ import {
 
 export type LocalConfigAccessor = ReturnType<typeof createConfigAccessor>;
 
+const QuerySourceSchema = zod
+    .strictObject({
+        id: zod.string(),
+        contents: zod.string(),
+    })
+    .readonly();
+
+const SourceWithSelectionSchema = zod
+    .strictObject({
+        selectedIndex: zod.number().nullable(),
+        sources: zod
+            .tuple([QuerySourceSchema])
+            .rest(QuerySourceSchema)
+            .readonly(),
+    })
+    .readonly();
+
 export const ConfigSchema = zod
     .strictObject({
         version: zod.literal("1"),
         userId: zod.string().optional(),
         apiRoot: zod.string().optional(),
+        sources: SourceWithSelectionSchema.optional(),
         dictionaries: zod
             .record(zod.string(), zod.record(zod.string(), zod.string()))
             .optional(),

@@ -76,9 +76,7 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
         statusMessageElement.className = classNames["status-message"];
 
         try {
-            let newConfig: Config = {
-                version: "1",
-            };
+            let newConfig = configAccessor.getConfig();
 
             newConfig = { ...newConfig, userId: userIdInput.getValue() };
             newConfig = { ...newConfig, apiRoot: apiRootInput.getValue() };
