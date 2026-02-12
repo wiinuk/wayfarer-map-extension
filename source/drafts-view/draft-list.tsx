@@ -98,139 +98,159 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         );
     };
 
-    const listContainer = <div class={classNames["list-container"]}></div>;
     const {
         element: virtualListElement,
         setItems: setVirtualListItems,
         cssText: virtualListCssText,
     } = createVirtualList();
-    listContainer.append(virtualListElement);
 
     const filterInput = createFilterBar();
 
-    const detailName = (<input type="text" value="" />) as HTMLInputElement;
-
-    detailName.classList.add(
-        classNames["detail-name"],
-        classNames["input-field"],
-    );
-    detailName.addEventListener("input", (event: Event) => {
-        if (!selectedDraft) return;
-        selectedDraft.name = (event.target as HTMLInputElement).value;
-        overlay.updateDraftTitle(selectedDraft);
-        saveDraftChanges(selectedDraft);
+    filterInput.events.addEventListener("input-changed", () => {
+        searchTerm = filterInput.getValue();
+        applyFilter();
     });
 
-    const detailDescription = (
-        <textarea value=""></textarea>
-    ) as HTMLTextAreaElement;
-
-    detailDescription.classList.add(
-        classNames["detail-description"],
-        classNames["input-field"],
-    );
-    detailDescription.addEventListener("input", (event: Event) => {
-        if (!selectedDraft) return;
-        selectedDraft.description = (event.target as HTMLTextAreaElement).value;
-        saveDraftChanges(selectedDraft);
-    });
-    const detailNote = (
-        <textarea class={classNames["detail-note"]} value=""></textarea>
-    ) as HTMLTextAreaElement;
-    detailNote.classList.add(
-        classNames["detail-note"],
-        classNames["input-field"],
-    );
-    detailNote.addEventListener("input", (event: Event) => {
-        if (!selectedDraft) return;
-        selectedDraft.note = (event.target as HTMLTextAreaElement).value;
-        saveDraftChanges(selectedDraft);
-    });
-    const detailCoordinates = (
-        <input type="text" value="" />
+    const detailName = (
+        <input
+            type="text"
+            value=""
+            classList={[classNames["detail-name"], classNames["input-field"]]}
+            oninput={(event) => {
+                if (!selectedDraft) return;
+                selectedDraft.name = (event.target as HTMLInputElement).value;
+                overlay.updateDraftTitle(selectedDraft);
+                saveDraftChanges(selectedDraft);
+            }}
+        />
     ) as HTMLInputElement;
 
-    detailCoordinates.classList.add(
-        classNames["detail-coordinates"],
-        classNames["input-field"],
-    );
-    detailCoordinates.addEventListener("input", (event: Event) => {
-        if (!selectedDraft) return;
-        const textarea = event.target as HTMLTextAreaElement;
-        try {
-            const newCoordinates = parseCoordinates(textarea.value);
-            if (newCoordinates.length > 0) {
-                selectedDraft.coordinates = newCoordinates as [
-                    LatLng,
-                    ...LatLng[],
-                ];
-                textarea.classList.remove(classNames["input-error"]);
-            } else {
-                textarea.classList.add(classNames["input-error"]);
-                return;
-            }
-        } catch (e) {
-            console.error("Failed to parse coordinates:", e);
-            textarea.classList.add(classNames["input-error"]);
-            return;
-        }
-        overlay.updateDraftCoordinates(selectedDraft);
-        saveDraftChanges(selectedDraft);
-    });
-    const createButton = (
-        <button class={classNames["create-button"]}>📍新規作成</button>
-    );
-    createButton.addEventListener("click", () => {
-        addNewDraft();
-    });
-    const deleteButton = (
-        <button class={classNames["delete-button"]}>🗑️削除</button>
-    );
-    deleteButton.addEventListener("click", () => {
-        if (!selectedDraft) {
-            alert("削除する候補が選択されていません。");
-            return;
-        }
-        if (confirm(`本当に「${selectedDraft.name}」を削除しますか？`)) {
-            deleteSelectedDraft(selectedDraft.id);
-        }
-    });
-    const mapButton = (
-        <button class={classNames["map-button"]}>🎯地図で表示</button>
-    );
-    const templateToggleButton = (
-        <button class={classNames["template-button"]}>📄テンプレート</button>
-    );
-    templateToggleButton.addEventListener("click", () => {
-        if (!selectedDraft) return;
+    const detailDescription = (
+        <textarea
+            value=""
+            classList={[
+                classNames["detail-description"],
+                classNames["input-field"],
+            ]}
+            oninput={(event: Event) => {
+                if (!selectedDraft) return;
+                selectedDraft.description = (
+                    event.target as HTMLTextAreaElement
+                ).value;
+                saveDraftChanges(selectedDraft);
+            }}
+        ></textarea>
+    ) as HTMLTextAreaElement;
 
-        if (getDraftIsTemplate(selectedDraft)) {
-            setDraftIsTemplate(selectedDraft, false);
-            saveDraftChanges(selectedDraft);
-        } else {
-            const currentTemplate = allDrafts.find((d) =>
-                getDraftIsTemplate(d),
-            );
-            if (currentTemplate) {
-                setDraftIsTemplate(currentTemplate, false);
-                saveDraftChanges(currentTemplate);
-            }
-            setDraftIsTemplate(selectedDraft, true);
-            saveDraftChanges(selectedDraft);
-        }
-        updateVirtualList();
-        updateDetailPane();
-    });
+    const detailNote = (
+        <textarea
+            classList={[classNames["detail-note"], classNames["input-field"]]}
+            value=""
+            oninput={(event) => {
+                if (!selectedDraft) return;
+                selectedDraft.note = (
+                    event.target as HTMLTextAreaElement
+                ).value;
+                saveDraftChanges(selectedDraft);
+            }}
+        ></textarea>
+    ) as HTMLTextAreaElement;
+
+    const detailCoordinates = (
+        <input
+            type="text"
+            value=""
+            classList={[
+                classNames["detail-coordinates"],
+                classNames["input-field"],
+            ]}
+            oninput={(event) => {
+                if (!selectedDraft) return;
+                const textarea = event.target as HTMLTextAreaElement;
+                try {
+                    const newCoordinates = parseCoordinates(textarea.value);
+                    if (newCoordinates.length > 0) {
+                        selectedDraft.coordinates = newCoordinates as [
+                            LatLng,
+                            ...LatLng[],
+                        ];
+                        textarea.classList.remove(classNames["input-error"]);
+                    } else {
+                        textarea.classList.add(classNames["input-error"]);
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Failed to parse coordinates:", e);
+                    textarea.classList.add(classNames["input-error"]);
+                    return;
+                }
+                overlay.updateDraftCoordinates(selectedDraft);
+                saveDraftChanges(selectedDraft);
+            }}
+        />
+    ) as HTMLInputElement;
+
+    const deleteButton = (
+        <button
+            class={classNames["delete-button"]}
+            onclick={() => {
+                if (!selectedDraft) {
+                    alert("削除する候補が選択されていません。");
+                    return;
+                }
+                if (
+                    confirm(`本当に「${selectedDraft.name}」を削除しますか？`)
+                ) {
+                    deleteSelectedDraft(selectedDraft.id);
+                }
+            }}
+        >
+            🗑️削除
+        </button>
+    );
+    const mapButton = (
+        <button
+            class={classNames["map-button"]}
+            onclick={() => {
+                if (selectedDraft) {
+                    overlay.map.setCenter(selectedDraft.coordinates[0]);
+                }
+            }}
+        >
+            🎯地図で表示
+        </button>
+    );
+
+    const templateToggleButton = (
+        <button
+            class={classNames["template-button"]}
+            onclick={() => {
+                if (!selectedDraft) return;
+
+                if (getDraftIsTemplate(selectedDraft)) {
+                    setDraftIsTemplate(selectedDraft, false);
+                    saveDraftChanges(selectedDraft);
+                } else {
+                    const currentTemplate = allDrafts.find((d) =>
+                        getDraftIsTemplate(d),
+                    );
+                    if (currentTemplate) {
+                        setDraftIsTemplate(currentTemplate, false);
+                        saveDraftChanges(currentTemplate);
+                    }
+                    setDraftIsTemplate(selectedDraft, true);
+                    saveDraftChanges(selectedDraft);
+                }
+                updateVirtualList();
+                updateDetailPane();
+            }}
+        >
+            📄テンプレート
+        </button>
+    );
 
     const configView = createLocalConfigView(local);
     const configDialog = createDialog(configView.element, { title: "設定" });
-
-    const configButton = (
-        <button class={classNames["config-button"]}>⚙️設定</button>
-    );
-    configButton.addEventListener("click", () => {
-        configDialog.show();
-    });
 
     const deleteSelectedDraft = (draftId: Draft["id"]) => {
         const { apiRoot, userId } = local.getConfig();
@@ -259,26 +279,37 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         );
     };
 
-    const detailPane = (
-        <details class={classNames["detail-pane"]} open={true}>
-            <summary class={classNames["detail-summary"]}>{detailName}</summary>
-            <div class={classNames["detail-content-wrapper"]}>
-                {detailDescription}
-                {detailNote}
-                {detailCoordinates}
-                {createButton}
-                {deleteButton}
-                {mapButton}
-                {templateToggleButton}
-                {configButton}
-            </div>
-        </details>
-    );
     const container = (
         <div class={classNames["container"]}>
             {filterInput.element}
-            {listContainer}
-            {detailPane}
+            <div class={classNames["list-container"]}>{virtualListElement}</div>
+            <details class={classNames["detail-pane"]} open={true}>
+                <summary class={classNames["detail-summary"]}>
+                    {detailName}
+                </summary>
+                <div class={classNames["detail-content-wrapper"]}>
+                    {detailDescription}
+                    {detailNote}
+                    {detailCoordinates}
+                    <button
+                        class={classNames["create-button"]}
+                        onclick={() => addNewDraft()}
+                    >
+                        📍新規作成
+                    </button>
+                    {deleteButton}
+                    {mapButton}
+                    {templateToggleButton}
+                    <button
+                        class={classNames["config-button"]}
+                        onclick={() => {
+                            configDialog.show();
+                        }}
+                    >
+                        ⚙️設定
+                    </button>
+                </div>
+            </details>
         </div>
     );
 
@@ -427,17 +458,6 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         setVirtualListItems(virtualElements);
     };
     updateVirtualList();
-
-    filterInput.events.addEventListener("input-changed", () => {
-        searchTerm = filterInput.getValue();
-        applyFilter();
-    });
-
-    mapButton.addEventListener("click", () => {
-        if (selectedDraft) {
-            overlay.map.setCenter(selectedDraft.coordinates[0]);
-        }
-    });
 
     return {
         events,

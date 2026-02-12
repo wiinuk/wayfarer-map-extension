@@ -19,7 +19,9 @@ export function createVirtualList() {
     const list = <ul class={classNames["list"]}></ul>;
     const listSpacer = <div class={classNames["list-spacer"]}>{list}</div>;
     const listWindow = (
-        <div class={classNames["list-window"]}>{listSpacer}</div>
+        <div class={classNames["list-window"]} onscroll={update}>
+            {listSpacer}
+        </div>
     );
     let items = createEmptyElements();
 
@@ -70,7 +72,6 @@ export function createVirtualList() {
         return update();
     }
 
-    listWindow.addEventListener("scroll", update);
     new ResizeObserver((entries) => {
         for (const _ of entries) void update();
     }).observe(listWindow);

@@ -8,12 +8,27 @@ export type Json = null | number | string | Json[] | { [k: string]: Json };
 export function createJsonItemInput(label: string) {
     const events = createTypedEventTarget<{ changed: undefined }>();
 
+    const dispatchChange = () =>
+        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
+
     const textarea = (
-        <textarea class={classNames["textarea"]}></textarea>
+        <textarea
+            class={classNames["textarea"]}
+            oninput={dispatchChange}
+        ></textarea>
     ) as HTMLTextAreaElement;
 
     const enabledCheckbox = (
-        <input type="checkbox" class={classNames["checkbox"]} />
+        <input
+            type="checkbox"
+            class={classNames["checkbox"]}
+            onchange={() => {
+                const isChecked = enabledCheckbox.checked;
+                textarea.disabled = !isChecked;
+                inputContainer.style.display = isChecked ? "" : "none";
+                dispatchChange();
+            }}
+        />
     ) as HTMLInputElement;
 
     const inputContainer = (
@@ -50,15 +65,6 @@ export function createJsonItemInput(label: string) {
             }
         }
     }
-    const onChange = () =>
-        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
-    enabledCheckbox.addEventListener("change", () => {
-        const isChecked = enabledCheckbox.checked;
-        textarea.disabled = !isChecked;
-        inputContainer.style.display = isChecked ? "" : "none";
-        onChange();
-    });
-    textarea.addEventListener("input", onChange);
 
     return {
         element,
