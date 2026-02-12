@@ -9,7 +9,6 @@ import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
 const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
 const watchMode = args.includes("--watch");
-const debugMode = args.includes("--debug");
 const wsHost = process.env.WS_HOST || "127.0.0.1";
 const wsPort = Number(process.env.WS_PORT || 35729);
 
@@ -86,88 +85,53 @@ async function build() {
     const banner = headerMatch[0];
 
     let wss = null;
-    if (debugMode) {
+    if (watchMode) {
         wss = await startWsServer();
     }
 
-    const clientSnippet = debugMode
+    const clientSnippet = watchMode
         ? `;(function(){try{let connected = false; var ws=new WebSocket('ws://${wsHost}:${wsPort}');ws.addEventListener('open', () => {connected = true;});ws.addEventListener('message',function(e){if(e.data==='reload')location.reload();});ws.addEventListener('close',function(){if(connected){setTimeout(function(){location.reload();},100);}} );}catch(e){console.warn('dev reload ws failed',e);} })();`
         : "";
+
+    /** @type {esbuild.Plugin} */
+    const cleanupPlugin = {
+        name: "build-notifier",
+        setup(build) {
+            build.onStart(() => {
+                console.log("[esbuild] building...");
+            });
+            build.onEnd((result) => {
+                if (result.errors.length > 0) {
+                    console.error("[esbuild] build failed:", result.errors);
+                } else {
+                    console.log("[esbuild] build succeeded");
+                    if (wss) {
+                        for (const c of wss.clients) {
+                            c.send("reload");
+                        }
+                    }
+                }
+            });
+        },
+    };
 
     /** @type {esbuild.BuildOptions} */
     const baseOptions = {
         entryPoints: [mainFile],
         bundle: true,
-        outfile: changeExt(
-            mainFile,
-            debugMode || watchMode ? ".debug.js" : ".js",
-        ),
+        outfile: changeExt(mainFile, watchMode ? ".debug.js" : ".js"),
         banner: { js: banner },
-        footer: debugMode ? { js: clientSnippet } : undefined,
-        sourcemap: debugMode ? "inline" : false,
-        plugins: [TypedCssModulePlugin(), workerPlugin()],
+        footer: watchMode ? { js: clientSnippet } : undefined,
+        sourcemap: watchMode ? "inline" : false,
+        plugins: [TypedCssModulePlugin(), workerPlugin(), cleanupPlugin],
     };
 
     if (watchMode) {
-        // esbuild version in this project doesn't support `watch` option reliably.
-        // Use chokidar to watch files and re-run a build on changes.
-        const { watch } = await import("chokidar");
-        let building = false;
-        let scheduled = false;
-
-        const runBuild = async () => {
-            if (building) {
-                scheduled = true;
-                return;
-            }
-            building = true;
-            try {
-                if (!debugMode) {
-                    const tscPassed = await runTsc();
-                    if (!tscPassed) {
-                        console.error(
-                            "Build aborted due to TypeScript errors.",
-                        );
-                        return;
-                    }
-                    const lintPassed = await runEslint();
-                    if (!lintPassed) {
-                        console.error("Build aborted due to linting errors.");
-                        return;
-                    }
-                }
-
-                await esbuild.build(baseOptions);
-                console.log("Build succeeded");
-                if (wss) {
-                    try {
-                        for (const c of wss.clients) c.send("reload");
-                    } catch (e) {}
-                }
-            } catch (err) {
-                console.error("Build failed:", err);
-            } finally {
-                building = false;
-                if (scheduled) {
-                    scheduled = false;
-                    runBuild();
-                }
-            }
-        };
-
-        // initial build
-        await runBuild();
-
-        const watcher = watch([mainFile, "./source/**/*"], {
-            ignoreInitial: true,
-        });
-        watcher.on("all", (ev, path) => {
-            console.log("[dev] file change", ev, path);
-            runBuild();
+        const context = await esbuild.context(baseOptions);
+        await context.watch({
+            delay: 3000,
         });
         console.log("Watching for changes...");
-        // keep process alive
-        process.stdin.resume();
     } else {
         const tscPassed = await runTsc();
         if (!tscPassed) {

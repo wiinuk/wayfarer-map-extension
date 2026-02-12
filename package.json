@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "debug": "node build.mjs --watch --debug",
+    "debug": "node build.mjs --watch",
     "test": "vitest run",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
