@@ -31,12 +31,6 @@
     border: 1px solid red;
 }
 
-.search-input {
-    padding: 8px;
-    margin-bottom: 8px;
-    border-radius: 4px;
-}
-
 .list-container {
     flex-grow: 1;
     overflow-y: auto;

@@ -16,6 +16,7 @@ import {
 } from "../typed-event-target";
 import { createDialog } from "./dialog";
 import { createLocalConfigView } from "../local-config-view/local-config-view";
+import { createFilterBar } from "./query-view/filter-bar";
 
 function hasTermInString(text: string, term: string) {
     return text.toLowerCase().includes(term);
@@ -105,13 +106,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     } = createVirtualList();
     listContainer.append(virtualListElement);
 
-    const searchInput = (
-        <input type="search" placeholder="Search drafts..." />
-    ) as HTMLInputElement;
-    searchInput.classList.add(
-        classNames["search-input"],
-        classNames["input-field"],
-    );
+    const filterInput = createFilterBar();
 
     const detailName = (<input type="text" value="" />) as HTMLInputElement;
 
@@ -281,7 +276,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     );
     const container = (
         <div class={classNames["container"]}>
-            {searchInput}
+            {filterInput.element}
             {listContainer}
             {detailPane}
         </div>
@@ -433,8 +428,8 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     };
     updateVirtualList();
 
-    searchInput.addEventListener("input", () => {
-        searchTerm = searchInput.value;
+    filterInput.events.addEventListener("input-changed", () => {
+        searchTerm = filterInput.getValue();
         applyFilter();
     });
 
@@ -448,7 +443,13 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         events,
         element: container,
         cssText:
-            cssText + "\n" + virtualListCssText + "\n" + configView.cssText,
+            cssText +
+            "\n" +
+            virtualListCssText +
+            "\n" +
+            configView.cssText +
+            "\n" +
+            filterInput.cssText,
         setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
             applyFilter();
