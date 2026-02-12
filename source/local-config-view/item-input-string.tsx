@@ -10,12 +10,28 @@ interface OptionalStringConfigEventMap {
 export function createStringItemInput(label: string) {
     const events = createTypedEventTarget<OptionalStringConfigEventMap>();
 
+    const dispatchChanged = () =>
+        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
+
     const input = (
-        <input type="text" class={classNames["input"]} />
+        <input
+            type="text"
+            class={classNames["input"]}
+            oninput={dispatchChanged}
+        />
     ) as HTMLInputElement;
 
     const enabledCheckbox = (
-        <input type="checkbox" class={classNames["checkbox"]} />
+        <input
+            type="checkbox"
+            class={classNames["checkbox"]}
+            onchange={() => {
+                const isChecked = enabledCheckbox.checked;
+                input.disabled = !isChecked;
+                inputContainer.style.display = isChecked ? "" : "none";
+                dispatchChanged();
+            }}
+        />
     ) as HTMLInputElement;
 
     const inputContainer = (
@@ -35,17 +51,6 @@ export function createStringItemInput(label: string) {
             {inputContainer}
         </>
     );
-
-    const onChanged = () =>
-        events.dispatchEvent(createTypedCustomEvent("changed", undefined));
-
-    enabledCheckbox.addEventListener("change", () => {
-        const isChecked = enabledCheckbox.checked;
-        input.disabled = !isChecked;
-        inputContainer.style.display = isChecked ? "" : "none";
-        onChanged();
-    });
-    input.addEventListener("input", onChanged);
 
     function setValue(value: string | undefined) {
         const hasUserId = value !== undefined;

@@ -65,55 +65,47 @@ export function createDialog(
     innerElement: HTMLElement,
     options?: { title?: string | HTMLElement },
 ) {
-    const minimizeToggleButton = (
-        <button
-            class={
-                classNames["titlebar-button"] +
-                " " +
-                classNames["minimize-toggle-button"]
-            }
-            title="minimize"
-        />
-    );
-    const maximizeToggleButton = (
-        <button
-            class={
-                classNames["titlebar-button"] +
-                " " +
-                classNames["maximize-toggle-button"]
-            }
-            title="maximize"
-        />
-    );
-    const closeButton = (
-        <button class={classNames["titlebar-button"]} title="close">
-            ×
-        </button>
-    );
     const titleSpan = (
         <div class={classNames["titlebar-title"]}>{options?.title ?? ""}</div>
     );
-    const titleBar = (
-        <div class={classNames["titlebar"]}>
-            {titleSpan}
-            <div class={classNames["titlebar-right-controls"]}>
-                {minimizeToggleButton}
-                {maximizeToggleButton}
-                {closeButton}
-            </div>
-        </div>
-    );
     const dialogElement = (
         <div class={classNames["dialog"]}>
-            {titleBar}
+            {
+                <div
+                    class={classNames["titlebar"]}
+                    ondblclick={toggleMaximizedState}
+                >
+                    {titleSpan}
+                    <div class={classNames["titlebar-right-controls"]}>
+                        <button
+                            classList={[
+                                classNames["titlebar-button"],
+                                classNames["minimize-toggle-button"],
+                            ]}
+                            title="minimize"
+                            onclick={toggleMinimizedState}
+                        />
+                        <button
+                            classList={[
+                                classNames["titlebar-button"],
+                                classNames["maximize-toggle-button"],
+                            ]}
+                            title="maximize"
+                            onclick={toggleMaximizedState}
+                        />
+                        <button
+                            class={classNames["titlebar-button"]}
+                            title="close"
+                            onclick={hide}
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            }
             <div class={classNames["inner-container"]}>{innerElement}</div>
         </div>
     );
-
-    titleBar.addEventListener("dblclick", toggleMaximizedState);
-    minimizeToggleButton.addEventListener("click", toggleMinimizedState);
-    maximizeToggleButton.addEventListener("click", toggleMaximizedState);
-    closeButton.addEventListener("click", hide);
 
     makeDraggable(dialogElement, titleSpan, {
         propertyNames: {
