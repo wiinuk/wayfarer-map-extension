@@ -1,9 +1,5 @@
 import classNames, { cssText } from "./local-config-view.module.css";
-import {
-    ConfigSchema,
-    type LocalConfigAccessor,
-    type Config,
-} from "../local-config";
+import { ConfigSchema, type LocalConfigAccessor } from "../local-config";
 import { createStringItemInput } from "./item-input-string";
 import { createJsonItemInput } from "./item-input-json";
 import { styleSetter } from "../dom-extensions";

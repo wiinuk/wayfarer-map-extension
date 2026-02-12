@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -100,6 +100,17 @@
   function createScheduler(signal, thresholdMs = 10) {
     if (isWebWorker()) return createWorkerScheduler();
     return createSchedulerByAnimationFrame(signal, thresholdMs);
+  }
+  function styleSetter(cssText12) {
+    let done = false;
+    return () => {
+      if (!done) {
+        done = true;
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(cssText12);
+        document.adoptedStyleSheets.push(sheet);
+      }
+    };
   }
 
   // source/geometry.ts
@@ -14986,10 +14997,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/poi-records-overlay.ts
+  var setStyle = styleSetter(cssText);
   function createPoisOverlay(map2) {
-    const styleElement = document.createElement("style");
-    styleElement.textContent = cssText;
-    document.head.append(styleElement);
+    setStyle();
     const options = {
       cell17CountMarkerOptions: {
         clickable: false,
@@ -15000,7 +15010,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     };
     return {
-      styleElement,
       options,
       map: map2,
       cell14IdToAddedViews: /* @__PURE__ */ new Map()
@@ -15222,10 +15231,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/local-config.ts
+  var QuerySourceSchema = zod_default.strictObject({
+    id: zod_default.string(),
+    contents: zod_default.string()
+  }).readonly();
+  var SourceWithSelectionSchema = zod_default.strictObject({
+    selectedIndex: zod_default.number().nullable(),
+    sources: zod_default.tuple([QuerySourceSchema]).rest(QuerySourceSchema).readonly()
+  }).readonly();
   var ConfigSchema = zod_default.strictObject({
     version: zod_default.literal("1"),
     userId: zod_default.string().optional(),
     apiRoot: zod_default.string().optional(),
+    sources: SourceWithSelectionSchema.optional(),
     dictionaries: zod_default.record(zod_default.string(), zod_default.record(zod_default.string(), zod_default.string())).optional()
   }).readonly();
   function createConfigAccessor(key) {
@@ -16313,10 +16331,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     };
   }
+  var setStyle2 = styleSetter(cssText2);
   async function setupDraftsOverlay(overlay, local, scheduler) {
-    const style = document.createElement("style");
-    style.textContent = cssText2;
-    document.body.append(style);
+    setStyle2();
     overlay.draftsCanvasOverlay.setMap(overlay.map);
     overlay.map.addListener("idle", () => notifyMapRangeChanged(overlay));
     notifyMapRangeChanged(overlay);
@@ -16808,39 +16825,56 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     window.addEventListener("resize", adjustSize);
     adjustSize();
   }
+  var setStyle3 = styleSetter(cssText3);
   function createDialog(innerElement, options) {
-    const minimizeToggleButton = /* @__PURE__ */ jsx(
-      "button",
-      {
-        class: dialog_default["titlebar-button"] + " " + dialog_default["minimize-toggle-button"],
-        title: "minimize"
-      }
-    );
-    const maximizeToggleButton = /* @__PURE__ */ jsx(
-      "button",
-      {
-        class: dialog_default["titlebar-button"] + " " + dialog_default["maximize-toggle-button"],
-        title: "maximize"
-      }
-    );
-    const closeButton = /* @__PURE__ */ jsx("button", { class: dialog_default["titlebar-button"], title: "close", children: "\xD7" });
+    setStyle3();
     const titleSpan = /* @__PURE__ */ jsx("div", { class: dialog_default["titlebar-title"], children: options?.title ?? "" });
-    const titleBar = /* @__PURE__ */ jsxs("div", { class: dialog_default["titlebar"], children: [
-      titleSpan,
-      /* @__PURE__ */ jsxs("div", { class: dialog_default["titlebar-right-controls"], children: [
-        minimizeToggleButton,
-        maximizeToggleButton,
-        closeButton
-      ] })
-    ] });
     const dialogElement = /* @__PURE__ */ jsxs("div", { class: dialog_default["dialog"], children: [
-      titleBar,
+      /* @__PURE__ */ jsxs(
+        "div",
+        {
+          class: dialog_default["titlebar"],
+          ondblclick: toggleMaximizedState,
+          children: [
+            titleSpan,
+            /* @__PURE__ */ jsxs("div", { class: dialog_default["titlebar-right-controls"], children: [
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  classList: [
+                    dialog_default["titlebar-button"],
+                    dialog_default["minimize-toggle-button"]
+                  ],
+                  title: "minimize",
+                  onclick: toggleMinimizedState
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  classList: [
+                    dialog_default["titlebar-button"],
+                    dialog_default["maximize-toggle-button"]
+                  ],
+                  title: "maximize",
+                  onclick: toggleMaximizedState
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  class: dialog_default["titlebar-button"],
+                  title: "close",
+                  onclick: hide,
+                  children: "\xD7"
+                }
+              )
+            ] })
+          ]
+        }
+      ),
       /* @__PURE__ */ jsx("div", { class: dialog_default["inner-container"], children: innerElement })
     ] });
-    titleBar.addEventListener("dblclick", toggleMaximizedState);
-    minimizeToggleButton.addEventListener("click", toggleMinimizedState);
-    maximizeToggleButton.addEventListener("click", toggleMaximizedState);
-    closeButton.addEventListener("click", hide);
     makeDraggable(dialogElement, titleSpan, {
       propertyNames: {
         left: variables["--drag-left"],
@@ -16864,7 +16898,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return {
       show,
       hide,
-      cssText: cssText3,
       element: dialogElement,
       setTitle(title) {
         titleSpan.innerHTML = "";
@@ -16886,30 +16919,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText4 = ':root {\n    --border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1: #ccc;\n    --selected-background-color-d7f64ef7b890bbee7594cf5bc100828d41a3dd1f: #2563eb;\n    --selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4: #fff;\n    --text-muted-bf5a19b1afbc0854f0a50ce10012b81f9883028b: #666;\n    --background-color-light-312fa40164e25efde6a346554297557cd49e68a2: #f8f9fa;\n    --primary-color-0ecf8e681c0883ab213d2c7c6a40d94bda12b44a: #2563eb;\n    --primary-color-dark-7390d1dc3790bb3c7a619222dfda25647e8f625a: #0056b3;\n}\n\n.container-a8e27d697d0bc425baf3dc2c5242337e753177a8 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216:focus {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.input-error-a3d58ba035f3034ca9a070c9fc80243539479b90 {\n    border: 1px solid red;\n}\n\n.search-input-8382bbc6e67a7ef46f07fa2f9de75722fbfdc642 {\n    padding: 8px;\n    margin-bottom: 8px;\n    border-radius: 4px;\n}\n\n.list-container-ce7be2434a7bb81b1d987632aa71b41a61e94948 {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    border-radius: 4px;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf:last-child {\n    border-bottom: none;\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf.selected-bc18875271f8766e50b7f8a87e3580ff887f8f69 {\n    background-color: var(--selected-background-color-d7f64ef7b890bbee7594cf5bc100828d41a3dd1f);\n    color: var(--selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4);\n}\n\n.item-dbe64dceaaaccd57dbe04af327db992280635bcf.selected-bc18875271f8766e50b7f8a87e3580ff887f8f69 .item-note-7b19d49cc782813c2c4430282830d4592546b811 {\n    color: var(--selected-text-color-5a2b8755b80ad982504d46984d53151452db01b4);\n}\n\n.item-name-8b4812ea97d1ea2711e4a9ccf6d6ed4ec6fa9d87 {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-7b19d49cc782813c2c4430282830d4592546b811 {\n    font-size: 0.8em;\n    color: var(--text-muted-bf5a19b1afbc0854f0a50ce10012b81f9883028b);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-c0890b11309ce8d35dc919f9d74de8e2362a56d1);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9[open] > .detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b::after {\n    content: "\u2212";\n}\n\n.detail-name-ba6028060f6ac583f1a090d3d621f7e2838c59b7 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-4cc3c15a0fd85d0cbdc664b3d9ba1aeb48e207fc,\n.detail-note-bebf9fd1e3f2d012bad93b70c10582b9bc286ccc,\n.detail-coordinates-6bdc32729f5f8243f746b936016d369867ca41d5 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-9cdfbd2c49202411e49954e145abab5307d92d79 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3,\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc {\n    background-color: var(--primary-color-0ecf8e681c0883ab213d2c7c6a40d94bda12b44a);\n}\n\n.map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7:hover,\n.create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3:hover,\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234:hover,\n.config-button-1307b5b58b3594065b5da7f8f52057969ff228bc:hover {\n    background-color: var(--primary-color-dark-7390d1dc3790bb3c7a619222dfda25647e8f625a);\n}\n\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1 {\n    background-color: #dc3545;\n}\n\n.delete-button-27f9ef387904083464a03e980a246c11a491a4f1:hover {\n    background-color: #c82333;\n}\n\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234.is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9 {\n    background-color: #28a745;\n}\n\n.template-button-80a3eb211221ef1108e4bda1a5194790c46cf234.is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9:hover {\n    background-color: #218838;\n}\n\n.input-error-a3d58ba035f3034ca9a070c9fc80243539479b90 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
+  var cssText4 = ':root {\n    --border-color-51631c833743ba2a62500c30df9174e36f9b9673: #ccc;\n    --selected-background-color-1bc6cb676d23da8289c0d6a0b3bb2cdf3610faee: #2563eb;\n    --selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd: #fff;\n    --text-muted-022faf9d53e3d59f9848f2691abf286e5ee97d8e: #666;\n    --background-color-light-f430ca9112788979e76b190123afd7a26a88e9c9: #f8f9fa;\n    --primary-color-68a3ef2f2c6d3344d237a9856025adfe18fd107c: #2563eb;\n    --primary-color-dark-be35b3b230419a40a8bdc9ef9018e8a06e7d5f66: #0056b3;\n}\n\n.container-bcca77d95a0c238b622ad40e7361a62dc25cd3d3 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-319235de682839e4738c9ef400f355f6631287b5 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-319235de682839e4738c9ef400f355f6631287b5:focus {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.input-error-9992f803f35644f2d22186012a38d080999233f3 {\n    border: 1px solid red;\n}\n\n.list-container-b9ec8abc5ee696908aa8198c1fed3c63294688b3 {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    border-radius: 4px;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80:last-child {\n    border-bottom: none;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80.selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446 {\n    background-color: var(--selected-background-color-1bc6cb676d23da8289c0d6a0b3bb2cdf3610faee);\n    color: var(--selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd);\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80.selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446 .item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518 {\n    color: var(--selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd);\n}\n\n.item-name-d565d6e49fc154926305fcf6100601a298cc223a {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518 {\n    font-size: 0.8em;\n    color: var(--text-muted-022faf9d53e3d59f9848f2691abf286e5ee97d8e);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca[open] > .detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::after {\n    content: "\u2212";\n}\n\n.detail-name-068298090b376b2e49849d1866736a9c17833d13 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-c585478c67fd2886b55072144a65681cb2110f7d,\n.detail-note-0a41dc9710d7c916f069cfdbfd5f3f890bf15e44,\n.detail-coordinates-1bcea9690df40975a760d07d77861165f2b74873 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-dfe140a008e33f532dbc0a6511c731307b56a5b4 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113,\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e {\n    background-color: var(--primary-color-68a3ef2f2c6d3344d237a9856025adfe18fd107c);\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515:hover,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113:hover,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c:hover,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e:hover {\n    background-color: var(--primary-color-dark-be35b3b230419a40a8bdc9ef9018e8a06e7d5f66);\n}\n\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553 {\n    background-color: #dc3545;\n}\n\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553:hover {\n    background-color: #c82333;\n}\n\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c.is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e {\n    background-color: #28a745;\n}\n\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c.is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e:hover {\n    background-color: #218838;\n}\n\n.input-error-9992f803f35644f2d22186012a38d080999233f3 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
   var draft_list_default = {
-    container: "container-a8e27d697d0bc425baf3dc2c5242337e753177a8",
-    "input-field": "input-field-947438d7c2c2b36f5b2c83ef0155735354bfa216",
-    "input-error": "input-error-a3d58ba035f3034ca9a070c9fc80243539479b90",
-    "search-input": "search-input-8382bbc6e67a7ef46f07fa2f9de75722fbfdc642",
-    "list-container": "list-container-ce7be2434a7bb81b1d987632aa71b41a61e94948",
-    item: "item-dbe64dceaaaccd57dbe04af327db992280635bcf",
-    selected: "selected-bc18875271f8766e50b7f8a87e3580ff887f8f69",
-    "item-note": "item-note-7b19d49cc782813c2c4430282830d4592546b811",
-    "item-name": "item-name-8b4812ea97d1ea2711e4a9ccf6d6ed4ec6fa9d87",
-    "detail-pane": "detail-pane-af0595b4c6c4cc9d12999d1e98557852b8887ad9",
-    "detail-summary": "detail-summary-40e2841fe4051eee9c401d3e29aaedc07fb3b38b",
-    "detail-name": "detail-name-ba6028060f6ac583f1a090d3d621f7e2838c59b7",
-    "detail-description": "detail-description-4cc3c15a0fd85d0cbdc664b3d9ba1aeb48e207fc",
-    "detail-note": "detail-note-bebf9fd1e3f2d012bad93b70c10582b9bc286ccc",
-    "detail-coordinates": "detail-coordinates-6bdc32729f5f8243f746b936016d369867ca41d5",
-    "detail-content-wrapper": "detail-content-wrapper-9cdfbd2c49202411e49954e145abab5307d92d79",
-    "map-button": "map-button-1aaab2651dc3a0efbec0c08bb4eeebb22fd5feb7",
-    "create-button": "create-button-3b2f85fe1bfd1b845e8234db1ab125c6832394a3",
-    "delete-button": "delete-button-27f9ef387904083464a03e980a246c11a491a4f1",
-    "template-button": "template-button-80a3eb211221ef1108e4bda1a5194790c46cf234",
-    "config-button": "config-button-1307b5b58b3594065b5da7f8f52057969ff228bc",
-    "is-template": "is-template-c7ffcfb1efec5490c003e4d9ca280d39af93abd9"
+    container: "container-bcca77d95a0c238b622ad40e7361a62dc25cd3d3",
+    "input-field": "input-field-319235de682839e4738c9ef400f355f6631287b5",
+    "input-error": "input-error-9992f803f35644f2d22186012a38d080999233f3",
+    "list-container": "list-container-b9ec8abc5ee696908aa8198c1fed3c63294688b3",
+    item: "item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80",
+    selected: "selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446",
+    "item-note": "item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518",
+    "item-name": "item-name-d565d6e49fc154926305fcf6100601a298cc223a",
+    "detail-pane": "detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca",
+    "detail-summary": "detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1",
+    "detail-name": "detail-name-068298090b376b2e49849d1866736a9c17833d13",
+    "detail-description": "detail-description-c585478c67fd2886b55072144a65681cb2110f7d",
+    "detail-note": "detail-note-0a41dc9710d7c916f069cfdbfd5f3f890bf15e44",
+    "detail-coordinates": "detail-coordinates-1bcea9690df40975a760d07d77861165f2b74873",
+    "detail-content-wrapper": "detail-content-wrapper-dfe140a008e33f532dbc0a6511c731307b56a5b4",
+    "map-button": "map-button-908d4aa41c19b78316d582a681067fd5d9c8c515",
+    "create-button": "create-button-3ea22a965c69c8451c019dc09bf6578724443113",
+    "delete-button": "delete-button-25c3a2ec4558be37b257180f32e60df742dad553",
+    "template-button": "template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c",
+    "config-button": "config-button-fbedbd8bad00446b85fd186f85264068c070686e",
+    "is-template": "is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -16927,6 +16959,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/virtual-list.tsx
+  var setStyle4 = styleSetter(cssText5);
   function createEmptyElements() {
     return {
       itemHeight: 0,
@@ -16937,9 +16970,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
   }
   function createVirtualList() {
+    setStyle4();
     const list = /* @__PURE__ */ jsx("ul", { class: virtual_list_default["list"] });
     const listSpacer = /* @__PURE__ */ jsx("div", { class: virtual_list_default["list-spacer"], children: list });
-    const listWindow = /* @__PURE__ */ jsx("div", { class: virtual_list_default["list-window"], children: listSpacer });
+    const listWindow = /* @__PURE__ */ jsx("div", { class: virtual_list_default["list-window"], onscroll: update, children: listSpacer });
     let items = createEmptyElements();
     let redrawRequested = true;
     let lastStart = null;
@@ -16981,13 +17015,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       redrawRequested = true;
       return update();
     }
-    listWindow.addEventListener("scroll", update);
     new ResizeObserver((entries) => {
       for (const _ of entries) void update();
     }).observe(listWindow);
     return {
       element: listWindow,
-      cssText: cssText5,
       setItems
     };
   }
@@ -17063,10 +17095,32 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/local-config-view/item-input-string.tsx
+  var setStyle5 = styleSetter(cssText7);
   function createStringItemInput(label) {
+    setStyle5();
     const events = createTypedEventTarget();
-    const input = /* @__PURE__ */ jsx("input", { type: "text", class: item_input_default["input"] });
-    const enabledCheckbox = /* @__PURE__ */ jsx("input", { type: "checkbox", class: item_input_default["checkbox"] });
+    const dispatchChanged = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
+    const input = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "text",
+        class: item_input_default["input"],
+        oninput: dispatchChanged
+      }
+    );
+    const enabledCheckbox = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "checkbox",
+        class: item_input_default["checkbox"],
+        onchange: () => {
+          const isChecked = enabledCheckbox.checked;
+          input.disabled = !isChecked;
+          inputContainer.style.display = isChecked ? "" : "none";
+          dispatchChanged();
+        }
+      }
+    );
     const inputContainer = /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsx("label", { class: item_input_default["label"], children: input }) });
     const element = /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsxs("label", { class: item_input_default["label"], children: [
@@ -17075,14 +17129,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       ] }) }),
       inputContainer
     ] });
-    const onChanged = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
-    enabledCheckbox.addEventListener("change", () => {
-      const isChecked = enabledCheckbox.checked;
-      input.disabled = !isChecked;
-      inputContainer.style.display = isChecked ? "" : "none";
-      onChanged();
-    });
-    input.addEventListener("input", onChanged);
     function setValue(value) {
       const hasUserId = value !== void 0;
       enabledCheckbox.checked = hasUserId;
@@ -17097,7 +17143,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     return {
       element,
-      cssText: cssText7,
       events,
       setValue,
       getValue: getValue2
@@ -17105,10 +17150,31 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/local-config-view/item-input-json.tsx
+  var setStyle6 = styleSetter(cssText7);
   function createJsonItemInput(label) {
+    setStyle6();
     const events = createTypedEventTarget();
-    const textarea = /* @__PURE__ */ jsx("textarea", { class: item_input_default["textarea"] });
-    const enabledCheckbox = /* @__PURE__ */ jsx("input", { type: "checkbox", class: item_input_default["checkbox"] });
+    const dispatchChange = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
+    const textarea = /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        class: item_input_default["textarea"],
+        oninput: dispatchChange
+      }
+    );
+    const enabledCheckbox = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "checkbox",
+        class: item_input_default["checkbox"],
+        onchange: () => {
+          const isChecked = enabledCheckbox.checked;
+          textarea.disabled = !isChecked;
+          inputContainer.style.display = isChecked ? "" : "none";
+          dispatchChange();
+        }
+      }
+    );
     const inputContainer = /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsx("label", { class: item_input_default["label"], children: textarea }) });
     const element = /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsx("div", { class: item_input_default["form-group"], children: /* @__PURE__ */ jsxs("label", { class: item_input_default["label"], children: [
@@ -17134,17 +17200,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       }
     }
-    const onChange = () => events.dispatchEvent(createTypedCustomEvent("changed", void 0));
-    enabledCheckbox.addEventListener("change", () => {
-      const isChecked = enabledCheckbox.checked;
-      textarea.disabled = !isChecked;
-      inputContainer.style.display = isChecked ? "" : "none";
-      onChange();
-    });
-    textarea.addEventListener("input", onChange);
     return {
       element,
-      cssText: cssText7,
       events,
       setValue,
       getValue: getValue2
@@ -17152,6 +17209,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/local-config-view/local-config-view.tsx
+  var setStyle7 = styleSetter(cssText6);
   function debounce(f, ms) {
     let timeout;
     const debounced = (...args) => {
@@ -17175,6 +17233,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
   }
   function createLocalConfigView(configAccessor) {
+    setStyle7();
     const userIdInput = createStringItemInput("User ID");
     const apiRootInput = createStringItemInput("API Root");
     const dictionariesInput = createJsonItemInput("Dictionaries(JSON)");
@@ -17197,9 +17256,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       statusMessageElement.textContent = "Changes pending...";
       statusMessageElement.className = local_config_view_default["status-message"];
       try {
-        let newConfig = {
-          version: "1"
-        };
+        let newConfig = configAccessor.getConfig();
         newConfig = { ...newConfig, userId: userIdInput.getValue() };
         newConfig = { ...newConfig, apiRoot: apiRootInput.getValue() };
         newConfig = {
@@ -17224,8 +17281,163 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     dictionariesInput.events.addEventListener("changed", saveConfig);
     loadConfig();
     return {
+      element
+    };
+  }
+
+  // source/drafts-view/query-view/filter-bar.module.css
+  var cssText8 = ".wrapper-15e630d88345a3e17fd076d7998db9ba18cd3d66 {\r\n    display: flex;\r\n    align-items: center;\r\n    border-radius: 14px;\r\n    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);\r\n    padding: 6px 8px 6px 14px;\r\n    transition:\r\n        box-shadow 0.2s ease,\r\n        transform 0.15s ease;\r\n}\r\n\r\n.wrapper-15e630d88345a3e17fd076d7998db9ba18cd3d66:focus-within {\r\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);\r\n    background: #ffffff;\r\n    transform: translateY(-1px);\r\n}\r\n\r\n.input-fcc10ef3ae9807c3bf94e80809b1e07c745bf730 {\r\n    flex: 1;\r\n    border: none;\r\n    outline: none;\r\n    font-size: 15px;\r\n    padding: 10px 8px;\r\n    background: transparent;\r\n}\r\n\r\n.input-fcc10ef3ae9807c3bf94e80809b1e07c745bf730::placeholder {\r\n    color: #9aa0a6;\r\n}\r\n\r\n.buttons-7db4700fc8a17de1c693dea7a2327eada3c94f5f {\r\n    display: flex;\r\n    gap: 6px;\r\n}\r\n\r\n.button-f356c93d3018bb3f0c1d173256c77bd371c3dafc {\r\n    border: none;\r\n    background: #f1f3f4;\r\n    border-radius: 10px;\r\n    padding: 8px 10px;\r\n    cursor: pointer;\r\n    font-size: 16px;\r\n    transition:\r\n        background 0.2s ease,\r\n        transform 0.1s ease;\r\n}\r\n\r\n.button-f356c93d3018bb3f0c1d173256c77bd371c3dafc:hover {\r\n    background: #e3e6e8;\r\n}\r\n\r\n.button-f356c93d3018bb3f0c1d173256c77bd371c3dafc:active {\r\n    transform: scale(0.96);\r\n}\r\n";
+  var filter_bar_default = {
+    wrapper: "wrapper-15e630d88345a3e17fd076d7998db9ba18cd3d66",
+    input: "input-fcc10ef3ae9807c3bf94e80809b1e07c745bf730",
+    buttons: "buttons-7db4700fc8a17de1c693dea7a2327eada3c94f5f",
+    button: "button-f356c93d3018bb3f0c1d173256c77bd371c3dafc"
+  };
+
+  // source/drafts-view/query-view/filter-bar.tsx
+  var setStyle8 = styleSetter(cssText8);
+  function createFilterBar({ value }) {
+    setStyle8();
+    const events = createTypedEventTarget();
+    const input = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "text",
+        oninput: () => events.dispatchEvent(
+          createTypedCustomEvent("input-changed", void 0)
+        ),
+        classList: [filter_bar_default.input],
+        placeholder: "\u{1F50D}\u30AD\u30FC\u30EF\u30FC\u30C9\u3067\u7D5E\u308A\u8FBC\u307F\u2026",
+        value
+      }
+    );
+    const element = /* @__PURE__ */ jsxs("div", { classList: [filter_bar_default.wrapper], children: [
+      input,
+      /* @__PURE__ */ jsxs("div", { class: filter_bar_default.buttons, children: [
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            class: filter_bar_default.button,
+            onclick: () => {
+              events.dispatchEvent(
+                createTypedCustomEvent(
+                  "click-list-button",
+                  void 0
+                )
+              );
+            },
+            "aria-label": "\u691C\u7D22\u5F0F\u4E00\u89A7",
+            children: "\u{1F4C2}"
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            class: filter_bar_default.button,
+            onclick: () => {
+              events.dispatchEvent(
+                createTypedCustomEvent(
+                  "click-edit-button",
+                  void 0
+                )
+              );
+            },
+            "aria-label": "\u691C\u7D22\u5F0F\u3092\u7DE8\u96C6",
+            children: "\u270F"
+          }
+        )
+      ] })
+    ] });
+    function getValue2() {
+      return input.value;
+    }
+    function setValue(value2) {
+      return input.value = value2;
+    }
+    return { element, events, getValue: getValue2, setValue };
+  }
+
+  // source/drafts-view/query-view/source-list.module.css
+  var cssText9 = ".wrapper-36fc8b6dd404bfad6d19a817b262462f0e81509b {\r\n    flex: 1;\r\n    display: flex;\r\n    flex-direction: column;\r\n    height: 100%;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae {\r\n    height: 100%;\r\n    display: flex;\r\n    align-items: center;\r\n    justify-content: space-between;\r\n    padding: 12px 14px;\r\n    border-radius: 12px;\r\n    cursor: pointer;\r\n    user-select: none;\r\n    transition:\r\n        background 0.15s ease,\r\n        transform 0.05s ease;\r\n    font-size: 14px;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae:hover {\r\n    background: #f1f3f4;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae.active-b896314ad721175dd3fff613c4932b12c7c54292 {\r\n    background: #e8f0fe;\r\n    font-weight: 600;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae:active {\r\n    transform: scale(0.98);\r\n}\r\n\r\n.item-label-2f4392f0f996ec9601fee30fda2690451dc25db5 {\r\n    pointer-events: none;\r\n}\r\n\r\n.delete-button-9084d643b294fe1ccfd18ae01787945b79284ece {\r\n    display: none;\r\n    border: none;\r\n    background: #ffdede;\r\n    color: #b00020;\r\n    border-radius: 8px;\r\n    padding: 4px 8px;\r\n    font-size: 12px;\r\n    cursor: pointer;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae.active-b896314ad721175dd3fff613c4932b12c7c54292 .delete-button-9084d643b294fe1ccfd18ae01787945b79284ece {\r\n    display: inline-block;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317 {\r\n    margin-top: 10px;\r\n    border: none;\r\n    background: #f1f3f4;\r\n    border-radius: 12px;\r\n    padding: 12px;\r\n    cursor: pointer;\r\n    font-size: 14px;\r\n    transition:\r\n        background 0.2s ease,\r\n        transform 0.1s ease;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317:hover {\r\n    background: #e3e6e8;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317:active {\r\n    transform: scale(0.97);\r\n}\r\n";
+  var source_list_default = {
+    wrapper: "wrapper-36fc8b6dd404bfad6d19a817b262462f0e81509b",
+    item: "item-b958d7e0f5f138767c954e26eeced9d7870d13ae",
+    active: "active-b896314ad721175dd3fff613c4932b12c7c54292",
+    "item-label": "item-label-2f4392f0f996ec9601fee30fda2690451dc25db5",
+    "delete-button": "delete-button-9084d643b294fe1ccfd18ae01787945b79284ece",
+    "add-button": "add-button-a939c035d413b216c33028343047552704860317"
+  };
+
+  // source/drafts-view/query-view/source-list.tsx
+  var setStyle9 = styleSetter(cssText9);
+  function createSourceList({
+    initialList
+  }) {
+    setStyle9();
+    const events = createTypedEventTarget();
+    const list = createVirtualList();
+    const element = /* @__PURE__ */ jsxs("div", { class: source_list_default.wrapper, children: [
+      list.element,
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          class: source_list_default["add-button"],
+          onclick: () => events.dispatchEvent(
+            createTypedCustomEvent("add", void 0)
+          ),
+          children: "\uFF0B \u9805\u76EE\u3092\u8FFD\u52A0"
+        }
+      )
+    ] });
+    function createListItem(sources, index) {
+      const contents = sources.sources[index]?.contents;
+      if (contents == null) return;
+      const classList = [source_list_default.item];
+      if (sources.selectedIndex === index) {
+        classList.push(source_list_default.active);
+      }
+      return /* @__PURE__ */ jsxs(
+        "div",
+        {
+          classList,
+          onclick: () => {
+            events.dispatchEvent(
+              createTypedCustomEvent("select", index)
+            );
+          },
+          children: [
+            /* @__PURE__ */ jsx("span", { class: source_list_default["item-label"], children: contents === "" ? "<empty>" : contents }),
+            /* @__PURE__ */ jsx(
+              "button",
+              {
+                class: source_list_default["delete-button"],
+                onclick: (e) => {
+                  events.dispatchEvent(
+                    createTypedCustomEvent("delete", index)
+                  );
+                  e.stopPropagation();
+                },
+                children: "\u524A\u9664"
+              }
+            )
+          ]
+        }
+      );
+    }
+    function setSources(sources) {
+      list.setItems({
+        itemHeight: 52,
+        count: sources.sources.length,
+        get(index) {
+          return createListItem(sources, index);
+        }
+      });
+    }
+    setSources(initialList);
+    return {
       element,
-      cssText: cssText6 + "\n" + userIdInput.cssText
+      events,
+      setSources
     };
   }
 
@@ -17236,14 +17448,91 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function hasTermInDraft({ name, description, note }, term) {
     return hasTermInString(name, term) || hasTermInString(description, term) || hasTermInString(note, term);
   }
+  function newFreshId(baseName, definedIds) {
+    const names = new Set(definedIds);
+    for (let i = 2; ; i++) {
+      const id2 = `${baseName}${i}`;
+      if (!names.has(id2)) return id2;
+    }
+  }
+  function toSpliced(array3, start, deleteCount, ...items) {
+    const result = [...array3];
+    result.splice(start, deleteCount, ...items);
+    return result;
+  }
+  function hasMinLength(items, length) {
+    return items.length >= length;
+  }
+  function isTrivial({ id: id2, contents }, { sources }) {
+    return contents === "" || contents.length <= 1 || sources.find((s) => s.id !== id2 && s.contents === contents);
+  }
+  var setStyle10 = styleSetter(cssText4);
   function createDraftList({ overlay, remote, local }) {
+    setStyle10();
     const events = createTypedEventTarget();
     let allDrafts = Array.from(overlay.drafts.values()).map(
       (view) => view.draft
     );
     let filteredDrafts = [...allDrafts];
-    let searchTerm = "";
     let selectedDraft = null;
+    let currentSources = local.getConfig().sources || {
+      selectedIndex: 0,
+      sources: [{ id: "source0", contents: "" }]
+    };
+    const sourceList = createSourceList({ initialList: currentSources });
+    const sourceListDialog = createDialog(sourceList.element, {
+      title: "\u691C\u7D22\u4E00\u89A7"
+    });
+    sourceList.events.addEventListener("select", ({ detail: index }) => {
+      setCurrentSourcesAndNotify({
+        ...currentSources,
+        selectedIndex: index
+      });
+    });
+    sourceList.events.addEventListener("delete", ({ detail: index }) => {
+      const oldSource = currentSources.sources[index];
+      if (oldSource == null || !hasMinLength(currentSources.sources, 2)) {
+        return;
+      }
+      const oldSources = currentSources.sources;
+      if (!isTrivial(oldSource, currentSources) && !confirm(
+        `\u672C\u5F53\u306B ${JSON.stringify(oldSource.contents)} (id: ${JSON.stringify(oldSource.id)}) \u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F`
+      )) {
+        return;
+      }
+      const newSources = toSpliced(oldSources, index, 1);
+      const newIndex = currentSources.sources.length === 0 ? null : currentSources.sources.length <= index + 1 ? index - 1 : index;
+      setCurrentSourcesAndNotify({
+        ...currentSources,
+        selectedIndex: newIndex,
+        sources: newSources
+      });
+    });
+    sourceList.events.addEventListener("add", () => {
+      const id2 = newFreshId(
+        "source",
+        currentSources.sources.map((s) => s.id)
+      );
+      const contents = getSelectedSource() ?? "";
+      const newSource = { id: id2, contents };
+      const index = currentSources.selectedIndex === null ? 0 : currentSources.selectedIndex + 1;
+      const sources = toSpliced(currentSources.sources, index, 0, newSource);
+      setCurrentSourcesAndNotify({
+        ...currentSources,
+        selectedIndex: index,
+        sources
+      });
+    });
+    function setCurrentSourcesAndNotify(newSources) {
+      currentSources = newSources;
+      sourceList.setSources(currentSources);
+      filterInput.setValue(getSelectedSource() ?? "");
+      applyFilter();
+      local.setConfig({ ...local.getConfig(), sources: currentSources });
+    }
+    function getSelectedSource() {
+      return currentSources.sources[currentSources.selectedIndex ?? -1]?.contents;
+    }
     overlay.events.addEventListener("selection-changed", ({ detail: id2 }) => {
       if (id2 == null) {
         selectedDraft = null;
@@ -17288,115 +17577,153 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         apiRoot
       );
     };
-    const listContainer = /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"] });
-    const {
-      element: virtualListElement,
-      setItems: setVirtualListItems,
-      cssText: virtualListCssText
-    } = createVirtualList();
-    listContainer.append(virtualListElement);
-    const searchInput = /* @__PURE__ */ jsx("input", { type: "search", placeholder: "Search drafts..." });
-    searchInput.classList.add(
-      draft_list_default["search-input"],
-      draft_list_default["input-field"]
-    );
-    const detailName = /* @__PURE__ */ jsx("input", { type: "text", value: "" });
-    detailName.classList.add(
-      draft_list_default["detail-name"],
-      draft_list_default["input-field"]
-    );
-    detailName.addEventListener("input", (event) => {
-      if (!selectedDraft) return;
-      selectedDraft.name = event.target.value;
-      overlay.updateDraftTitle(selectedDraft);
-      saveDraftChanges(selectedDraft);
+    const { element: virtualListElement, setItems: setVirtualListItems } = createVirtualList();
+    const filterInput = createFilterBar({ value: getSelectedSource() ?? "" });
+    function setSelectedSource(newContents) {
+      const index = currentSources.selectedIndex ?? -1;
+      const source = currentSources.sources[index];
+      if (source == null) return;
+      const sources = toSpliced(currentSources.sources, index, 1, {
+        ...source,
+        contents: newContents
+      });
+      setCurrentSourcesAndNotify({ ...currentSources, sources });
+    }
+    filterInput.events.addEventListener("input-changed", () => {
+      setSelectedSource(filterInput.getValue());
+      applyFilter();
     });
-    const detailDescription = /* @__PURE__ */ jsx("textarea", { value: "" });
-    detailDescription.classList.add(
-      draft_list_default["detail-description"],
-      draft_list_default["input-field"]
-    );
-    detailDescription.addEventListener("input", (event) => {
-      if (!selectedDraft) return;
-      selectedDraft.description = event.target.value;
-      saveDraftChanges(selectedDraft);
+    filterInput.events.addEventListener("click-list-button", () => {
+      sourceListDialog.show();
     });
-    const detailNote = /* @__PURE__ */ jsx("textarea", { class: draft_list_default["detail-note"], value: "" });
-    detailNote.classList.add(
-      draft_list_default["detail-note"],
-      draft_list_default["input-field"]
-    );
-    detailNote.addEventListener("input", (event) => {
-      if (!selectedDraft) return;
-      selectedDraft.note = event.target.value;
-      saveDraftChanges(selectedDraft);
-    });
-    const detailCoordinates = /* @__PURE__ */ jsx("input", { type: "text", value: "" });
-    detailCoordinates.classList.add(
-      draft_list_default["detail-coordinates"],
-      draft_list_default["input-field"]
-    );
-    detailCoordinates.addEventListener("input", (event) => {
-      if (!selectedDraft) return;
-      const textarea = event.target;
-      try {
-        const newCoordinates = parseCoordinates(textarea.value);
-        if (newCoordinates.length > 0) {
-          selectedDraft.coordinates = newCoordinates;
-          textarea.classList.remove(draft_list_default["input-error"]);
-        } else {
-          textarea.classList.add(draft_list_default["input-error"]);
-          return;
+    const detailName = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "text",
+        value: "",
+        classList: [draft_list_default["detail-name"], draft_list_default["input-field"]],
+        oninput: (event) => {
+          if (!selectedDraft) return;
+          selectedDraft.name = event.target.value;
+          overlay.updateDraftTitle(selectedDraft);
+          saveDraftChanges(selectedDraft);
         }
-      } catch (e) {
-        console.error("Failed to parse coordinates:", e);
-        textarea.classList.add(draft_list_default["input-error"]);
-        return;
       }
-      overlay.updateDraftCoordinates(selectedDraft);
-      saveDraftChanges(selectedDraft);
-    });
-    const createButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["create-button"], children: "\u{1F4CD}\u65B0\u898F\u4F5C\u6210" });
-    createButton.addEventListener("click", () => {
-      addNewDraft();
-    });
-    const deleteButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["delete-button"], children: "\u{1F5D1}\uFE0F\u524A\u9664" });
-    deleteButton.addEventListener("click", () => {
-      if (!selectedDraft) {
-        alert("\u524A\u9664\u3059\u308B\u5019\u88DC\u304C\u9078\u629E\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002");
-        return;
-      }
-      if (confirm(`\u672C\u5F53\u306B\u300C${selectedDraft.name}\u300D\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F`)) {
-        deleteSelectedDraft(selectedDraft.id);
-      }
-    });
-    const mapButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["map-button"], children: "\u{1F3AF}\u5730\u56F3\u3067\u8868\u793A" });
-    const templateToggleButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["template-button"], children: "\u{1F4C4}\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8" });
-    templateToggleButton.addEventListener("click", () => {
-      if (!selectedDraft) return;
-      if (getDraftIsTemplate(selectedDraft)) {
-        setDraftIsTemplate(selectedDraft, false);
-        saveDraftChanges(selectedDraft);
-      } else {
-        const currentTemplate = allDrafts.find(
-          (d) => getDraftIsTemplate(d)
-        );
-        if (currentTemplate) {
-          setDraftIsTemplate(currentTemplate, false);
-          saveDraftChanges(currentTemplate);
+    );
+    const detailDescription = /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        value: "",
+        classList: [
+          draft_list_default["detail-description"],
+          draft_list_default["input-field"]
+        ],
+        oninput: (event) => {
+          if (!selectedDraft) return;
+          selectedDraft.description = event.target.value;
+          saveDraftChanges(selectedDraft);
         }
-        setDraftIsTemplate(selectedDraft, true);
-        saveDraftChanges(selectedDraft);
       }
-      updateVirtualList();
-      updateDetailPane();
-    });
+    );
+    const detailNote = /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        classList: [draft_list_default["detail-note"], draft_list_default["input-field"]],
+        value: "",
+        oninput: (event) => {
+          if (!selectedDraft) return;
+          selectedDraft.note = event.target.value;
+          saveDraftChanges(selectedDraft);
+        }
+      }
+    );
+    const detailCoordinates = /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "text",
+        value: "",
+        classList: [
+          draft_list_default["detail-coordinates"],
+          draft_list_default["input-field"]
+        ],
+        oninput: (event) => {
+          if (!selectedDraft) return;
+          const textarea = event.target;
+          try {
+            const newCoordinates = parseCoordinates(textarea.value);
+            if (newCoordinates.length > 0) {
+              selectedDraft.coordinates = newCoordinates;
+              textarea.classList.remove(draft_list_default["input-error"]);
+            } else {
+              textarea.classList.add(draft_list_default["input-error"]);
+              return;
+            }
+          } catch (e) {
+            console.error("Failed to parse coordinates:", e);
+            textarea.classList.add(draft_list_default["input-error"]);
+            return;
+          }
+          overlay.updateDraftCoordinates(selectedDraft);
+          saveDraftChanges(selectedDraft);
+        }
+      }
+    );
+    const deleteButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: draft_list_default["delete-button"],
+        onclick: () => {
+          if (!selectedDraft) {
+            alert("\u524A\u9664\u3059\u308B\u5019\u88DC\u304C\u9078\u629E\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002");
+            return;
+          }
+          if (confirm(`\u672C\u5F53\u306B\u300C${selectedDraft.name}\u300D\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F`)) {
+            deleteSelectedDraft(selectedDraft.id);
+          }
+        },
+        children: "\u{1F5D1}\uFE0F\u524A\u9664"
+      }
+    );
+    const mapButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: draft_list_default["map-button"],
+        onclick: () => {
+          if (selectedDraft) {
+            overlay.map.setCenter(selectedDraft.coordinates[0]);
+          }
+        },
+        children: "\u{1F3AF}\u5730\u56F3\u3067\u8868\u793A"
+      }
+    );
+    const templateToggleButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: draft_list_default["template-button"],
+        onclick: () => {
+          if (!selectedDraft) return;
+          if (getDraftIsTemplate(selectedDraft)) {
+            setDraftIsTemplate(selectedDraft, false);
+            saveDraftChanges(selectedDraft);
+          } else {
+            const currentTemplate = allDrafts.find(
+              (d) => getDraftIsTemplate(d)
+            );
+            if (currentTemplate) {
+              setDraftIsTemplate(currentTemplate, false);
+              saveDraftChanges(currentTemplate);
+            }
+            setDraftIsTemplate(selectedDraft, true);
+            saveDraftChanges(selectedDraft);
+          }
+          updateVirtualList();
+          updateDetailPane();
+        },
+        children: "\u{1F4C4}\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8"
+      }
+    );
     const configView = createLocalConfigView(local);
     const configDialog = createDialog(configView.element, { title: "\u8A2D\u5B9A" });
-    const configButton = /* @__PURE__ */ jsx("button", { class: draft_list_default["config-button"], children: "\u2699\uFE0F\u8A2D\u5B9A" });
-    configButton.addEventListener("click", () => {
-      configDialog.show();
-    });
     const deleteSelectedDraft = (draftId) => {
       const { apiRoot, userId } = local.getConfig();
       if (!userId || !apiRoot) {
@@ -17420,23 +17747,38 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         apiRoot
       );
     };
-    const detailPane = /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], open: true, children: [
-      /* @__PURE__ */ jsx("summary", { class: draft_list_default["detail-summary"], children: detailName }),
-      /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
-        detailDescription,
-        detailNote,
-        detailCoordinates,
-        createButton,
-        deleteButton,
-        mapButton,
-        templateToggleButton,
-        configButton
-      ] })
-    ] });
     const container = /* @__PURE__ */ jsxs("div", { class: draft_list_default["container"], children: [
-      searchInput,
-      listContainer,
-      detailPane
+      filterInput.element,
+      /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"], children: virtualListElement }),
+      /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], open: true, children: [
+        /* @__PURE__ */ jsx("summary", { class: draft_list_default["detail-summary"], children: detailName }),
+        /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
+          detailDescription,
+          detailNote,
+          detailCoordinates,
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              class: draft_list_default["create-button"],
+              onclick: () => addNewDraft(),
+              children: "\u{1F4CD}\u65B0\u898F\u4F5C\u6210"
+            }
+          ),
+          deleteButton,
+          mapButton,
+          templateToggleButton,
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              class: draft_list_default["config-button"],
+              onclick: () => {
+                configDialog.show();
+              },
+              children: "\u2699\uFE0F\u8A2D\u5B9A"
+            }
+          )
+        ] })
+      ] })
     ] });
     const addNewDraft = () => {
       const { userId } = local.getConfig();
@@ -17509,7 +17851,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
     updateDetailPane();
     const applyFilter = () => {
-      const searchAndTerms = searchTerm.toLowerCase().match(/[^ ]+/g) ?? [""];
+      const searchAndTerms = getSelectedSource()?.toLowerCase().match(/[^ ]+/g) ?? [""];
       filteredDrafts = allDrafts.filter((draft) => {
         for (const term of searchAndTerms) {
           if (!hasTermInDraft(draft, term)) return false;
@@ -17567,19 +17909,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       setVirtualListItems(virtualElements);
     };
     updateVirtualList();
-    searchInput.addEventListener("input", () => {
-      searchTerm = searchInput.value;
-      applyFilter();
-    });
-    mapButton.addEventListener("click", () => {
-      if (selectedDraft) {
-        overlay.map.setCenter(selectedDraft.coordinates[0]);
-      }
-    });
     return {
       events,
       element: container,
-      cssText: cssText4 + "\n" + virtualListCssText + "\n" + configView.cssText,
       setDrafts(newDrafts) {
         allDrafts.splice(0, allDrafts.length, ...newDrafts);
         applyFilter();
@@ -17597,7 +17929,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/drafts-dialog-title.module.css
-  var cssText8 = ":root {\n    --text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907: #333;\n    --secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5: #666;\n    --primary-color-85c1441dbfb39319542140435119ee442e85721a: #007bff;\n    --background-color-light-d3c1d427ed49fb706d5d27ecc2e2bf2144145b42: #f8f9fa;\n    --border-color-0c4d1205af0f0747deb181610984f634e079550a: #dee2e6;\n}\n\n.container-3a7a3702be125e4c680a49a5f6b48a0685a89213 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-0c4d1205af0f0747deb181610984f634e079550a);\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    gap: 10px;\n}\n\n.main-title-af45008e5a094765ba2506a66e549cf852ebcfe3 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    flex-grow: 1;\n}\n\n.counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96 {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5);\n    white-space: nowrap;\n}\n\n.saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-85c1441dbfb39319542140435119ee442e85721a);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-63a9f84c54405daf885a836d67ad7091a22f7475 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
+  var cssText10 = ":root {\n    --text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907: #333;\n    --secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5: #666;\n    --primary-color-85c1441dbfb39319542140435119ee442e85721a: #007bff;\n    --background-color-light-d3c1d427ed49fb706d5d27ecc2e2bf2144145b42: #f8f9fa;\n    --border-color-0c4d1205af0f0747deb181610984f634e079550a: #dee2e6;\n}\n\n.container-3a7a3702be125e4c680a49a5f6b48a0685a89213 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-0c4d1205af0f0747deb181610984f634e079550a);\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    gap: 10px;\n}\n\n.main-title-af45008e5a094765ba2506a66e549cf852ebcfe3 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    flex-grow: 1;\n}\n\n.counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96 {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5);\n    white-space: nowrap;\n}\n\n.saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-85c1441dbfb39319542140435119ee442e85721a);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-63a9f84c54405daf885a836d67ad7091a22f7475 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
   var drafts_dialog_title_default = {
     container: "container-3a7a3702be125e4c680a49a5f6b48a0685a89213",
     "main-title": "main-title-af45008e5a094765ba2506a66e549cf852ebcfe3",
@@ -17607,7 +17939,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/indicator.module.css
-  var cssText9 = ".loader-62b568c1cf31831c16b87cb441cc3a63b60f4dbd {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(\n        circle,\n        rgba(59, 130, 246, 0.95) 0%,\n        rgba(96, 165, 250, 0.6) 45%,\n        rgba(147, 197, 253, 0.25) 75%,\n        transparent 100%\n    );\n    box-shadow:\n        0 0 4px rgba(96, 165, 250, 0.8),\n        0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-02933a59452e89089c97a52e6fe88a96cf4766d4 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-701c23d5aacc00f9e4c0bb8ae539ee979c42e024 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: endFade 0.4s ease-in forwards;\n}\n";
+  var cssText11 = ".loader-62b568c1cf31831c16b87cb441cc3a63b60f4dbd {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(\n        circle,\n        rgba(59, 130, 246, 0.95) 0%,\n        rgba(96, 165, 250, 0.6) 45%,\n        rgba(147, 197, 253, 0.25) 75%,\n        transparent 100%\n    );\n    box-shadow:\n        0 0 4px rgba(96, 165, 250, 0.8),\n        0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-02933a59452e89089c97a52e6fe88a96cf4766d4 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-701c23d5aacc00f9e4c0bb8ae539ee979c42e024 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: endFade 0.4s ease-in forwards;\n}\n";
   var variables3 = {
     "--pulseDur": "--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337"
   };
@@ -17619,7 +17951,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/indicator.tsx
+  var setStyle11 = styleSetter(cssText11);
   function createIndicator() {
+    setStyle11();
     const loader = /* @__PURE__ */ jsxs("div", { class: indicator_default.loader, "aria-label": "Communicating", children: [
       /* @__PURE__ */ jsx("div", { class: indicator_default.orb }),
       /* @__PURE__ */ jsx("div", { class: indicator_default.orb }),
@@ -17681,14 +18015,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     stopCommunication();
     return {
       element: loader,
-      cssText: cssText9,
       start: startCommunication,
       stop: stopCommunication
     };
   }
 
   // source/drafts-view/drafts-dialog-title.tsx
+  var setStyle12 = styleSetter(cssText10);
   function createDraftsDialogTitle({ title }) {
+    setStyle12();
     const mainTitleElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["main-title"], children: title });
     const countsElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["counts-element"] });
     const indicator = createIndicator();
@@ -17700,7 +18035,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     let currentSaving;
     return {
       element,
-      cssText: cssText8 + "\n" + indicator.cssText,
       setCounts({
         totalCount,
         filteredCount
@@ -17754,9 +18088,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       workerApi.onGcsReceived(url2.toString(), responseText).catch(handleAsyncError);
     });
   }
-  function setStyle(page, cssText10) {
-    page.styleElement.textContent += cssText10 + "\n";
-  }
   function getDictionaryEntry(page, key) {
     const lang = navigator.language;
     return page.local.getConfig()?.dictionaries?.[lang]?.[key] ?? page.defaultDictionary[key];
@@ -17774,9 +18105,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       title: title.element
     });
     drafts.show();
-    setStyle(page, title.cssText);
-    setStyle(page, drafts.cssText);
-    setStyle(page, draftList.cssText);
     document.body.append(drafts.element);
     draftList.events.addEventListener("count-changed", (e) => {
       title.setCounts(e.detail);
