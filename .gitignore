@@ -15,3 +15,7 @@ lerna-debug.log*
 # typed css module
 *.module.css.d.ts
 *.module.css.d.ts.map
+
+# parser generator
+.antlr/
+source/sal/.antlr-generated/

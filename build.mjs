@@ -5,12 +5,33 @@ import { exec } from "child_process";
 import path from "path";
 import workerPlugin from "esbuild-plugin-inline-worker";
 import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
+import chokidar from "chokidar";
 
 const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
 const watchMode = args.includes("--watch");
 const wsHost = process.env.WS_HOST || "127.0.0.1";
 const wsPort = Number(process.env.WS_PORT || 35729);
+
+async function runAntlr() {
+    console.log("[antlr] Running antlr4ts...");
+    return new Promise((resolve) => {
+        exec(
+            "cd source/sal && npx antlr4ts -visitor Sal.g4 -o .antlr-generated",
+            (error, stdout, stderr) => {
+                if (stdout) console.log(stdout);
+                if (stderr) console.error(stderr);
+                if (error) {
+                    console.error("[antlr] antlr4ts found errors!");
+                    resolve(false);
+                } else {
+                    console.log("[antlr] antlr4ts passed.");
+                    resolve(true);
+                }
+            },
+        );
+    });
+}
 
 async function runEslint() {
     console.log("[lint] Running ESLint...");
@@ -128,11 +149,25 @@ async function build() {
 
     if (watchMode) {
         const context = await esbuild.context(baseOptions);
+        await runAntlr();
         await context.watch({
             delay: 3000,
         });
         console.log("Watching for changes...");
+        const watcher = chokidar.watch("source/sal/Sal.g4", {
+            persistent: true,
+        });
+
+        watcher.on("change", async (path) => {
+            console.log(`[watcher] File ${path} has been changed.`);
+            await runAntlr();
+        });
     } else {
+        const antlrPassed = await runAntlr();
+        if (!antlrPassed) {
+            console.error("Build aborted due to antlr4ts errors.");
+            process.exit(1);
+        }
         const tscPassed = await runTsc();
         if (!tscPassed) {
             console.error("Build aborted due to TypeScript errors.");
