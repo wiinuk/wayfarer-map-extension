@@ -1,42 +1,45 @@
+import {
+    createStandardQueries,
+    type DraftQueryBuilder,
+} from "../query/standard-queries";
 import type { Draft } from "../remote";
-import { sleep } from "../standard-extensions";
-
-function hasTermInString(text: string, term: string): boolean {
-    return text.toLowerCase().includes(term);
-}
-
-function hasTermInDraft(
-    { name, description, note }: Draft,
-    term: string,
-): boolean {
-    return (
-        hasTermInString(name, term) ||
-        hasTermInString(description, term) ||
-        hasTermInString(note, term)
-    );
-}
-
-function filterDraftsSync(drafts: readonly Draft[], query: string): Draft[] {
-    const searchAndTerms = query.toLowerCase().match(/[^ ]+/g) ?? [""];
-
-    // クエリが空文字列や空白のみの場合は、全てのドラフトを返す
-    if (searchAndTerms.length === 1 && searchAndTerms[0] === "") {
-        return [...drafts];
-    }
-
-    return drafts.filter((draft) => {
-        for (const term of searchAndTerms) {
-            if (!hasTermInDraft(draft, term)) return false;
-        }
-        return true;
-    });
-}
+import { done, forceAsPromise } from "../sal/effective";
+import { evaluateExpression } from "../sal/evaluator";
 
 export async function filterDrafts(
     drafts: readonly Draft[],
-    query: string,
+    source: string,
     signal: AbortSignal,
 ): Promise<Draft[]> {
-    await sleep(0, { signal });
-    return filterDraftsSync(drafts, query);
+    const queryGlobals = createStandardQueries();
+    const effective = evaluateExpression(source, (k) => queryGlobals.get(k));
+    const filter = await forceAsPromise(effective, signal);
+    const queryBuilder = filter as unknown as DraftQueryBuilder;
+    const query = await forceAsPromise(
+        queryBuilder.initialize({
+            getUserLocation() {
+                return done({
+                    lat: 0,
+                    lng: 0,
+                });
+            },
+        }),
+        signal,
+    );
+
+    const result = [];
+    let error = null;
+    for (const d of drafts) {
+        let isVisible = false;
+        try {
+            isVisible = await forceAsPromise(query.isVisible(d), signal);
+        } catch (e) {
+            error ??= e;
+        }
+        if (isVisible) {
+            result.push(d);
+        }
+    }
+    if (error) console.error(error);
+    return result;
 }
