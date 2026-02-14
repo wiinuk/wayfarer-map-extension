@@ -51,6 +51,8 @@ export default defineConfig([
                 "warn",
                 { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
             ],
+            "@typescript-eslint/await-thenable": "error",
+            "@typescript-eslint/no-misused-promises": "error",
             "object-shorthand": "warn",
             "no-useless-rename": "warn",
             "no-duplicate-imports": "warn",
