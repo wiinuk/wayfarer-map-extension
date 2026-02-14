@@ -66,5 +66,6 @@ export default defineConfig([
         "./*.config.mjs",
         "./*.user.js",
         "./*.debug.js",
+        "./shims/",
     ]),
 ]);
