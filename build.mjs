@@ -145,6 +145,10 @@ async function build() {
         footer: watchMode ? { js: clientSnippet } : undefined,
         sourcemap: watchMode ? "inline" : false,
         plugins: [TypedCssModulePlugin(), workerPlugin(), cleanupPlugin],
+        alias: {
+            assert: "./shims/assert.js",
+            util: "./shims/util.js",
+        },
     };
 
     if (watchMode) {
