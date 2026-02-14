@@ -1,49 +1,39 @@
 grammar Sal;
 
-// ========================================== 構文規則 (Parser Rules) ==========================================
+// ==========================================
+// 構文規則 (Parser Rules)
+// ==========================================
 
-sourceFile: expression EOF;
-
-atEnd: AT 'end';
+sourceFile: expression? EOF;
 
 identifier: AT (WORD | STRING);
 
-// @ を省略可能なパラメータ
-simpleParameter: identifier | WORD;
-
-declaration: identifier EQUALS expression;
-whereClause:
-	AT 'where' simpleParameter EQUALS expression declaration* atEnd?;
+// パラメータは @ を省略可能
+parameter: identifier | WORD;
 
 expression:
+    MINUS expression # NotExpression
+    | left= expression COLON right= expression # ApplyExpression
+    | left= expression right= expression # SequenceExpression
+    | left= expression OR right= expression # OrExpression
+    | left= expression AND right= expression # AndExpression
+    | left= expression SLASH WORD right= expression # BinaryExpression
+    | scope= expression AT 'where' parameter EQUALS value= expression # WhereExpression
+    | AT 'lambda' parameter COLON expression # LambdaExpression
+    | NUMBER # Number
+    | STRING # String
+    | identifier # Variable
+    | WORD # Word
+    | '(' expression ')' # ParenthesizedExpression
+;
 
-	// LambdaExpression
-	AT 'lambda' simpleParameter COLON expression atEnd?
-	// NotExpression
-	| MINUS expression
-	// ApplyExpression
-	| expression COLON expression
-	// SequenceExpression
-	| expression expression
-	// OrExpression
-	| expression OR expression
-	// BinaryExpression
-	| expression SLASH WORD expression
-
-	// PrimaryExpression
-	| NUMBER
-	| STRING
-	| identifier
-	| WORD
-	| '(' expression ')'
-
-	// WhereExpression
-	| expression whereClause;
-
-// ========================================== 字句規則 (Lexer Rules) ==========================================
+// ========================================== 
+// 字句規則 (Lexer Rules) 
+// ==========================================
 
 // キーワード (WORDより先に定義して優先させる)
 OR: 'or';
+AND: 'and';
 
 // 記号
 PAREN_BEGIN: '(';
