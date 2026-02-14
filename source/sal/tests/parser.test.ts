@@ -94,10 +94,10 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         return this.binaryLike(e, " ");
     }
     visitOrExpression(e: OrExpressionContext): string {
-        return this.binaryLike(e, "or");
+        return this.binaryLike(e, " or ");
     }
     visitAndExpression(e: AndExpressionContext): string {
-        return this.binaryLike(e, "_and_");
+        return this.binaryLike(e, " and ");
     }
     visitBinaryExpression(e: BinaryExpressionContext): string {
         return `${this.visitExpression(e._left)} /${e.WORD().accept(this)} ${this.visitExpression(e._right)}`;
@@ -230,11 +230,17 @@ describe("Sal Parser", () => {
         });
 
         it("should parse notExpression", () => {
+            // 1トークン
             expect(parseAndPrint("-123")).toStrictEqual(
                 "(sourceFile (expression -123) <EOF>)",
             );
+            // 3トークン
             expect(parseAndPrint("-@ident")).toStrictEqual(
                 "(sourceFile (expression - (expression (identifier @ ident))) <EOF>)",
+            );
+            // 2トークン
+            expect(parseAndPrint("-x")).toStrictEqual(
+                "(sourceFile (expression - (expression x)) <EOF>)",
             );
         });
 
