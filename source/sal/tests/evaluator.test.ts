@@ -196,6 +196,14 @@ describe("Evaluator", () => {
             expect(await evaluate("@x @where x = 10")).toBe(10);
         });
 
+        it("should define and use a function", async () => {
+            expect(await evaluate("@f:10:7 @where f x y = x /sub y")).toBe(3);
+        });
+
+        it("should apply the last definition when duplicate parameters exist", async () => {
+            expect(await evaluate("@f:10:7 @where f x x = x")).toBe(7);
+        });
+
         it("should handle multiple declarations", async () => {
             expect(
                 await evaluate(
@@ -234,6 +242,18 @@ describe("Evaluator", () => {
                 (@fn y: (@fn x: @x /add @y):10):5
             `;
             expect(await evaluate(code)).toBe(15);
+        });
+        it("should handle closures correctly - parameters", async () => {
+            const code = `
+                (@fn x y: x /sub y):10:5
+            `;
+            expect(await evaluate(code)).toBe(5);
+        });
+        it("parameters shadow", async () => {
+            const code = `
+                (@fn x x: x):10:5
+            `;
+            expect(await evaluate(code)).toBe(5);
         });
 
         it("should work as higher-order functions", async () => {

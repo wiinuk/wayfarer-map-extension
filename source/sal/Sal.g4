@@ -25,8 +25,8 @@ expression:
     | left= expression OR right= expression # OrExpression
     | left= expression AND right= expression # AndExpression
     | left= expression SLASH word right= expression # BinaryExpression
-    | scope= expression AT WHERE parameter EQUALS value= expression # WhereExpression
-    | AT FUNCTION parameter COLON expression # LambdaExpression
+    | scope= expression AT WHERE parameter+ EQUALS value= expression # WhereExpression
+    | AT FUNCTION parameter+ COLON expression # LambdaExpression
     | NUMBER # Number
     | STRING # String
     | identifier # Variable

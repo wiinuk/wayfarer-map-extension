@@ -94,7 +94,11 @@ class PrintWithParenVisitor implements SalVisitor<string> {
     }
 
     visitLambdaExpression(e: LambdaExpressionContext): string {
-        return `${e.AT().text}${e.FUNCTION().text} ${e.parameter().accept(this)}: ${this.visitExpression(e.expression())}`;
+        const ps = e
+            .parameter()
+            .map((p) => p.accept(this))
+            .join(" ");
+        return `${e.AT().text}${e.FUNCTION().text} ${ps}: ${this.visitExpression(e.expression())}`;
     }
     visitNotExpression(e: NotExpressionContext): string {
         return `-${this.visitExpression(e.expression())}`;
@@ -122,7 +126,14 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         return `${this.visitExpression(e._left)} /${e.word().accept(this)} ${this.visitExpression(e._right)}`;
     }
     visitWhereExpression(e: WhereExpressionContext): string {
-        return `${this.visitExpression(e._scope)} @where ${e.parameter().accept(this)} = ${this.visitExpression(e._value)}`;
+        const [param0, ...params] = e.parameter() as [
+            ParameterContext,
+            ...ParameterContext[],
+        ];
+        const id = param0.accept(this);
+        const ps = params.map((p) => ` ${p.accept(this)}`).join("");
+
+        return `${this.visitExpression(e._scope)} @where ${id}${ps} = ${this.visitExpression(e._value)}`;
     }
     visitNumber(e: NumberContext): string {
         return e.NUMBER().accept(this);
@@ -321,6 +332,11 @@ describe("Sal Parser", () => {
             expect(parseAndPrint("a @ where x = 1")).toStrictEqual(
                 "(sourceFile (expression (expression (word a)) @ where (parameter (word x)) = (expression 1)) <EOF>)",
             );
+
+            expect(parseAndPrint("a @ where f x y = 1")).toStrictEqual(
+                "(sourceFile (expression (expression (word a)) @ where (parameter (word f)) (parameter (word x)) (parameter (word y)) = (expression 1)) <EOF>)",
+            );
+
             expect(parseAndPrint("a @where @x = 1 @where y = 2")).toStrictEqual(
                 "(sourceFile (expression (expression (expression (word a)) @ where (parameter (identifier @ (word x))) = (expression 1)) @ where (parameter (word y)) = (expression 2)) <EOF>)",
             );
@@ -343,6 +359,9 @@ describe("Sal Parser", () => {
             );
             expect(parseAndPrint("@fn @x: x")).toStrictEqual(
                 "(sourceFile (expression @ fn (parameter (identifier @ (word x))) : (expression (word x))) <EOF>)",
+            );
+            expect(parseAndPrint("@fn x y z: 0")).toStrictEqual(
+                "(sourceFile (expression @ fn (parameter (word x)) (parameter (word y)) (parameter (word z)) : (expression 0)) <EOF>)",
             );
             expect(printWithParen("@fn x: @fn y: x")).toStrictEqual(
                 "@fn x: (@fn y: x)",

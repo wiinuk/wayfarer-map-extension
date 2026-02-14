@@ -91,6 +91,20 @@ export type Value =
     | { readonly [k: string]: Value }
     | ((v: Value) => Effective<Value>);
 
+function createNestedFunctionOrValue(
+    scope: SalEvaluationVisitor,
+    parameterNames: readonly string[],
+    body: ExpressionContext,
+) {
+    const [p, ...ps] = parameterNames;
+    if (p == undefined) return scope.visitExpression(body);
+
+    return done((v: Value): Effective<Value> => {
+        scope.environment.set(p, v);
+        return createNestedFunctionOrValue(scope, ps, body);
+    });
+}
+
 class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     visit: (tree: ParseTree) => Effective<Value> = unreachable;
     visitChildren: (node: RuleNode) => Effective<Value> = unreachable;
@@ -145,14 +159,10 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         return this.visitExpression(body);
     }
     visitLambdaExpression(e: LambdaExpressionContext): Effective<Value> {
-        const parameterName = getParameterName(e.parameter());
-        const body = e.expression();
-
         const newScope = new SalEvaluationVisitor(this.tryResolveVariable);
-        return done((x: Value) => {
-            this.environment.set(parameterName, x);
-            return newScope.visitExpression(body);
-        });
+        const ps = e.parameter().map(getParameterName);
+        const body = e.expression();
+        return createNestedFunctionOrValue(newScope, ps, body);
     }
     *visitNotExpression(e: NotExpressionContext): Effective<Value> {
         const not = this.resolveVariable("not_") as SalFunction;
@@ -184,10 +194,18 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     *visitWhereExpression(e: WhereExpressionContext): Effective<Value> {
         const newScope = new SalEvaluationVisitor(this.tryResolveVariable);
 
-        const id = getParameterName(e.parameter());
-        const value = yield* newScope.visitExpression(e._value);
+        const [param0, ...params] = e.parameter() as [
+            ParameterContext,
+            ...ParameterContext[],
+        ];
+        const id = getParameterName(param0);
+        const ps = params.map(getParameterName);
+        const value = yield* createNestedFunctionOrValue(
+            newScope,
+            ps,
+            e._value,
+        );
         newScope.environment.set(id, value);
-
         return yield* newScope.visitExpression(e._scope);
     }
     visitNumber(e: NumberContext): Effective<Value> {
