@@ -26,7 +26,7 @@ async function setup() {
             keyof PageEventMap,
             PageEventMap[keyof PageEventMap]
         >,
-    ) => mainAPI.dispatchEvent(e.type, e.detail);
+    ) => void mainAPI.dispatchEvent(e.type, e.detail).catch(handleAsyncError);
 
     pageEventTypes.forEach((type) =>
         events.addEventListener(type, transferEvent),
