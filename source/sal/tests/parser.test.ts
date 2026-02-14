@@ -324,6 +324,9 @@ describe("Sal Parser", () => {
             );
         });
 
+        it("apply vs not", () => {
+            expect(printWithParen("-f:x")).toStrictEqual("-(f:x)");
+        });
         it("apply vs sequence", () => {
             expect(printWithParen("f : x g : y")).toStrictEqual("(f:x) (g:y)");
         });

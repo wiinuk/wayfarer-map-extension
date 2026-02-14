@@ -20,8 +20,8 @@ parameter: identifier | word;
 entry: (word | STRING) ':' expression;
 
 expression:
-    MINUS expression # NotExpression
-    | left= expression COLON right= expression # ApplyExpression
+    left= expression COLON right= expression # ApplyExpression
+    | MINUS expression # NotExpression
     | left= expression right= expression # SequenceExpression
     | left= expression OR right= expression # OrExpression
     | left= expression AND right= expression # AndExpression
