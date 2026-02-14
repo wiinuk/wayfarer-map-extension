@@ -56,11 +56,15 @@ NUMBER: '-'? [0-9]+ ('.' [0-9]+)? ([eE] '-'? [0-9]+)?;
 // 文字列
 STRING: '"' ( '\\' . | ~[\\"])* '"';
 
-// \p{L} : あらゆる言語の「文字」(Letter)、\p{N} : あらゆる言語の「数字」(Number)、\p{M} : 結合文字 (アクセント記号など) 
-fragment WORD_START: [\p{L}\p{N}\p{M}+.?!,;];
-fragment WORD_PART: [\p{L}\p{N}\p{M}+.?!,;\-];
+// 空白(Z)・制御文字(C)・特別な記号・文字列の始まり、を除く全ての文字
+fragment WORD_START: ~[\p{Z}\p{C}:/@"\-'=.,;(){}<>];
+// . - ' は先頭以外で許可
+fragment WORD_PART: (WORD_START | [-.']);
 WORD: WORD_START WORD_PART*;
 
 // コメント
 LINE_COMMENT: '//' ~[\r\n]* -> skip;
 BLOCK_COMMENT: '/*' ( BLOCK_COMMENT | .)*? '*/' -> skip;
+
+// 空白
+WS: [\p{Z}]+ -> skip;

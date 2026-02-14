@@ -86,10 +86,11 @@ export type Value =
     | boolean
     | number
     | string
-    | Value[]
+    | readonly Value[]
+    | { readonly [k: string]: Value }
     | ((v: Value) => Effective<Value>);
 
-class SalVisitorImpl implements SalVisitor<Effective<Value>> {
+class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     visit: (tree: ParseTree) => Effective<Value> = unreachable;
     visitChildren: (node: RuleNode) => Effective<Value> = unreachable;
     visitTerminal: (node: TerminalNode) => Effective<Value> = unreachable;
@@ -115,41 +116,51 @@ class SalVisitorImpl implements SalVisitor<Effective<Value>> {
         opName: string,
         right: ExpressionContext,
     ) {
-        const l = yield* left.accept(this);
+        const l = yield* this.visitExpression(left);
         const f = this.resolveVariable(opName) as SalFunctionMany<
             [Value, Value],
             Value
         >;
-        const r = yield* right.accept(this);
+        const r = yield* this.visitExpression(right);
         return yield* (yield* f(l))(r);
     }
 
+    visitExpression(e: ExpressionContext): Effective<Value> {
+        // `a or` => `a or fromMissing:null`
+        if (e.exception) {
+            const fromVoid = this.resolveVariable("fromMissing") as (
+                x: Value,
+            ) => Effective<Value>;
+            return fromVoid(null);
+        }
+        return e.accept(this);
+    }
     visitSourceFile(e: SourceFileContext): Effective<Value> {
         const body = e.expression();
         if (body == null) {
             const fromEmpty = this.resolveVariable("fromVoid") as SalFunction;
             return fromEmpty(null);
         }
-        return body.accept(this);
+        return this.visitExpression(body);
     }
     visitLambdaExpression(e: LambdaExpressionContext): Effective<Value> {
         const parameterName = getParameterName(e.parameter());
         const body = e.expression();
 
-        const newScope = new SalVisitorImpl(this.tryResolveVariable);
+        const newScope = new SalEvaluationVisitor(this.tryResolveVariable);
         return done((x: Value) => {
             this.environment.set(parameterName, x);
-            return body.accept(newScope);
+            return newScope.visitExpression(body);
         });
     }
     *visitNotExpression(e: NotExpressionContext): Effective<Value> {
         const not = this.resolveVariable("not_") as SalFunction;
-        const v = yield* e.expression().accept(this);
+        const v = yield* this.visitExpression(e.expression());
         return yield* not(v);
     }
     *visitApplyExpression(e: ApplyExpressionContext): Effective<Value> {
-        const f = (yield* e._left.accept(this)) as SalFunction;
-        const x = yield* e._right.accept(this);
+        const f = (yield* this.visitExpression(e._left)) as SalFunction;
+        const x = yield* this.visitExpression(e._right);
         return yield* f(x);
     }
     visitSequenceExpression(e: SequenceExpressionContext): Effective<Value> {
@@ -162,21 +173,21 @@ class SalVisitorImpl implements SalVisitor<Effective<Value>> {
         return this.evaluateBinaryLikeExpression(e._left, "_and_", e._right);
     }
     *visitBinaryExpression(e: BinaryExpressionContext): Effective<Value> {
-        const l = yield* e._left.accept(this);
+        const l = yield* this.visitExpression(e._left);
         const op = this.resolveVariable(
             getWordValue(e.WORD()),
         ) as SalFunctionMany<[Value, Value], Value>;
-        const r = yield* e._right.accept(this);
+        const r = yield* this.visitExpression(e._right);
         return yield* (yield* op(l))(r);
     }
     *visitWhereExpression(e: WhereExpressionContext): Effective<Value> {
-        const newScope = new SalVisitorImpl(this.tryResolveVariable);
+        const newScope = new SalEvaluationVisitor(this.tryResolveVariable);
 
         const id = getParameterName(e.parameter());
-        const value = yield* e._value.accept(newScope);
+        const value = yield* newScope.visitExpression(e._value);
         newScope.environment.set(id, value);
 
-        return yield* e._scope.accept(newScope);
+        return yield* newScope.visitExpression(e._scope);
     }
     visitNumber(e: NumberContext): Effective<Value> {
         const value = getNumberValue(e.NUMBER());
@@ -215,7 +226,7 @@ class SalVisitorImpl implements SalVisitor<Effective<Value>> {
     visitParenthesizedExpression(
         e: ParenthesizedExpressionContext,
     ): Effective<Value> {
-        return e.expression().accept(this);
+        return this.visitExpression(e.expression());
     }
 }
 
@@ -223,6 +234,9 @@ function createStandardGlobals() {
     const globals: Readonly<Record<string, Value>> = {
         fromVoid(_) {
             return done("fromVoid");
+        },
+        fromMissing(_) {
+            return done("fromMissing");
         },
         fromWord(x) {
             return done(`fromWord(${x})`);
@@ -265,5 +279,5 @@ export function evaluateExpression(
         if (v !== undefined) return v;
         return globals.get(k);
     };
-    return tree.accept(new SalVisitorImpl(tryResolveGlobalVariable));
+    return tree.accept(new SalEvaluationVisitor(tryResolveGlobalVariable));
 }
