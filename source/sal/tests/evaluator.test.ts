@@ -226,12 +226,12 @@ describe("Evaluator", () => {
 
     describe("Functions and Lambdas", () => {
         it("should define and apply a lambda", async () => {
-            expect(await evaluate("(@lambda x: @x /add 1):10")).toBe(11);
+            expect(await evaluate("(@fn x: @x /add 1):10")).toBe(11);
         });
 
         it("should handle closures correctly", async () => {
             const code = `
-                (@lambda y: (@lambda x: @x /add @y):10):5
+                (@fn y: (@fn x: @x /add @y):10):5
             `;
             expect(await evaluate(code)).toBe(15);
         });
@@ -239,8 +239,8 @@ describe("Evaluator", () => {
         it("should work as higher-order functions", async () => {
             const code = `
                 (
-                    (@lambda f: @f:10)
-                    : (@lambda x: @x /mul 2)
+                    (@fn f: @f:10)
+                    : (@fn x: @x /mul 2)
                 )
             `;
             expect(await evaluate(code)).toBe(20);
@@ -260,7 +260,7 @@ describe("Evaluator", () => {
 
         it("should handle complex nested expressions", async () => {
             const code = `
-                (@lambda z: @z /mul 100)
+                (@fn z: @z /mul 100)
                 : (
                     (5 /add 3) /div (2 /mul 2)
                     @where @"y" = 10
@@ -284,7 +284,7 @@ describe("Evaluator", () => {
 
     describe("promise", () => {
         it("sleep", async () => {
-            expect(await evaluate(`200 /sleep @lambda x: "woke up!"`)).toBe(
+            expect(await evaluate(`200 /sleep @fn x: "woke up!"`)).toBe(
                 "woke up!",
             );
         });

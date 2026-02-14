@@ -12,10 +12,11 @@ grammar Sal;
 
 sourceFile: expression? EOF;
 
-identifier: AT (WORD | STRING);
+word: WHERE | FUNCTION | WORD;
+identifier: AT (word | STRING);
 
 // パラメータは @ を省略可能
-parameter: identifier | WORD;
+parameter: identifier | word;
 
 expression:
     MINUS expression # NotExpression
@@ -23,13 +24,13 @@ expression:
     | left= expression right= expression # SequenceExpression
     | left= expression OR right= expression # OrExpression
     | left= expression AND right= expression # AndExpression
-    | left= expression SLASH WORD right= expression # BinaryExpression
-    | scope= expression AT 'where' parameter EQUALS value= expression # WhereExpression
-    | AT 'lambda' parameter COLON expression # LambdaExpression
+    | left= expression SLASH word right= expression # BinaryExpression
+    | scope= expression AT WHERE parameter EQUALS value= expression # WhereExpression
+    | AT FUNCTION parameter COLON expression # LambdaExpression
     | NUMBER # Number
     | STRING # String
     | identifier # Variable
-    | WORD # Word
+    | word # WordExpression
     | '(' expression ')' # ParenthesizedExpression
 ;
 
@@ -40,6 +41,9 @@ expression:
 // キーワード (WORDより先に定義して優先させる)
 OR: 'or';
 AND: 'and';
+
+WHERE: 'where';
+FUNCTION: 'function' | 'fn';
 
 // 記号
 PAREN_BEGIN: '(';

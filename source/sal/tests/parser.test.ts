@@ -6,10 +6,12 @@ import {
     ApplyExpressionContext,
     BinaryExpressionContext,
     ExpressionContext,
+    IdentifierContext,
     LambdaExpressionContext,
     NotExpressionContext,
     NumberContext,
     OrExpressionContext,
+    ParameterContext,
     ParenthesizedExpressionContext,
     SalParser,
     SequenceExpressionContext,
@@ -18,6 +20,7 @@ import {
     VariableContext,
     WhereExpressionContext,
     WordContext,
+    WordExpressionContext,
 } from "../.antlr-generated/SalParser";
 import { describe, it, expect } from "vitest";
 import { ignore, raise } from "../../standard-extensions";
@@ -57,6 +60,22 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         return node.text;
     }
 
+    visitWord(e: WordContext): string {
+        const w = e.WORD();
+        if (w != null) return w.accept(this);
+        return e.text;
+    }
+    visitIdentifier(e: IdentifierContext): string {
+        const w = e.word();
+        const name =
+            w != null ? w.accept(this) : (e.STRING()?.accept(this) ?? raise``);
+        return `${e.AT().text}${name}`;
+    }
+    visitParameter(e: ParameterContext): string {
+        const i = e.identifier();
+        if (i != null) return i.accept(this);
+        return e.word()?.accept(this) ?? raise``;
+    }
     visitSourceFile(s: SourceFileContext): string {
         const e = s.expression();
         if (!e) return "";
@@ -66,8 +85,8 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         if (
             e instanceof NumberContext ||
             e instanceof StringContext ||
-            e instanceof VariableContext ||
-            e instanceof WordContext
+            e instanceof WordExpressionContext ||
+            e instanceof VariableContext
         ) {
             return e.accept(this);
         }
@@ -75,7 +94,7 @@ class PrintWithParenVisitor implements SalVisitor<string> {
     }
 
     visitLambdaExpression(e: LambdaExpressionContext): string {
-        return `@lambda ${this.visitExpression(e.parameter())}: ${this.visitExpression(e.expression())}`;
+        return `${e.AT().text}${e.FUNCTION().text} ${e.parameter().accept(this)}: ${this.visitExpression(e.expression())}`;
     }
     visitNotExpression(e: NotExpressionContext): string {
         return `-${this.visitExpression(e.expression())}`;
@@ -100,7 +119,7 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         return this.binaryLike(e, " and ");
     }
     visitBinaryExpression(e: BinaryExpressionContext): string {
-        return `${this.visitExpression(e._left)} /${e.WORD().accept(this)} ${this.visitExpression(e._right)}`;
+        return `${this.visitExpression(e._left)} /${e.word().accept(this)} ${this.visitExpression(e._right)}`;
     }
     visitWhereExpression(e: WhereExpressionContext): string {
         return `${this.visitExpression(e._scope)} @where ${e.parameter().accept(this)} = ${this.visitExpression(e._value)}`;
@@ -114,8 +133,8 @@ class PrintWithParenVisitor implements SalVisitor<string> {
     visitVariable(e: VariableContext): string {
         return e.identifier().accept(this);
     }
-    visitWord(e: WordContext): string {
-        return e.WORD().accept(this);
+    visitWordExpression(e: WordExpressionContext): string {
+        return this.visitWord(e.word());
     }
     visitParenthesizedExpression(e: ParenthesizedExpressionContext): string {
         return `(${this.visitExpression(e.expression())})`;
@@ -216,10 +235,16 @@ describe("Sal Parser", () => {
                 `(sourceFile (expression "a string") <EOF>)`,
             );
             expect(parseAndPrint("@identifier")).toStrictEqual(
-                "(sourceFile (expression (identifier @ identifier)) <EOF>)",
+                "(sourceFile (expression (identifier @ (word identifier))) <EOF>)",
             );
             expect(parseAndPrint("aWord")).toStrictEqual(
-                "(sourceFile (expression aWord) <EOF>)",
+                "(sourceFile (expression (word aWord)) <EOF>)",
+            );
+        });
+
+        it("pseudo reserved word", () => {
+            expect(parseAndPrint("where fn function")).toStrictEqual(
+                "(sourceFile (expression (expression (expression (word where)) (expression (word fn))) (expression (word function))) <EOF>)",
             );
         });
 
@@ -236,23 +261,23 @@ describe("Sal Parser", () => {
             );
             // 3トークン
             expect(parseAndPrint("-@ident")).toStrictEqual(
-                "(sourceFile (expression - (expression (identifier @ ident))) <EOF>)",
+                "(sourceFile (expression - (expression (identifier @ (word ident)))) <EOF>)",
             );
             // 2トークン
             expect(parseAndPrint("-x")).toStrictEqual(
-                "(sourceFile (expression - (expression x)) <EOF>)",
+                "(sourceFile (expression - (expression (word x))) <EOF>)",
             );
         });
 
         it("should parse applyExpression", () => {
             expect(parseAndPrint("func:arg")).toStrictEqual(
-                "(sourceFile (expression (expression func) : (expression arg)) <EOF>)",
+                "(sourceFile (expression (expression (word func)) : (expression (word arg))) <EOF>)",
             );
             expect(parseAndPrint('"string":"another"')).toStrictEqual(
                 '(sourceFile (expression (expression "string") : (expression "another")) <EOF>)',
             );
             expect(parseAndPrint("a:b:c")).toStrictEqual(
-                "(sourceFile (expression (expression (expression a) : (expression b)) : (expression c)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) : (expression (word b))) : (expression (word c))) <EOF>)",
             );
         });
 
@@ -273,70 +298,67 @@ describe("Sal Parser", () => {
 
         it("should parse binaryExpression", () => {
             expect(parseAndPrint("a /b c")).toStrictEqual(
-                "(sourceFile (expression (expression a) / b (expression c)) <EOF>)",
+                "(sourceFile (expression (expression (word a)) / (word b) (expression (word c))) <EOF>)",
             );
         });
 
         it("should parse sequenceExpression", () => {
             expect(parseAndPrint("a b c")).toStrictEqual(
-                "(sourceFile (expression (expression (expression a) (expression b)) (expression c)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) (expression (word b))) (expression (word c))) <EOF>)",
             );
         });
 
         it("should parse orExpression", () => {
             expect(parseAndPrint("a or b")).toStrictEqual(
-                "(sourceFile (expression (expression a) or (expression b)) <EOF>)",
+                "(sourceFile (expression (expression (word a)) or (expression (word b))) <EOF>)",
             );
             expect(parseAndPrint("a or b or c")).toStrictEqual(
-                "(sourceFile (expression (expression (expression a) or (expression b)) or (expression c)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) or (expression (word b))) or (expression (word c))) <EOF>)",
             );
         });
 
         it("should parse whereClause", () => {
             expect(parseAndPrint("a @ where x = 1")).toStrictEqual(
-                "(sourceFile (expression (expression a) @ where (parameter x) = (expression 1)) <EOF>)",
+                "(sourceFile (expression (expression (word a)) @ where (parameter (word x)) = (expression 1)) <EOF>)",
             );
             expect(parseAndPrint("a @where @x = 1 @where y = 2")).toStrictEqual(
-                "(sourceFile (expression (expression (expression a) @ where (parameter (identifier @ x)) = (expression 1)) @ where (parameter y) = (expression 2)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) @ where (parameter (identifier @ (word x))) = (expression 1)) @ where (parameter (word y)) = (expression 2)) <EOF>)",
             );
             expect(
                 parseAndPrint("a @where x = (b @where c = 1) @where y = 2"),
             ).toStrictEqual(
-                "(sourceFile (expression (expression (expression a) @ where (parameter x) = (expression ( (expression (expression b) @ where (parameter c) = (expression 1)) ))) @ where (parameter y) = (expression 2)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) @ where (parameter (word x)) = (expression ( (expression (expression (word b)) @ where (parameter (word c)) = (expression 1)) ))) @ where (parameter (word y)) = (expression 2)) <EOF>)",
             );
             expect(parseAndPrint("a @where x = y /z w")).toStrictEqual(
-                "(sourceFile (expression (expression a) @ where (parameter x) = (expression (expression y) / z (expression w))) <EOF>)",
+                "(sourceFile (expression (expression (word a)) @ where (parameter (word x)) = (expression (expression (word y)) / (word z) (expression (word w)))) <EOF>)",
             );
         });
 
         it("should parse lambdaExpression", () => {
-            expect(parseAndPrint("@lambda x: x")).toStrictEqual(
-                "(sourceFile (expression @ lambda (parameter x) : (expression x)) <EOF>)",
+            expect(parseAndPrint("@function x: x")).toStrictEqual(
+                "(sourceFile (expression @ function (parameter (word x)) : (expression (word x))) <EOF>)",
             );
-            expect(parseAndPrint("@lambda @x: x")).toStrictEqual(
-                "(sourceFile (expression @ lambda (parameter (identifier @ x)) : (expression x)) <EOF>)",
+            expect(parseAndPrint("@fn x: x")).toStrictEqual(
+                "(sourceFile (expression @ fn (parameter (word x)) : (expression (word x))) <EOF>)",
             );
-            // `@lambda x: (@lambda y: x)`
-            expect(parseAndPrint("@lambda x: @lambda y: x")).toStrictEqual(
-                "(sourceFile (expression @ lambda (parameter x) : (expression @ lambda (parameter y) : (expression x))) <EOF>)",
+            expect(parseAndPrint("@fn @x: x")).toStrictEqual(
+                "(sourceFile (expression @ fn (parameter (identifier @ (word x))) : (expression (word x))) <EOF>)",
             );
-
-            // `a:(@lambda x: x)`
-            expect(parseAndPrint("a:@lambda x: x")).toStrictEqual(
-                "(sourceFile (expression (expression a) : (expression @ lambda (parameter x) : (expression x))) <EOF>)",
+            expect(printWithParen("@fn x: @fn y: x")).toStrictEqual(
+                "@fn x: (@fn y: x)",
             );
-            // `@lambda x: (@x /add 1)`
-            expect(parseAndPrint("@lambda x: @x /add 1")).toStrictEqual(
-                "(sourceFile (expression @ lambda (parameter x) : (expression (expression (identifier @ x)) / add (expression 1))) <EOF>)",
+            expect(printWithParen("a:@fn x: x")).toStrictEqual("a:(@fn x: x)");
+            expect(printWithParen("@fn x: @x /add 1")).toStrictEqual(
+                "@fn x: (@x /add 1)",
             );
         });
 
         it("should parse complex expressions", () => {
             expect(parseAndPrint("a:b /c d or e @where x = 1")).toStrictEqual(
-                "(sourceFile (expression (expression (expression (expression a) : (expression b)) / c (expression (expression d) or (expression e))) @ where (parameter x) = (expression 1)) <EOF>)",
+                "(sourceFile (expression (expression (expression (expression (word a)) : (expression (word b))) / (word c) (expression (expression (word d)) or (expression (word e)))) @ where (parameter (word x)) = (expression 1)) <EOF>)",
             );
-            expect(parseAndPrint("(@lambda x: x):1")).toStrictEqual(
-                "(sourceFile (expression (expression ( (expression @ lambda (parameter x) : (expression x)) )) : (expression 1)) <EOF>)",
+            expect(parseAndPrint("(@fn x: x):1")).toStrictEqual(
+                "(sourceFile (expression (expression ( (expression @ fn (parameter (word x)) : (expression (word x))) )) : (expression 1)) <EOF>)",
             );
         });
 

@@ -20,6 +20,7 @@ import {
     VariableContext,
     WhereExpressionContext,
     WordContext,
+    WordExpressionContext,
 } from "./.antlr-generated/SalParser";
 import { type SalVisitor } from "./.antlr-generated/SalVisitor";
 import { raise } from "../standard-extensions";
@@ -47,20 +48,20 @@ function getNumberValue(v: TerminalNode): number {
 function getStringValue(v: TerminalNode): string {
     return JSON.parse(v.text); // TODO:
 }
-function getWordValue(v: TerminalNode) {
+function getWordValue(v: WordContext) {
     return v.text;
 }
 function getIdentifierName(e: IdentifierContext) {
     const v = e.STRING();
     if (v != null) return getStringValue(v);
 
-    const w = e.WORD();
+    const w = e.word();
     if (w != null) return getWordValue(w);
 
     return unreachable(e);
 }
 function getParameterName(e: ParameterContext) {
-    const w = e.WORD();
+    const w = e.word();
     if (w != null) return getWordValue(w);
 
     const id = e.identifier();
@@ -175,7 +176,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     *visitBinaryExpression(e: BinaryExpressionContext): Effective<Value> {
         const l = yield* this.visitExpression(e._left);
         const op = this.resolveVariable(
-            getWordValue(e.WORD()),
+            getWordValue(e.word()),
         ) as SalFunctionMany<[Value, Value], Value>;
         const r = yield* this.visitExpression(e._right);
         return yield* (yield* op(l))(r);
@@ -209,8 +210,11 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         const name = getIdentifierName(e.identifier());
         return done(this.resolveVariable(name));
     }
+    visitWordExpression(e: WordExpressionContext): Effective<Value> {
+        return e.word().accept(this);
+    }
     visitWord(e: WordContext): Effective<Value> {
-        const name = getWordValue(e.WORD());
+        const name = getWordValue(e);
 
         // 変数が存在するか
         const value = this.tryResolveVariable(name);
