@@ -19,22 +19,14 @@ import { createLocalConfigView } from "../local-config-view/local-config-view";
 import { createFilterBar } from "./query-view/filter-bar";
 import { styleSetter } from "../dom-extensions";
 import { createSourceList } from "./query-view/source-list";
-
-function hasTermInString(text: string, term: string) {
-    return text.toLowerCase().includes(term);
-}
-function hasTermInDraft({ name, description, note }: Draft, term: string) {
-    return (
-        hasTermInString(name, term) ||
-        hasTermInString(description, term) ||
-        hasTermInString(note, term)
-    );
-}
+import { filterDrafts } from "./draft-filter";
+import { createAsyncCancelScope, sleep } from "../standard-extensions";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
     readonly remote: Remote;
     readonly local: LocalConfigAccessor;
+    readonly handleAsyncError: (reason: unknown) => void;
 }
 interface DraftListEventMap {
     "count-changed": {
@@ -111,7 +103,12 @@ function isTrivial(
 }
 
 const setStyle = styleSetter(cssText);
-export function createDraftList({ overlay, remote, local }: DraftListOptions) {
+export function createDraftList({
+    overlay,
+    remote,
+    local,
+    handleAsyncError,
+}: DraftListOptions) {
     setStyle();
 
     const events = createTypedEventTarget<DraftListEventMap>();
@@ -150,7 +147,9 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         if (
             !isTrivial(oldSource, currentSources) &&
             !confirm(
-                `本当に ${JSON.stringify(oldSource.contents)} (id: ${JSON.stringify(oldSource.id)}) を削除しますか？`,
+                `本当に ${JSON.stringify(
+                    oldSource.contents,
+                )} (id: ${JSON.stringify(oldSource.id)}) を削除しますか？`,
             )
         ) {
             return;
@@ -196,7 +195,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
 
         // 選択中のソースが更新されたかもしれないので処理
         filterInput.setValue(getSelectedSource() ?? "");
-        applyFilter();
+        requestFilterUpdate();
 
         local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
@@ -273,7 +272,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     }
     filterInput.events.addEventListener("input-changed", () => {
         setSelectedSource(filterInput.getValue());
-        applyFilter();
+        requestFilterUpdate();
     });
 
     filterInput.events.addEventListener("click-list-button", () => {
@@ -560,19 +559,15 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
     };
     updateDetailPane();
 
-    const applyFilter = () => {
-        const searchAndTerms = getSelectedSource()
-            ?.toLowerCase()
-            .match(/[^ ]+/g) ?? [""];
-        filteredDrafts = allDrafts.filter((draft) => {
-            for (const term of searchAndTerms) {
-                if (!hasTermInDraft(draft, term)) return false;
-            }
-            return true;
+    const applyFilterCancelScope = createAsyncCancelScope(handleAsyncError);
+    const requestFilterUpdate = () =>
+        applyFilterCancelScope(async (signal) => {
+            await sleep(200, { signal });
+            const query = getSelectedSource() ?? "";
+            filteredDrafts = await filterDrafts(allDrafts, query, signal);
+            dispatchCountUpdatedEvent();
+            updateVirtualList();
         });
-        dispatchCountUpdatedEvent();
-        updateVirtualList();
-    };
 
     const updateVirtualList = () => {
         const virtualElements: VirtualElements = {
@@ -635,7 +630,7 @@ export function createDraftList({ overlay, remote, local }: DraftListOptions) {
         element: container,
         setDrafts(newDrafts: readonly Draft[]) {
             allDrafts.splice(0, allDrafts.length, ...newDrafts);
-            applyFilter();
+            requestFilterUpdate();
             if (
                 selectedDraft &&
                 !newDrafts.some((d) => d.id === selectedDraft?.id)

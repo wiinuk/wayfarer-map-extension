@@ -103,6 +103,7 @@ function setupDraftManagerDialog(page: PageResource) {
         overlay: page.drafts,
         remote: page.remote,
         local: page.local,
+        handleAsyncError,
     });
 
     const title = createDraftsDialogTitle({
