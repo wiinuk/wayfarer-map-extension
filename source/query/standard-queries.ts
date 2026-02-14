@@ -1,8 +1,18 @@
+// spell-checker: words POKESTOP
+import { distance } from "../geometry";
+import type { CellStatistic } from "../poi-records";
 import type { Draft } from "../remote";
 import { done, type Effective } from "../sal/effective";
 import type { Value } from "../sal/evaluator";
 
+export interface CellRepository {
+    getCell17Stat(
+        p: google.maps.LatLngLiteral,
+    ): Effective<CellStatistic<17> | undefined>;
+}
 export interface QueryEnvironment {
+    getMinFreshDate(): Effective<number>;
+    getCellStats(): Effective<CellRepository>;
     getUserLocation(): Effective<{ lat: number; lng: number }>;
 }
 
@@ -126,6 +136,55 @@ function or(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
     };
 }
 
+export function reachableWith(
+    center: readonly [number, number],
+    radius: number,
+): DraftQueryBuilder {
+    return {
+        isIgnorable: false,
+        initialize() {
+            const p1 = { lat: center[0], lng: center[1] };
+            return done({
+                isVisible(d) {
+                    const [p2] = d.coordinates;
+                    return done(distance(p1, p2) <= radius);
+                },
+            });
+        },
+    };
+}
+
+function hasPokestopOrGymInCell17(): DraftQueryBuilder {
+    return {
+        isIgnorable: false,
+        *initialize(e) {
+            const minFetchDate = yield* e.getMinFreshDate();
+            const stats = yield* e.getCellStats();
+            return {
+                *isVisible(d) {
+                    const [p] = d.coordinates;
+                    const stat17 = yield* stats.getCell17Stat(p);
+
+                    // セル情報が取得されていないか古いなら検索にヒットさせる
+                    if (
+                        stat17 == null ||
+                        stat17.lastFetchDate == null ||
+                        stat17.lastFetchDate < minFetchDate
+                    ) {
+                        return true;
+                    }
+
+                    // セル17にジムかポケストップが存在するか
+                    const count =
+                        (stat17.kindToCount.get("GYM") ?? 0) +
+                        (stat17.kindToCount.get("POKESTOP") ?? 0);
+                    return 0 < count;
+                },
+            };
+        },
+    };
+}
+
 function binaryBuilder(
     f: (x: DraftQueryBuilder, y: DraftQueryBuilder) => DraftQueryBuilder,
 ): Value {
@@ -135,6 +194,9 @@ function binaryBuilder(
             return done(builderAsValue(b));
         });
     };
+}
+function binaryFunction(f: (a: Value, b: Value) => Value): Value {
+    return (x) => done((y) => done(f(x, y)));
 }
 export function createStandardQueries() {
     const all = any();
@@ -149,6 +211,7 @@ export function createStandardQueries() {
         },
     });
     const seq = binaryBuilder(and);
+    const occupied = builderAsValue(hasPokestopOrGymInCell17());
     const dict: Record<string, Value> = {
         fromVoid(_) {
             return done(all);
@@ -167,6 +230,17 @@ export function createStandardQueries() {
         _seq_: seq,
         _and_: seq,
         _or_: binaryBuilder(or),
+
+        reachableWith: binaryFunction((center, distanceMeter) => {
+            return builderAsValue(
+                reachableWith(
+                    center as [number, number],
+                    distanceMeter as number,
+                ),
+            );
+        }),
+        occupied,
+        hasPokestopOrGymInCell17: occupied,
     };
     return new Map<string, Value>(Object.entries(dict));
 }

@@ -102,6 +102,7 @@ function setupDraftManagerDialog(page: PageResource) {
     const draftList = createDraftList({
         overlay: page.drafts,
         remote: page.remote,
+        records: page.records,
         local: page.local,
         handleAsyncError,
     });

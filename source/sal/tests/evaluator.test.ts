@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 // spell-checker:words antlr vitest
 import { describe, it, expect } from "vitest";
 import { evaluateExpression, type Value } from "../evaluator";
@@ -9,6 +10,7 @@ import {
     type Effective,
 } from "../effective";
 import { sleep } from "../../standard-extensions";
+import { createStandardQueries } from "../../query/standard-queries";
 
 const createStandardLibrary = () => {
     const lib = new Map<string, Value>();
@@ -111,6 +113,9 @@ async function evaluate(source: string, globals?: ReadonlyMap<string, Value>) {
     });
     const { signal } = new AbortController();
     return await forceAsPromise(effective, signal);
+}
+async function evaluateAsQuery(source: string) {
+    return await evaluate(source, createStandardQueries());
 }
 
 describe("Evaluator", () => {

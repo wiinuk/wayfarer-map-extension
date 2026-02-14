@@ -21,10 +21,13 @@ import { styleSetter } from "../dom-extensions";
 import { createSourceList } from "./query-view/source-list";
 import { filterDrafts } from "./draft-filter";
 import { createAsyncCancelScope, sleep } from "../standard-extensions";
+import { createEditor } from "./query-view/editor";
+import type { PoiRecords } from "../poi-records";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
     readonly remote: Remote;
+    readonly records: PoiRecords;
     readonly local: LocalConfigAccessor;
     readonly handleAsyncError: (reason: unknown) => void;
 }
@@ -106,6 +109,7 @@ const setStyle = styleSetter(cssText);
 export function createDraftList({
     overlay,
     remote,
+    records,
     local,
     handleAsyncError,
 }: DraftListOptions) {
@@ -125,6 +129,11 @@ export function createDraftList({
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
         title: "検索一覧",
+    });
+
+    const editor = createEditor({ initialText: getSelectedSource() ?? "" });
+    const editorDialog = createDialog(editor.element, {
+        title: "検索ワードを編集",
     });
 
     sourceList.events.addEventListener("select", ({ detail: index }) => {
@@ -188,20 +197,36 @@ export function createDraftList({
             sources,
         });
     });
-
+    editor.events.addEventListener("input", ({ detail: value }) => {
+        setSelectedSourceAndNotify(value);
+    });
     function setCurrentSourcesAndNotify(newSources: typeof currentSources) {
         currentSources = newSources;
         sourceList.setSources(currentSources);
+        const selectedSource = getSelectedSource() ?? "";
 
         // 選択中のソースが更新されたかもしれないので処理
-        filterInput.setValue(getSelectedSource() ?? "");
+        filterInput.setValue(selectedSource);
         requestFilterUpdate();
 
+        editor.setSource(selectedSource);
         local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
         return currentSources.sources[currentSources.selectedIndex ?? -1]
             ?.contents;
+    }
+    function setSelectedSourceAndNotify(newContents: string) {
+        const index = currentSources.selectedIndex ?? -1;
+        const source = currentSources.sources[index];
+        if (source == null) return;
+
+        const sources = toSpliced(currentSources.sources, index, 1, {
+            ...source,
+            contents: newContents,
+        }) as QuerySource[] as [QuerySource, ...QuerySource[]]; // 削除して追加するので元と同じ
+
+        setCurrentSourcesAndNotify({ ...currentSources, sources });
     }
 
     overlay.events.addEventListener("selection-changed", ({ detail: id }) => {
@@ -258,25 +283,15 @@ export function createDraftList({
 
     const filterInput = createFilterBar({ value: getSelectedSource() ?? "" });
 
-    function setSelectedSource(newContents: string) {
-        const index = currentSources.selectedIndex ?? -1;
-        const source = currentSources.sources[index];
-        if (source == null) return;
-
-        const sources = toSpliced(currentSources.sources, index, 1, {
-            ...source,
-            contents: newContents,
-        }) as QuerySource[] as [QuerySource, ...QuerySource[]]; // 削除して追加するので元と同じ
-
-        setCurrentSourcesAndNotify({ ...currentSources, sources });
-    }
     filterInput.events.addEventListener("input-changed", () => {
-        setSelectedSource(filterInput.getValue());
-        requestFilterUpdate();
+        setSelectedSourceAndNotify(filterInput.getValue());
     });
 
     filterInput.events.addEventListener("click-list-button", () => {
         sourceListDialog.show();
+    });
+    filterInput.events.addEventListener("click-edit-button", () => {
+        editorDialog.show();
     });
 
     const detailName = (
@@ -564,7 +579,12 @@ export function createDraftList({
         applyFilterCancelScope(async (signal) => {
             await sleep(200, { signal });
             const query = getSelectedSource() ?? "";
-            filteredDrafts = await filterDrafts(allDrafts, query, signal);
+            filteredDrafts = await filterDrafts(
+                records,
+                allDrafts,
+                query,
+                signal,
+            );
             dispatchCountUpdatedEvent();
             updateVirtualList();
         });

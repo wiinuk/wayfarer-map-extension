@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateExpression } from "../sal/evaluator";
 import {
     createStandardQueries,
+    reachableWith,
     type DraftQueryBuilder,
 } from "./standard-queries";
 import { done, forceAsPromise } from "../sal/effective";
@@ -25,6 +26,16 @@ describe("Queries", () => {
             b.initialize({
                 getUserLocation() {
                     return done({ lat: 0, lng: 0 });
+                },
+                getMinFreshDate() {
+                    return done(0);
+                },
+                getCellStats() {
+                    return done({
+                        getCell17Stat() {
+                            return done(undefined);
+                        },
+                    });
                 },
             }),
             signal,
@@ -54,5 +65,21 @@ describe("Queries", () => {
             false,
         );
         expect(await isVisible({ ...emptyDraft(), name: "coff" })).toBe(true);
+    });
+
+    it("reachableWith", async () => {
+        const isVisible = await builderAsPredicate(reachableWith([0, 0], 1));
+        expect(
+            await isVisible({
+                ...emptyDraft(),
+                coordinates: [{ lat: 0, lng: 0 }],
+            }),
+        ).toBe(true);
+        expect(
+            await isVisible({
+                ...emptyDraft(),
+                coordinates: [{ lat: 30, lng: 30 }],
+            }),
+        ).toBe(false);
     });
 });

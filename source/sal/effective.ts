@@ -19,7 +19,7 @@ export function* awaitPromise<T>(promise: Promise<T>): Effective<T> {
 }
 
 const privateGetAbortSignalSymbol = Symbol("privateGetAbortSignal");
-export function* getCancel() {
+export function* getCancel(): Effective<AbortSignal> {
     return (yield privateGetAbortSignalSymbol) as AbortSignal;
 }
 
