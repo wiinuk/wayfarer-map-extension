@@ -27,6 +27,7 @@ import { TerminalNode } from "antlr4ts/tree/TerminalNode";
 import { ErrorNode } from "antlr4ts/tree/ErrorNode";
 import { type ParseTree } from "antlr4ts/tree/ParseTree";
 import { type RuleNode } from "antlr4ts/tree/RuleNode";
+import { done, type Effective } from "./effective";
 
 const unreachable = (node: TerminalNode | ParseTree | RuleNode) => {
     if (node instanceof TerminalNode) {
@@ -69,7 +70,7 @@ function getParameterName(e: ParameterContext) {
 
 type SalFunction<T extends Value = Value, R extends Value = Value> = (
     x: T,
-) => Promise<R>;
+) => Effective<R>;
 
 type SalFunctionMany<
     TArgs extends readonly [Value, ...Value[]],
@@ -86,13 +87,13 @@ export type Value =
     | number
     | string
     | Value[]
-    | ((v: Value) => Promise<Value>);
+    | ((v: Value) => Effective<Value>);
 
-class SalVisitorImpl implements SalVisitor<Promise<Value>> {
-    visit: (tree: ParseTree) => Promise<Value> = unreachable;
-    visitChildren: (node: RuleNode) => Promise<Value> = unreachable;
-    visitTerminal: (node: TerminalNode) => Promise<Value> = unreachable;
-    visitErrorNode: (node: ErrorNode) => Promise<Value> = unreachable;
+class SalVisitorImpl implements SalVisitor<Effective<Value>> {
+    visit: (tree: ParseTree) => Effective<Value> = unreachable;
+    visitChildren: (node: RuleNode) => Effective<Value> = unreachable;
+    visitTerminal: (node: TerminalNode) => Effective<Value> = unreachable;
+    visitErrorNode: (node: ErrorNode) => Effective<Value> = unreachable;
 
     readonly environment = new Map<string, Value>();
     readonly tryResolveVariable: (k: string) => Value | undefined;
@@ -109,23 +110,21 @@ class SalVisitorImpl implements SalVisitor<Promise<Value>> {
         if (v === undefined) throw new Error(`undefined variable: ${name}`);
         return v;
     }
-    async evaluateBinaryLikeExpression(
+    *evaluateBinaryLikeExpression(
         left: ExpressionContext,
         opName: string,
         right: ExpressionContext,
     ) {
-        const l = await left.accept(this);
+        const l = yield* left.accept(this);
         const f = this.resolveVariable(opName) as SalFunctionMany<
             [Value, Value],
             Value
         >;
-        const r = await right.accept(this);
-        return await (
-            await f(l)
-        )(r);
+        const r = yield* right.accept(this);
+        return yield* (yield* f(l))(r);
     }
 
-    visitSourceFile(e: SourceFileContext): Promise<Value> {
+    visitSourceFile(e: SourceFileContext): Effective<Value> {
         const body = e.expression();
         if (body == null) {
             const fromEmpty = this.resolveVariable("fromVoid") as SalFunction;
@@ -133,55 +132,53 @@ class SalVisitorImpl implements SalVisitor<Promise<Value>> {
         }
         return body.accept(this);
     }
-    async visitLambdaExpression(e: LambdaExpressionContext): Promise<Value> {
+    visitLambdaExpression(e: LambdaExpressionContext): Effective<Value> {
         const parameterName = getParameterName(e.parameter());
         const body = e.expression();
 
         const newScope = new SalVisitorImpl(this.tryResolveVariable);
-        return (x: Value) => {
+        return done((x: Value) => {
             this.environment.set(parameterName, x);
             return body.accept(newScope);
-        };
+        });
     }
-    async visitNotExpression(e: NotExpressionContext): Promise<Value> {
+    *visitNotExpression(e: NotExpressionContext): Effective<Value> {
         const not = this.resolveVariable("not_") as SalFunction;
-        const v = await e.expression().accept(this);
-        return await not(v);
+        const v = yield* e.expression().accept(this);
+        return yield* not(v);
     }
-    async visitApplyExpression(e: ApplyExpressionContext): Promise<Value> {
-        const f = (await e._left.accept(this)) as SalFunction;
-        const x = await e._right.accept(this);
-        return await f(x);
+    *visitApplyExpression(e: ApplyExpressionContext): Effective<Value> {
+        const f = (yield* e._left.accept(this)) as SalFunction;
+        const x = yield* e._right.accept(this);
+        return yield* f(x);
     }
-    visitSequenceExpression(e: SequenceExpressionContext): Promise<Value> {
+    visitSequenceExpression(e: SequenceExpressionContext): Effective<Value> {
         return this.evaluateBinaryLikeExpression(e._left, "_seq_", e._right);
     }
-    visitOrExpression(e: OrExpressionContext): Promise<Value> {
+    visitOrExpression(e: OrExpressionContext): Effective<Value> {
         return this.evaluateBinaryLikeExpression(e._left, "_or_", e._right);
     }
-    visitAndExpression(e: AndExpressionContext): Promise<Value> {
+    visitAndExpression(e: AndExpressionContext): Effective<Value> {
         return this.evaluateBinaryLikeExpression(e._left, "_and_", e._right);
     }
-    async visitBinaryExpression(e: BinaryExpressionContext): Promise<Value> {
-        const l = await e._left.accept(this);
+    *visitBinaryExpression(e: BinaryExpressionContext): Effective<Value> {
+        const l = yield* e._left.accept(this);
         const op = this.resolveVariable(
             getWordValue(e.WORD()),
         ) as SalFunctionMany<[Value, Value], Value>;
-        const r = await e._right.accept(this);
-        return await (
-            await op(l)
-        )(r);
+        const r = yield* e._right.accept(this);
+        return yield* (yield* op(l))(r);
     }
-    async visitWhereExpression(e: WhereExpressionContext): Promise<Value> {
+    *visitWhereExpression(e: WhereExpressionContext): Effective<Value> {
         const newScope = new SalVisitorImpl(this.tryResolveVariable);
 
         const id = getParameterName(e.parameter());
-        const value = await e._value.accept(newScope);
+        const value = yield* e._value.accept(newScope);
         newScope.environment.set(id, value);
 
-        return await e._scope.accept(newScope);
+        return yield* e._scope.accept(newScope);
     }
-    visitNumber(e: NumberContext): Promise<Value> {
+    visitNumber(e: NumberContext): Effective<Value> {
         const value = getNumberValue(e.NUMBER());
         const fromNumber = this.resolveVariable("fromNumber") as SalFunction<
             number,
@@ -189,7 +186,7 @@ class SalVisitorImpl implements SalVisitor<Promise<Value>> {
         >;
         return fromNumber(value);
     }
-    visitString(e: StringContext): Promise<Value> {
+    visitString(e: StringContext): Effective<Value> {
         const value = getStringValue(e.STRING());
         const fromString = this.resolveVariable("fromString") as SalFunction<
             string,
@@ -197,16 +194,16 @@ class SalVisitorImpl implements SalVisitor<Promise<Value>> {
         >;
         return fromString(value);
     }
-    visitVariable(e: VariableContext): Promise<Value> {
+    visitVariable(e: VariableContext): Effective<Value> {
         const name = getIdentifierName(e.identifier());
-        return Promise.resolve(this.resolveVariable(name));
+        return done(this.resolveVariable(name));
     }
-    visitWord(e: WordContext): Promise<Value> {
+    visitWord(e: WordContext): Effective<Value> {
         const name = getWordValue(e.WORD());
 
         // 変数が存在するか
         const value = this.tryResolveVariable(name);
-        if (value !== undefined) return Promise.resolve(value);
+        if (value !== undefined) return done(value);
 
         // 存在しないなら文字列
         const fromWord = this.resolveVariable("fromWord") as SalFunction<
@@ -217,36 +214,36 @@ class SalVisitorImpl implements SalVisitor<Promise<Value>> {
     }
     visitParenthesizedExpression(
         e: ParenthesizedExpressionContext,
-    ): Promise<Value> {
+    ): Effective<Value> {
         return e.expression().accept(this);
     }
 }
 
 function createStandardGlobals() {
     const globals: Readonly<Record<string, Value>> = {
-        async fromVoid(_) {
-            return "fromVoid";
+        fromVoid(_) {
+            return done("fromVoid");
         },
-        async fromWord(x) {
-            return `fromWord(${x})`;
+        fromWord(x) {
+            return done(`fromWord(${x})`);
         },
-        async fromString(x) {
-            return `fromString(${x})`;
+        fromString(x) {
+            return done(`fromString(${x})`);
         },
-        async fromNumber(x) {
-            return `fromNumber(${x})`;
+        fromNumber(x) {
+            return done(`fromNumber(${x})`);
         },
-        async not_(x) {
-            return `not(${x})`;
+        not_(x) {
+            return done(`not(${x})`);
         },
-        async _seq_(x) {
-            return async (y) => `seq(${x}, ${y})`;
+        _seq_(x) {
+            return done((y) => done(`seq(${x}, ${y})`));
         },
-        async _or_(x) {
-            return async (y) => `or(${x}, ${y})`;
+        _or_(x) {
+            return done((y) => done(`or(${x}, ${y})`));
         },
-        async _and_(x) {
-            return async (y) => `and(${x}, ${y})`;
+        _and_(x) {
+            return done((y) => done(`and(${x}, ${y})`));
         },
     };
     return new Map<string, Value>(Object.entries(globals));

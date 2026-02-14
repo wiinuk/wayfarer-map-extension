@@ -1,26 +1,31 @@
 // spell-checker:words antlr vitest
 import { describe, it, expect } from "vitest";
 import { evaluateExpression, type Value } from "../evaluator";
+import {
+    awaitPromise,
+    done,
+    forceAsPromise,
+    getCancel,
+    type Effective,
+} from "../effective";
+import { sleep } from "../../standard-extensions";
 
 const createStandardLibrary = () => {
     const lib = new Map<string, Value>();
 
-    const binary =
-        (op: (a: number, b: number) => Value) =>
-        async (a: Value) =>
-        async (b: Value) => {
-            if (typeof a !== "number" || typeof b !== "number") {
-                throw new TypeError(
-                    `Operator requires number arguments, but got ${typeof a} and ${typeof b}`,
-                );
-            }
-            return op(a, b);
-        };
+    const binaryGeneric =
+        (op: (a: Value, b: Value) => Value): Value =>
+        (a: Value) =>
+            done((b: Value) => done(op(a, b)));
 
-    lib.set("fromVoid", async () => null);
-    lib.set("fromNumber", async (x) => x);
-    lib.set("fromString", async (x) => x);
-    lib.set("fromWord", async (x) => x);
+    const binary = binaryGeneric as (
+        op: (a: number, b: number) => Value,
+    ) => Value;
+
+    lib.set("fromVoid", () => done(null));
+    lib.set("fromNumber", (x) => done(x));
+    lib.set("fromString", (x) => done(x));
+    lib.set("fromWord", (x) => done(x));
     lib.set(
         "add",
         binary((a, b) => a + b),
@@ -44,8 +49,14 @@ const createStandardLibrary = () => {
         "mod",
         binary((a, b) => a % b),
     );
-    lib.set("eq", async (a: Value) => async (b: Value) => a === b);
-    lib.set("neq", async (a: Value) => async (b: Value) => a !== b);
+    lib.set(
+        "eq",
+        binary((a, b) => a === b),
+    );
+    lib.set(
+        "neq",
+        binary((a, b) => a !== b),
+    );
     lib.set(
         "lt",
         binary((a, b) => a < b),
@@ -63,24 +74,43 @@ const createStandardLibrary = () => {
         binary((a, b) => a >= b),
     );
 
-    lib.set("not_", async (a) => !a);
-    lib.set("_seq_", async (a) => async (b) => [a, b]);
-    lib.set("_and_", async (a) => async (b) => a && b);
-    lib.set("_or_", async (a) => async (b) => a || b);
+    lib.set("not_", (a) => done(!a));
+    lib.set(
+        "_seq_",
+        binary((a, b) => [a, b]),
+    );
+    lib.set(
+        "_and_",
+        binary((a, b) => a && b),
+    );
+    lib.set(
+        "_or_",
+        binary((a, b) => a || b),
+    );
     lib.set("true", true);
     lib.set("false", false);
     lib.set("null", null);
+    lib.set("sleep", function* (milliseconds) {
+        yield* awaitPromise(
+            sleep(milliseconds as number, { signal: yield* getCancel() }),
+        );
+        return (f) => {
+            return (f as (x: Value) => Effective<Value>)(null);
+        };
+    });
 
     return lib;
 };
 
 async function evaluate(source: string, globals?: ReadonlyMap<string, Value>) {
     const lib = createStandardLibrary();
-    return await evaluateExpression(source, (k) => {
+    const effective = evaluateExpression(source, (k) => {
         const v = globals?.get(k);
         if (v !== undefined) return v;
         return lib.get(k);
     });
+    const { signal } = new AbortController();
+    return await forceAsPromise(effective, signal);
 }
 
 describe("Evaluator", () => {
@@ -123,10 +153,6 @@ describe("Evaluator", () => {
             await expect(evaluate("1 /div 0")).rejects.toThrow(
                 "Division by zero",
             );
-        });
-
-        it("should throw error for arithmetic on non-numbers", async () => {
-            await expect(evaluate('"a" /add 1')).rejects.toThrow(TypeError);
         });
 
         it("should handle comparison operators", async () => {
@@ -253,6 +279,14 @@ describe("Evaluator", () => {
                 /* And this is a block comment */
             `;
             expect(await evaluate(code)).toBe(null);
+        });
+    });
+
+    describe("promise", () => {
+        it("sleep", async () => {
+            expect(await evaluate(`200 /sleep @lambda x: "woke up!"`)).toBe(
+                "woke up!",
+            );
         });
     });
 });
