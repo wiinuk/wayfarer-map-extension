@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.4.2
+// @version      0.4.3
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -1192,7 +1192,7 @@
         return escapeSpaces ? s.replace(/ /, "\xB7") : s.replace(/\t/, "\\t").replace(/\n/, "\\n").replace(/\r/, "\\r");
       }
       exports.escapeWhitespace = escapeWhitespace;
-      function join(collection, separator) {
+      function join2(collection, separator) {
         let buf = "";
         let first = true;
         for (let current of collection) {
@@ -1205,7 +1205,7 @@
         }
         return buf;
       }
-      exports.join = join;
+      exports.join = join2;
       function equals(x, y) {
         if (x === y) {
           return true;
@@ -20485,13 +20485,13 @@
     if (isWebWorker()) return createWorkerScheduler();
     return createSchedulerByAnimationFrame(signal, thresholdMs);
   }
-  function styleSetter(cssText12) {
+  function styleSetter(cssText13) {
     let done2 = false;
     return () => {
       if (!done2) {
         done2 = true;
         const sheet = new CSSStyleSheet();
-        sheet.replaceSync(cssText12);
+        sheet.replaceSync(cssText13);
         document.adoptedStyleSheets.push(sheet);
       }
     };
@@ -20500,6 +20500,16 @@
   // source/geometry.ts
   function toLatLngLiteral(latLng) {
     return { lat: latLng.lat(), lng: latLng.lng() };
+  }
+  function distance({ lat: lat1, lng: lng1 }, { lat: lat2, lng: lng2 }) {
+    const R = 6371e3;
+    const rLat1 = lat1 * Math.PI / 180;
+    const rLat2 = lat2 * Math.PI / 180;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
   function distanceSquared(a, b) {
     const dLat = b.lat - a.lat;
@@ -21274,6 +21284,9 @@
   // source/typed-s2cell.ts
   function createCellFromCoordinates(latLng, level) {
     return S2.S2Cell.FromLatLng(latLng, level);
+  }
+  function getCellId(latLng, level) {
+    return createCellFromCoordinates(latLng, level).toString();
   }
   var indexes = Object.freeze(["0", "1", "2", "3"]);
   var buffer64 = new BigUint64Array(1);
@@ -37745,14 +37758,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/query-view/source-list.module.css
-  var cssText9 = ".wrapper-36fc8b6dd404bfad6d19a817b262462f0e81509b {\r\n    flex: 1;\r\n    display: flex;\r\n    flex-direction: column;\r\n    height: 100%;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae {\r\n    height: 100%;\r\n    display: flex;\r\n    align-items: center;\r\n    justify-content: space-between;\r\n    padding: 12px 14px;\r\n    border-radius: 12px;\r\n    cursor: pointer;\r\n    user-select: none;\r\n    transition:\r\n        background 0.15s ease,\r\n        transform 0.05s ease;\r\n    font-size: 14px;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae:hover {\r\n    background: #f1f3f4;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae.active-b896314ad721175dd3fff613c4932b12c7c54292 {\r\n    background: #e8f0fe;\r\n    font-weight: 600;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae:active {\r\n    transform: scale(0.98);\r\n}\r\n\r\n.item-label-2f4392f0f996ec9601fee30fda2690451dc25db5 {\r\n    pointer-events: none;\r\n}\r\n\r\n.delete-button-9084d643b294fe1ccfd18ae01787945b79284ece {\r\n    display: none;\r\n    border: none;\r\n    background: #ffdede;\r\n    color: #b00020;\r\n    border-radius: 8px;\r\n    padding: 4px 8px;\r\n    font-size: 12px;\r\n    cursor: pointer;\r\n}\r\n\r\n.item-b958d7e0f5f138767c954e26eeced9d7870d13ae.active-b896314ad721175dd3fff613c4932b12c7c54292 .delete-button-9084d643b294fe1ccfd18ae01787945b79284ece {\r\n    display: inline-block;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317 {\r\n    margin-top: 10px;\r\n    border: none;\r\n    background: #f1f3f4;\r\n    border-radius: 12px;\r\n    padding: 12px;\r\n    cursor: pointer;\r\n    font-size: 14px;\r\n    transition:\r\n        background 0.2s ease,\r\n        transform 0.1s ease;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317:hover {\r\n    background: #e3e6e8;\r\n}\r\n\r\n.add-button-a939c035d413b216c33028343047552704860317:active {\r\n    transform: scale(0.97);\r\n}\r\n";
+  var cssText9 = ".wrapper-12ea3675915522e27cfe3356addfb9ac5a8e4fe2 {\r\n    flex: 1;\r\n    display: flex;\r\n    flex-direction: column;\r\n    height: 100%;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91 {\r\n    height: 100%;\r\n    display: flex;\r\n    align-items: center;\r\n    justify-content: space-between;\r\n    padding: 12px 14px;\r\n    border-radius: 12px;\r\n    cursor: pointer;\r\n    user-select: none;\r\n    transition:\r\n        background 0.15s ease,\r\n        transform 0.05s ease;\r\n    font-size: 14px;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91:hover {\r\n    background: #f1f3f4;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91.active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b {\r\n    background: #e8f0fe;\r\n    font-weight: 600;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91:active {\r\n    transform: scale(0.98);\r\n}\r\n\r\n.item-label-aa6d3639738d866205ef3f6db063315d6b23659f {\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n    text-overflow: ellipsis;\r\n    white-space: nowrap;\r\n}\r\n\r\n.delete-button-04b39470f8b9cde6122641ba127dae02e389ce94 {\r\n    display: none;\r\n    border: none;\r\n    background: #ffdede;\r\n    color: #b00020;\r\n    border-radius: 8px;\r\n    padding: 4px 8px;\r\n    font-size: 12px;\r\n    cursor: pointer;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91.active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b .delete-button-04b39470f8b9cde6122641ba127dae02e389ce94 {\r\n    display: inline-block;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50 {\r\n    margin-top: 10px;\r\n    border: none;\r\n    background: #f1f3f4;\r\n    border-radius: 12px;\r\n    padding: 12px;\r\n    cursor: pointer;\r\n    font-size: 14px;\r\n    transition:\r\n        background 0.2s ease,\r\n        transform 0.1s ease;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50:hover {\r\n    background: #e3e6e8;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50:active {\r\n    transform: scale(0.97);\r\n}\r\n";
   var source_list_default = {
-    wrapper: "wrapper-36fc8b6dd404bfad6d19a817b262462f0e81509b",
-    item: "item-b958d7e0f5f138767c954e26eeced9d7870d13ae",
-    active: "active-b896314ad721175dd3fff613c4932b12c7c54292",
-    "item-label": "item-label-2f4392f0f996ec9601fee30fda2690451dc25db5",
-    "delete-button": "delete-button-9084d643b294fe1ccfd18ae01787945b79284ece",
-    "add-button": "add-button-a939c035d413b216c33028343047552704860317"
+    wrapper: "wrapper-12ea3675915522e27cfe3356addfb9ac5a8e4fe2",
+    item: "item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91",
+    active: "active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b",
+    "item-label": "item-label-aa6d3639738d866205ef3f6db063315d6b23659f",
+    "delete-button": "delete-button-04b39470f8b9cde6122641ba127dae02e389ce94",
+    "add-button": "add-button-a69146193c33e23bae778ebbed5c56d136253b50"
   };
 
   // source/drafts-view/query-view/source-list.tsx
@@ -37840,7 +37853,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.promise = promise2;
     }
   };
+  function* awaitPromise(promise2) {
+    return yield new AwaitPromiseRequest(promise2);
+  }
   var privateGetAbortSignalSymbol = /* @__PURE__ */ Symbol("privateGetAbortSignal");
+  function* getCancel() {
+    return yield privateGetAbortSignalSymbol;
+  }
   async function forceAsPromise(g, signal) {
     let nextInput = void 0;
     let nextResult;
@@ -37909,8 +37928,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       *initialize(e) {
         const q = yield* b.initialize(e);
         return {
-          isVisible(d) {
-            return q.isVisible(d);
+          *isVisible(d) {
+            return !(yield* q.isVisible(d));
           },
           isAny: false
         };
@@ -37952,6 +37971,72 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     };
   }
+  function reachableWith(center, radius) {
+    return {
+      isIgnorable: false,
+      initialize() {
+        const p1 = { lat: center[0], lng: center[1] };
+        return done({
+          isVisible(d) {
+            const [p2] = d.coordinates;
+            return done(distance(p1, p2) <= radius);
+          }
+        });
+      }
+    };
+  }
+  function builderOfCellPredicate(predicate) {
+    return {
+      isIgnorable: false,
+      *initialize(e) {
+        const minFetchDate = yield* e.getMinFreshDate();
+        const stats = yield* e.getCellStats();
+        return {
+          *isVisible(d) {
+            const [p] = d.coordinates;
+            const stat17 = yield* stats.getCell17Stat(p);
+            if (stat17 == null || stat17.lastFetchDate == null || stat17.lastFetchDate < minFetchDate) {
+              return true;
+            }
+            const stat14 = yield* stats.getCell14Stat(p);
+            if (stat14 == null) return true;
+            return predicate(stat14, stat17);
+          }
+        };
+      }
+    };
+  }
+  function hasPokestopOrGymInCell17() {
+    return builderOfCellPredicate((_stat14, stat17) => {
+      const count = (stat17.kindToCount.get("GYM") ?? 0) + (stat17.kindToCount.get("POKESTOP") ?? 0);
+      return 0 < count;
+    });
+  }
+  function getPokestopCountForNextGym(current) {
+    let next;
+    if (current < 2) {
+      next = 2;
+    } else if (current < 6) {
+      next = 6;
+    } else if (current < 20) {
+      next = 20;
+    } else {
+      return Infinity;
+    }
+    if (current < next) return Infinity;
+    return next - current;
+  }
+  function stopsForNextGym(expectedCount) {
+    return builderOfCellPredicate((stat14, _stat17) => {
+      const currentCount = (stat14.kindToPois.get("GYM")?.length ?? 0) + (stat14.kindToPois.get("POKESTOP")?.length ?? 0);
+      return getPokestopCountForNextGym(currentCount) === expectedCount;
+    });
+  }
+  function cell14Stops(expectedCount) {
+    return builderOfCellPredicate((stat14, _stat17) => {
+      return stat14.pois.size === expectedCount;
+    });
+  }
   function binaryBuilder(f) {
     return (x) => {
       return done((y) => {
@@ -37959,6 +38044,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return done(builderAsValue(b));
       });
     };
+  }
+  function binaryFunction(f) {
+    return (x) => done((y) => done(f(x, y)));
   }
   function createStandardQueries() {
     const all = any3();
@@ -37973,6 +38061,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     });
     const seq = binaryBuilder(and);
+    const duplicated = builderAsValue(hasPokestopOrGymInCell17());
     const dict = {
       fromVoid(_) {
         return done(all);
@@ -37990,7 +38079,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       },
       _seq_: seq,
       _and_: seq,
-      _or_: binaryBuilder(or)
+      _or_: binaryBuilder(or),
+      reachableWith: binaryFunction((center, distanceMeter) => {
+        return builderAsValue(
+          reachableWith(
+            center,
+            distanceMeter
+          )
+        );
+      }),
+      duplicated,
+      hasStopInCell17: duplicated,
+      stopsForNextGym(x) {
+        return done(builderAsValue(stopsForNextGym(x)));
+      },
+      cell14Stops(x) {
+        return done(builderAsValue(cell14Stops(x)));
+      }
     };
     return new Map(Object.entries(dict));
   }
@@ -38012,49 +38117,64 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.T__1 = 2;
     }
     static {
-      this.OR = 3;
+      this.T__2 = 3;
     }
     static {
-      this.AND = 4;
+      this.T__3 = 4;
     }
     static {
-      this.PAREN_BEGIN = 5;
+      this.T__4 = 5;
     }
     static {
-      this.PAREN_END = 6;
+      this.OR = 6;
     }
     static {
-      this.COLON = 7;
+      this.AND = 7;
     }
     static {
-      this.SLASH = 8;
+      this.WHERE = 8;
     }
     static {
-      this.AT = 9;
+      this.FUNCTION = 9;
     }
     static {
-      this.MINUS = 10;
+      this.PAREN_BEGIN = 10;
     }
     static {
-      this.EQUALS = 11;
+      this.PAREN_END = 11;
     }
     static {
-      this.NUMBER = 12;
+      this.COLON = 12;
     }
     static {
-      this.STRING = 13;
+      this.SLASH = 13;
     }
     static {
-      this.WORD = 14;
+      this.AT = 14;
     }
     static {
-      this.LINE_COMMENT = 15;
+      this.MINUS = 15;
     }
     static {
-      this.BLOCK_COMMENT = 16;
+      this.EQUALS = 16;
     }
     static {
-      this.WS = 17;
+      this.NUMBER = 17;
+    }
+    static {
+      this.STRING = 18;
+    }
+    static {
+      this.WORD = 19;
+    }
+    static {
+      this.LINE_COMMENT = 20;
+    }
+    static {
+      this.BLOCK_COMMENT = 21;
+    }
+    static {
+      this.WS = 22;
     }
     static {
       // tslint:disable:no-trailing-whitespace
@@ -38073,8 +38193,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.ruleNames = [
         "T__0",
         "T__1",
+        "T__2",
+        "T__3",
+        "T__4",
         "OR",
         "AND",
+        "WHERE",
+        "FUNCTION",
         "PAREN_BEGIN",
         "PAREN_END",
         "COLON",
@@ -38095,10 +38220,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     static {
       this._LITERAL_NAMES = [
         void 0,
-        "'where'",
-        "'lambda'",
+        "'['",
+        "','",
+        "']'",
+        "'{'",
+        "'}'",
         "'or'",
         "'and'",
+        "'where'",
+        void 0,
         "'('",
         "')'",
         "':'",
@@ -38113,8 +38243,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         void 0,
         void 0,
         void 0,
+        void 0,
+        void 0,
+        void 0,
         "OR",
         "AND",
+        "WHERE",
+        "FUNCTION",
         "PAREN_BEGIN",
         "PAREN_END",
         "COLON",
@@ -38164,7 +38299,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return _SalLexer.modeNames;
     }
     static {
-      this._serializedATN = '\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241\x9F\b					\x07	\x07\b	\b			\n	\n\v	\v\f	\f\r	\r							\x07\x07\b\b		\n\n\v\v\f\f\r\rM\n\r\r\rP\n\r\r\r\rQ\r\r\rV\n\r\r\r\rW\rZ\n\r\r\r\r^\n\r\r\ra\n\r\r\r\rb\re\n\r\x07k\n\fn\vv\n\x07z\n\f}\v\x07\x83\n\f\x86\v\x07\x8F\n\f\x92\v\x9A\n\r\x9B\x90\x07	\v\x07\r\b	\n\v\f\r\x1B!#%\'\b2;GGgg$$^^))/0\f\f\n""\xA2\xA2\u1682\u1682\u2002\u200C\u202A\u202B\u2031\u2031\u2061\u2061\u3002\u3002\u028B"$$)+.1<@BB}}\x7F\x7F\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\xAB\x07	\v\r\x1B!#%\')/\x076	9\v=\r?ACEGIL\x1Bfqu!w#~%\x89\'\x99)*\x07y*+\x07j+,\x07g,-\x07t-.\x07g./0\x07n01\x07c12\x07o23\x07d34\x07f45\x07c567\x07q78\x07t8\b9:\x07c:;\x07p;<\x07f<\n=>\x07*>\f?@\x07+@AB\x07<BCD\x071DEF\x07BFGH\x07/HIJ\x07?JKM\x07/LKLMMONP	ONPQQOQRRYSU\x070TV	UTVWWUWXXZYSYZZd[]	\\^\x07/]\\]^^`_a	`_abb`bcced[deefl\x07$gh\x07^hk\vik\njgjiknljlmmonlop\x07$pqr\n\brsvtv	usutv w{xzyxz}{y{||"}{~\x7F\x071\x7F\x80\x071\x80\x84\x81\x83\n\x82\x81\x83\x86\x84\x82\x84\x85\x85\x87\x86\x84\x87\x88\b\x88$\x89\x8A\x071\x8A\x8B\x07,\x8B\x90\x8C\x8F%\x8D\x8F\v\x8E\x8C\x8E\x8D\x8F\x92\x90\x91\x90\x8E\x91\x93\x92\x90\x93\x94\x07,\x94\x95\x071\x95\x96\x96\x97\b\x97&\x98\x9A	\x07\x99\x98\x9A\x9B\x9B\x99\x9B\x9C\x9C\x9D\x9D\x9E\b\x9E(LQWY]bdjlu{\x84\x8E\x90\x9B\b';
+      this._serializedATNSegments = 2;
+    }
+    static {
+      this._serializedATNSegment0 = '\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241\xB8\b					\x07	\x07\b	\b			\n	\n\v	\v\f	\f\r	\r												\x07\x07\x07\b\b\b\b						\n\n\n\n\n\n\n\n\n\n\nU\n\n\v\v\f\f\r\rf\ni\n\rjo\n\rps\nw\nz\n\r{~\n\x07\x84\n\f\x87\v\x8F\n\x07\x93\n\f\x96\v\x07\x9C\n\f\x9F\v\x07\xA8\n\f\xAB\v\xB3\n\r\xB4\xA9\x07	\v\x07\r\b	\n\v\f\r\x1B!#%\')+-/1\x072;GGgg$$^^))/0\f\f\u028D"$$)+.1<@BB]]__}}\x7F\x7F\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\u0284"\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353';
+    }
+    static {
+      this._serializedATNSegment1 = "\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\xC5\x07	\v\r\x1B!#%+-/135\x077	9\v;\r=@DTVXZ\x1B\\^`!b#e%\x7F'\x8A)\x8E+\x90-\x97/\xA21\xB234\x07]456\x07.678\x07_8\b9:\x07}:\n;<\x07\x7F<\f=>\x07q>?\x07t?@A\x07cAB\x07pBC\x07fCDE\x07yEF\x07jFG\x07gGH\x07tHI\x07gIJK\x07hKL\x07wLM\x07pMN\x07eNO\x07vOP\x07kPQ\x07qQU\x07pRS\x07hSU\x07pTJTRUVW\x07*WXY\x07+YZ[\x07<[\\]\x071]^_\x07B_`a\x07/a bc\x07?c\"df\x07/edeffhgi	hgijjhjkkrln\x070mo	nmoppnpqqsrlrss}tv	uw\x07/vuvwwyxz	yxz{{y{||~}t}~~$\x7F\x85\x07$\x80\x81\x07^\x81\x84\v\x82\x84\n\x83\x80\x83\x82\x84\x87\x85\x83\x85\x86\x86\x88\x87\x85\x88\x89\x07$\x89&\x8A\x8B\n\x07\x8B(\x8C\x8F'\x8D\x8F	\x8E\x8C\x8E\x8D\x8F*\x90\x94'\x91\x93)\x92\x91\x93\x96\x94\x92\x94\x95\x95,\x96\x94\x97\x98\x071\x98\x99\x071\x99\x9D\x9A\x9C\n\x9B\x9A\x9C\x9F\x9D\x9B\x9D\x9E\x9E\xA0\x9F\x9D\xA0\xA1\b\xA1.\xA2\xA3\x071\xA3\xA4\x07,\xA4\xA9\xA5\xA8/\xA6\xA8\v\xA7\xA5\xA7\xA6\xA8\xAB\xA9\xAA\xA9\xA7\xAA\xAC\xAB\xA9\xAC\xAD\x07,\xAD\xAE\x071\xAE\xAF\xAF\xB0\b\xB00\xB1\xB3	\b\xB2\xB1\xB3\xB4\xB4\xB2\xB4\xB5\xB5\xB6\xB6\xB7\b\xB72Tejprv{}\x83\x85\x8E\x94\x9D\xA7\xA9\xB4\b";
+    }
+    static {
+      this._serializedATN = Utils.join(
+        [
+          _SalLexer._serializedATNSegment0,
+          _SalLexer._serializedATNSegment1
+        ],
+        ""
+      );
     }
     static get _ATN() {
       if (!_SalLexer.__ATN) {
@@ -38194,78 +38344,106 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.T__1 = 2;
     }
     static {
-      this.OR = 3;
+      this.T__2 = 3;
     }
     static {
-      this.AND = 4;
+      this.T__3 = 4;
     }
     static {
-      this.PAREN_BEGIN = 5;
+      this.T__4 = 5;
     }
     static {
-      this.PAREN_END = 6;
+      this.OR = 6;
     }
     static {
-      this.COLON = 7;
+      this.AND = 7;
     }
     static {
-      this.SLASH = 8;
+      this.WHERE = 8;
     }
     static {
-      this.AT = 9;
+      this.FUNCTION = 9;
     }
     static {
-      this.MINUS = 10;
+      this.PAREN_BEGIN = 10;
     }
     static {
-      this.EQUALS = 11;
+      this.PAREN_END = 11;
     }
     static {
-      this.NUMBER = 12;
+      this.COLON = 12;
     }
     static {
-      this.STRING = 13;
+      this.SLASH = 13;
     }
     static {
-      this.WORD = 14;
+      this.AT = 14;
     }
     static {
-      this.LINE_COMMENT = 15;
+      this.MINUS = 15;
     }
     static {
-      this.BLOCK_COMMENT = 16;
+      this.EQUALS = 16;
     }
     static {
-      this.WS = 17;
+      this.NUMBER = 17;
+    }
+    static {
+      this.STRING = 18;
+    }
+    static {
+      this.WORD = 19;
+    }
+    static {
+      this.LINE_COMMENT = 20;
+    }
+    static {
+      this.BLOCK_COMMENT = 21;
+    }
+    static {
+      this.WS = 22;
     }
     static {
       this.RULE_sourceFile = 0;
     }
     static {
-      this.RULE_identifier = 1;
+      this.RULE_word = 1;
     }
     static {
-      this.RULE_parameter = 2;
+      this.RULE_identifier = 2;
     }
     static {
-      this.RULE_expression = 3;
+      this.RULE_parameter = 3;
+    }
+    static {
+      this.RULE_entry = 4;
+    }
+    static {
+      this.RULE_expression = 5;
     }
     static {
       // tslint:disable:no-trailing-whitespace
       this.ruleNames = [
         "sourceFile",
+        "word",
         "identifier",
         "parameter",
+        "entry",
         "expression"
       ];
     }
     static {
       this._LITERAL_NAMES = [
         void 0,
-        "'where'",
-        "'lambda'",
+        "'['",
+        "','",
+        "']'",
+        "'{'",
+        "'}'",
         "'or'",
         "'and'",
+        "'where'",
+        void 0,
         "'('",
         "')'",
         "':'",
@@ -38280,8 +38458,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         void 0,
         void 0,
         void 0,
+        void 0,
+        void 0,
+        void 0,
         "OR",
         "AND",
+        "WHERE",
+        "FUNCTION",
         "PAREN_BEGIN",
         "PAREN_END",
         "COLON",
@@ -38333,16 +38516,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       try {
         this.enterOuterAlt(_localctx, 1);
         {
-          this.state = 9;
+          this.state = 13;
           this._errHandler.sync(this);
           _la = this._input.LA(1);
-          if ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.PAREN_BEGIN | 1 << _SalParser.AT | 1 << _SalParser.MINUS | 1 << _SalParser.NUMBER | 1 << _SalParser.STRING | 1 << _SalParser.WORD)) !== 0) {
+          if ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.T__0 | 1 << _SalParser.T__3 | 1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.PAREN_BEGIN | 1 << _SalParser.AT | 1 << _SalParser.MINUS | 1 << _SalParser.NUMBER | 1 << _SalParser.STRING | 1 << _SalParser.WORD)) !== 0) {
             {
-              this.state = 8;
+              this.state = 12;
               this.expression(0);
             }
           }
-          this.state = 11;
+          this.state = 15;
           this.match(_SalParser.EOF);
         }
       } catch (re) {
@@ -38359,18 +38542,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return _localctx;
     }
     // @RuleVersion(0)
-    identifier() {
-      let _localctx = new IdentifierContext(this._ctx, this.state);
-      this.enterRule(_localctx, 2, _SalParser.RULE_identifier);
+    word() {
+      let _localctx = new WordContext(this._ctx, this.state);
+      this.enterRule(_localctx, 2, _SalParser.RULE_word);
       let _la;
       try {
         this.enterOuterAlt(_localctx, 1);
         {
-          this.state = 13;
-          this.match(_SalParser.AT);
-          this.state = 14;
+          this.state = 17;
           _la = this._input.LA(1);
-          if (!(_la === _SalParser.STRING || _la === _SalParser.WORD)) {
+          if (!((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.WORD)) !== 0)) {
             this._errHandler.recoverInline(this);
           } else {
             if (this._input.LA(1) === import_Token.Token.EOF) {
@@ -38394,29 +38575,119 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return _localctx;
     }
     // @RuleVersion(0)
+    identifier() {
+      let _localctx = new IdentifierContext(this._ctx, this.state);
+      this.enterRule(_localctx, 4, _SalParser.RULE_identifier);
+      try {
+        this.enterOuterAlt(_localctx, 1);
+        {
+          this.state = 19;
+          this.match(_SalParser.AT);
+          this.state = 22;
+          this._errHandler.sync(this);
+          switch (this._input.LA(1)) {
+            case _SalParser.WHERE:
+            case _SalParser.FUNCTION:
+            case _SalParser.WORD:
+              {
+                this.state = 20;
+                this.word();
+              }
+              break;
+            case _SalParser.STRING:
+              {
+                this.state = 21;
+                this.match(_SalParser.STRING);
+              }
+              break;
+            default:
+              throw new import_NoViableAltException.NoViableAltException(this);
+          }
+        }
+      } catch (re) {
+        if (re instanceof import_RecognitionException.RecognitionException) {
+          _localctx.exception = re;
+          this._errHandler.reportError(this, re);
+          this._errHandler.recover(this, re);
+        } else {
+          throw re;
+        }
+      } finally {
+        this.exitRule();
+      }
+      return _localctx;
+    }
+    // @RuleVersion(0)
     parameter() {
       let _localctx = new ParameterContext(this._ctx, this.state);
-      this.enterRule(_localctx, 4, _SalParser.RULE_parameter);
+      this.enterRule(_localctx, 6, _SalParser.RULE_parameter);
       try {
-        this.state = 18;
+        this.state = 26;
         this._errHandler.sync(this);
         switch (this._input.LA(1)) {
           case _SalParser.AT:
             this.enterOuterAlt(_localctx, 1);
             {
-              this.state = 16;
+              this.state = 24;
               this.identifier();
             }
             break;
+          case _SalParser.WHERE:
+          case _SalParser.FUNCTION:
           case _SalParser.WORD:
             this.enterOuterAlt(_localctx, 2);
             {
-              this.state = 17;
-              this.match(_SalParser.WORD);
+              this.state = 25;
+              this.word();
             }
             break;
           default:
             throw new import_NoViableAltException.NoViableAltException(this);
+        }
+      } catch (re) {
+        if (re instanceof import_RecognitionException.RecognitionException) {
+          _localctx.exception = re;
+          this._errHandler.reportError(this, re);
+          this._errHandler.recover(this, re);
+        } else {
+          throw re;
+        }
+      } finally {
+        this.exitRule();
+      }
+      return _localctx;
+    }
+    // @RuleVersion(0)
+    entry() {
+      let _localctx = new EntryContext(this._ctx, this.state);
+      this.enterRule(_localctx, 8, _SalParser.RULE_entry);
+      try {
+        this.enterOuterAlt(_localctx, 1);
+        {
+          this.state = 30;
+          this._errHandler.sync(this);
+          switch (this._input.LA(1)) {
+            case _SalParser.WHERE:
+            case _SalParser.FUNCTION:
+            case _SalParser.WORD:
+              {
+                this.state = 28;
+                this.word();
+              }
+              break;
+            case _SalParser.STRING:
+              {
+                this.state = 29;
+                this.match(_SalParser.STRING);
+              }
+              break;
+            default:
+              throw new import_NoViableAltException.NoViableAltException(this);
+          }
+          this.state = 32;
+          this.match(_SalParser.COLON);
+          this.state = 33;
+          this.expression(0);
         }
       } catch (re) {
         if (re instanceof import_RecognitionException.RecognitionException) {
@@ -38440,24 +38711,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       let _parentState = this.state;
       let _localctx = new ExpressionContext(this._ctx, _parentState);
       let _prevctx = _localctx;
-      let _startState = 6;
-      this.enterRecursionRule(_localctx, 6, _SalParser.RULE_expression, _p);
+      let _startState = 10;
+      this.enterRecursionRule(_localctx, 10, _SalParser.RULE_expression, _p);
+      let _la;
       try {
         let _alt;
         this.enterOuterAlt(_localctx, 1);
         {
-          this.state = 37;
+          this.state = 86;
           this._errHandler.sync(this);
-          switch (this.interpreter.adaptivePredict(this._input, 2, this._ctx)) {
+          switch (this.interpreter.adaptivePredict(this._input, 11, this._ctx)) {
             case 1:
               {
                 _localctx = new NotExpressionContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 21;
+                this.state = 36;
                 this.match(_SalParser.MINUS);
-                this.state = 22;
-                this.expression(13);
+                this.state = 37;
+                this.expression(14);
               }
               break;
             case 2:
@@ -38465,16 +38737,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 _localctx = new LambdaExpressionContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 23;
+                this.state = 38;
                 this.match(_SalParser.AT);
-                this.state = 24;
-                this.match(_SalParser.T__1);
-                this.state = 25;
-                this.parameter();
-                this.state = 26;
+                this.state = 39;
+                this.match(_SalParser.FUNCTION);
+                this.state = 41;
+                this._errHandler.sync(this);
+                _la = this._input.LA(1);
+                do {
+                  {
+                    {
+                      this.state = 40;
+                      this.parameter();
+                    }
+                  }
+                  this.state = 43;
+                  this._errHandler.sync(this);
+                  _la = this._input.LA(1);
+                } while ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.AT | 1 << _SalParser.WORD)) !== 0);
+                this.state = 45;
                 this.match(_SalParser.COLON);
-                this.state = 27;
-                this.expression(6);
+                this.state = 46;
+                this.expression(8);
               }
               break;
             case 3:
@@ -38482,7 +38766,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 _localctx = new NumberContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 29;
+                this.state = 48;
                 this.match(_SalParser.NUMBER);
               }
               break;
@@ -38491,7 +38775,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 _localctx = new StringContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 30;
+                this.state = 49;
                 this.match(_SalParser.STRING);
               }
               break;
@@ -38500,37 +38784,131 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 _localctx = new VariableContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 31;
+                this.state = 50;
                 this.identifier();
               }
               break;
             case 6:
               {
-                _localctx = new WordContext(_localctx);
+                _localctx = new WordExpressionContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 32;
-                this.match(_SalParser.WORD);
+                this.state = 51;
+                this.word();
               }
               break;
             case 7:
               {
+                _localctx = new ListLiteralExpressionContext(_localctx);
+                this._ctx = _localctx;
+                _prevctx = _localctx;
+                this.state = 52;
+                this.match(_SalParser.T__0);
+                this.state = 61;
+                this._errHandler.sync(this);
+                _la = this._input.LA(1);
+                if ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.T__0 | 1 << _SalParser.T__3 | 1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.PAREN_BEGIN | 1 << _SalParser.AT | 1 << _SalParser.MINUS | 1 << _SalParser.NUMBER | 1 << _SalParser.STRING | 1 << _SalParser.WORD)) !== 0) {
+                  {
+                    this.state = 53;
+                    this.expression(0);
+                    this.state = 58;
+                    this._errHandler.sync(this);
+                    _alt = this.interpreter.adaptivePredict(this._input, 5, this._ctx);
+                    while (_alt !== 2 && _alt !== import_ATN.ATN.INVALID_ALT_NUMBER) {
+                      if (_alt === 1) {
+                        {
+                          {
+                            this.state = 54;
+                            this.match(_SalParser.T__1);
+                            this.state = 55;
+                            this.expression(0);
+                          }
+                        }
+                      }
+                      this.state = 60;
+                      this._errHandler.sync(this);
+                      _alt = this.interpreter.adaptivePredict(this._input, 5, this._ctx);
+                    }
+                  }
+                }
+                this.state = 64;
+                this._errHandler.sync(this);
+                _la = this._input.LA(1);
+                if (_la === _SalParser.T__1) {
+                  {
+                    this.state = 63;
+                    this.match(_SalParser.T__1);
+                  }
+                }
+                this.state = 66;
+                this.match(_SalParser.T__2);
+              }
+              break;
+            case 8:
+              {
+                _localctx = new RecordLiteralExpressionContext(_localctx);
+                this._ctx = _localctx;
+                _prevctx = _localctx;
+                this.state = 67;
+                this.match(_SalParser.T__3);
+                this.state = 76;
+                this._errHandler.sync(this);
+                _la = this._input.LA(1);
+                if ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.STRING | 1 << _SalParser.WORD)) !== 0) {
+                  {
+                    this.state = 68;
+                    this.entry();
+                    this.state = 73;
+                    this._errHandler.sync(this);
+                    _alt = this.interpreter.adaptivePredict(this._input, 8, this._ctx);
+                    while (_alt !== 2 && _alt !== import_ATN.ATN.INVALID_ALT_NUMBER) {
+                      if (_alt === 1) {
+                        {
+                          {
+                            this.state = 69;
+                            this.match(_SalParser.T__1);
+                            this.state = 70;
+                            this.entry();
+                          }
+                        }
+                      }
+                      this.state = 75;
+                      this._errHandler.sync(this);
+                      _alt = this.interpreter.adaptivePredict(this._input, 8, this._ctx);
+                    }
+                  }
+                }
+                this.state = 79;
+                this._errHandler.sync(this);
+                _la = this._input.LA(1);
+                if (_la === _SalParser.T__1) {
+                  {
+                    this.state = 78;
+                    this.match(_SalParser.T__1);
+                  }
+                }
+                this.state = 81;
+                this.match(_SalParser.T__4);
+              }
+              break;
+            case 9:
+              {
                 _localctx = new ParenthesizedExpressionContext(_localctx);
                 this._ctx = _localctx;
                 _prevctx = _localctx;
-                this.state = 33;
+                this.state = 82;
                 this.match(_SalParser.PAREN_BEGIN);
-                this.state = 34;
+                this.state = 83;
                 this.expression(0);
-                this.state = 35;
+                this.state = 84;
                 this.match(_SalParser.PAREN_END);
               }
               break;
           }
           this._ctx._stop = this._input.tryLT(-1);
-          this.state = 63;
+          this.state = 117;
           this._errHandler.sync(this);
-          _alt = this.interpreter.adaptivePredict(this._input, 4, this._ctx);
+          _alt = this.interpreter.adaptivePredict(this._input, 14, this._ctx);
           while (_alt !== 2 && _alt !== import_ATN.ATN.INVALID_ALT_NUMBER) {
             if (_alt === 1) {
               if (this._parseListeners != null) {
@@ -38538,22 +38916,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               }
               _prevctx = _localctx;
               {
-                this.state = 61;
+                this.state = 115;
                 this._errHandler.sync(this);
-                switch (this.interpreter.adaptivePredict(this._input, 3, this._ctx)) {
+                switch (this.interpreter.adaptivePredict(this._input, 13, this._ctx)) {
                   case 1:
                     {
                       _localctx = new ApplyExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._left = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 39;
-                      if (!this.precpred(this._ctx, 12)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 12)");
+                      this.state = 88;
+                      if (!this.precpred(this._ctx, 15)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 15)");
                       }
-                      this.state = 40;
+                      this.state = 89;
                       this.match(_SalParser.COLON);
-                      this.state = 41;
-                      _localctx._right = this.expression(13);
+                      this.state = 90;
+                      _localctx._right = this.expression(16);
                     }
                     break;
                   case 2:
@@ -38561,12 +38939,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                       _localctx = new SequenceExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._left = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 42;
-                      if (!this.precpred(this._ctx, 11)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 11)");
+                      this.state = 91;
+                      if (!this.precpred(this._ctx, 13)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 13)");
                       }
-                      this.state = 43;
-                      _localctx._right = this.expression(12);
+                      this.state = 92;
+                      _localctx._right = this.expression(14);
                     }
                     break;
                   case 3:
@@ -38574,14 +38952,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                       _localctx = new OrExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._left = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 44;
-                      if (!this.precpred(this._ctx, 10)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 10)");
+                      this.state = 93;
+                      if (!this.precpred(this._ctx, 12)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 12)");
                       }
-                      this.state = 45;
+                      this.state = 94;
                       this.match(_SalParser.OR);
-                      this.state = 46;
-                      _localctx._right = this.expression(11);
+                      this.state = 95;
+                      _localctx._right = this.expression(13);
                     }
                     break;
                   case 4:
@@ -38589,14 +38967,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                       _localctx = new AndExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._left = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 47;
-                      if (!this.precpred(this._ctx, 9)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 9)");
+                      this.state = 96;
+                      if (!this.precpred(this._ctx, 11)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 11)");
                       }
-                      this.state = 48;
+                      this.state = 97;
                       this.match(_SalParser.AND);
-                      this.state = 49;
-                      _localctx._right = this.expression(10);
+                      this.state = 98;
+                      _localctx._right = this.expression(12);
                     }
                     break;
                   case 5:
@@ -38604,16 +38982,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                       _localctx = new BinaryExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._left = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 50;
-                      if (!this.precpred(this._ctx, 8)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 8)");
+                      this.state = 99;
+                      if (!this.precpred(this._ctx, 10)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 10)");
                       }
-                      this.state = 51;
+                      this.state = 100;
                       this.match(_SalParser.SLASH);
-                      this.state = 52;
-                      this.match(_SalParser.WORD);
-                      this.state = 53;
-                      _localctx._right = this.expression(9);
+                      this.state = 101;
+                      this.word();
+                      this.state = 102;
+                      _localctx._right = this.expression(11);
                     }
                     break;
                   case 6:
@@ -38621,28 +38999,40 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                       _localctx = new WhereExpressionContext(new ExpressionContext(_parentctx, _parentState));
                       _localctx._scope = _prevctx;
                       this.pushNewRecursionContext(_localctx, _startState, _SalParser.RULE_expression);
-                      this.state = 54;
-                      if (!this.precpred(this._ctx, 7)) {
-                        throw this.createFailedPredicateException("this.precpred(this._ctx, 7)");
+                      this.state = 104;
+                      if (!this.precpred(this._ctx, 9)) {
+                        throw this.createFailedPredicateException("this.precpred(this._ctx, 9)");
                       }
-                      this.state = 55;
+                      this.state = 105;
                       this.match(_SalParser.AT);
-                      this.state = 56;
-                      this.match(_SalParser.T__0);
-                      this.state = 57;
-                      this.parameter();
-                      this.state = 58;
+                      this.state = 106;
+                      this.match(_SalParser.WHERE);
+                      this.state = 108;
+                      this._errHandler.sync(this);
+                      _la = this._input.LA(1);
+                      do {
+                        {
+                          {
+                            this.state = 107;
+                            this.parameter();
+                          }
+                        }
+                        this.state = 110;
+                        this._errHandler.sync(this);
+                        _la = this._input.LA(1);
+                      } while ((_la & ~31) === 0 && (1 << _la & (1 << _SalParser.WHERE | 1 << _SalParser.FUNCTION | 1 << _SalParser.AT | 1 << _SalParser.WORD)) !== 0);
+                      this.state = 112;
                       this.match(_SalParser.EQUALS);
-                      this.state = 59;
-                      _localctx._value = this.expression(8);
+                      this.state = 113;
+                      _localctx._value = this.expression(10);
                     }
                     break;
                 }
               }
             }
-            this.state = 65;
+            this.state = 119;
             this._errHandler.sync(this);
-            _alt = this.interpreter.adaptivePredict(this._input, 4, this._ctx);
+            _alt = this.interpreter.adaptivePredict(this._input, 14, this._ctx);
           }
         }
       } catch (re) {
@@ -38660,7 +39050,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     sempred(_localctx, ruleIndex, predIndex) {
       switch (ruleIndex) {
-        case 3:
+        case 5:
           return this.expression_sempred(_localctx, predIndex);
       }
       return true;
@@ -38668,31 +39058,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     expression_sempred(_localctx, predIndex) {
       switch (predIndex) {
         case 0:
-          return this.precpred(this._ctx, 12);
+          return this.precpred(this._ctx, 15);
         case 1:
-          return this.precpred(this._ctx, 11);
+          return this.precpred(this._ctx, 13);
         case 2:
-          return this.precpred(this._ctx, 10);
+          return this.precpred(this._ctx, 12);
         case 3:
-          return this.precpred(this._ctx, 9);
+          return this.precpred(this._ctx, 11);
         case 4:
-          return this.precpred(this._ctx, 8);
+          return this.precpred(this._ctx, 10);
         case 5:
-          return this.precpred(this._ctx, 7);
+          return this.precpred(this._ctx, 9);
       }
       return true;
     }
     static {
-      this._serializedATN = `\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241E				\f
-
-(
-\x07@
-\fC\v\b\bN\v\b'
-\f\b\v
-\v\f\f\r\r\x07\x07\v	\x07\x07\b\x07\f(\b\x07\v\x1B\x07\x1B\x07	\b\b((\x07 (\x07!("(\x07#$\x07\x07$%\b%&\x07\b&('''' '!'"'#(A)*\f*+\x07	+@\b,-\f\r-@\b./\f\f/0\x070@\b\r12\f\v23\x073@\b\f45\f
-56\x07
-67\x077@\b\v89\f	9:\x07\v:;\x07;<<=\x07\r=>\b
->@?)?,?.?1?4?8@CA?ABB	CA\x07\v'?A`;
+      this._serializedATN = "\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241{					\x07	\x07\n\n\n!\n\x07\x07\x07\x07\x07\x07\x07,\n\x07\r\x07\x07-\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07;\n\x07\f\x07\x07>\v\x07\x07@\n\x07\x07\x07C\n\x07\x07\x07\x07\x07\x07\x07\x07J\n\x07\f\x07\x07M\v\x07\x07O\n\x07\x07\x07R\n\x07\x07\x07\x07\x07\x07\x07Y\n\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07\x07o\n\x07\r\x07\x07p\x07\x07\x07\x07\x07v\n\x07\f\x07\x07y\v\x07\x07\f\b\b\n\f\n\v\x8E\b\n \fX\f\x07\x07	\x07\x07\x07\x1B\x1B	!!\x07  !\"\"#\x07#$\f\x07$\v%&\b\x07&'\x07'Y\f\x07()\x07)+\x07\v*,\b+*,--+-..//0\x0701\f\x07\n1Y2Y\x073Y\x074Y5Y6?\x077<\f\x0789\x079;\f\x07:8;><:<==@><?7?@@BAC\x07BABCCDDY\x07EN\x07FK\nGH\x07HJ\nIGJMKIKLLOMKNFNOOQPR\x07QPQRRSSY\x07\x07TU\x07\fUV\f\x07VW\x07\rWYX%X(X2X3X4X5X6XEXTYwZ[\f[\\\x07\\v\f\x07]^\f^v\f\x07_`\f`a\x07\bav\f\x07bc\f\rcd\x07	dv\f\x07ef\f\ffg\x07ghhi\f\x07\rivjk\f\vkl\x07ln\x07\nmo\bnmoppnpqqrrs\x07st\f\x07\ftvuZu]u_ubueujvywuwxx\ryw -<?BKNQXpuw";
     }
     static get _ATN() {
       if (!_SalParser.__ATN) {
@@ -38736,12 +39117,50 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }
   };
+  var WordContext = class extends import_ParserRuleContext.ParserRuleContext {
+    WHERE() {
+      return this.tryGetToken(SalParser.WHERE, 0);
+    }
+    FUNCTION() {
+      return this.tryGetToken(SalParser.FUNCTION, 0);
+    }
+    WORD() {
+      return this.tryGetToken(SalParser.WORD, 0);
+    }
+    constructor(parent, invokingState) {
+      super(parent, invokingState);
+    }
+    // @Override
+    get ruleIndex() {
+      return SalParser.RULE_word;
+    }
+    // @Override
+    enterRule(listener) {
+      if (listener.enterWord) {
+        listener.enterWord(this);
+      }
+    }
+    // @Override
+    exitRule(listener) {
+      if (listener.exitWord) {
+        listener.exitWord(this);
+      }
+    }
+    // @Override
+    accept(visitor) {
+      if (visitor.visitWord) {
+        return visitor.visitWord(this);
+      } else {
+        return visitor.visitChildren(this);
+      }
+    }
+  };
   var IdentifierContext = class extends import_ParserRuleContext.ParserRuleContext {
     AT() {
       return this.getToken(SalParser.AT, 0);
     }
-    WORD() {
-      return this.tryGetToken(SalParser.WORD, 0);
+    word() {
+      return this.tryGetRuleContext(0, WordContext);
     }
     STRING() {
       return this.tryGetToken(SalParser.STRING, 0);
@@ -38778,8 +39197,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     identifier() {
       return this.tryGetRuleContext(0, IdentifierContext);
     }
-    WORD() {
-      return this.tryGetToken(SalParser.WORD, 0);
+    word() {
+      return this.tryGetRuleContext(0, WordContext);
     }
     constructor(parent, invokingState) {
       super(parent, invokingState);
@@ -38809,6 +39228,47 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }
   };
+  var EntryContext = class extends import_ParserRuleContext.ParserRuleContext {
+    COLON() {
+      return this.getToken(SalParser.COLON, 0);
+    }
+    expression() {
+      return this.getRuleContext(0, ExpressionContext);
+    }
+    word() {
+      return this.tryGetRuleContext(0, WordContext);
+    }
+    STRING() {
+      return this.tryGetToken(SalParser.STRING, 0);
+    }
+    constructor(parent, invokingState) {
+      super(parent, invokingState);
+    }
+    // @Override
+    get ruleIndex() {
+      return SalParser.RULE_entry;
+    }
+    // @Override
+    enterRule(listener) {
+      if (listener.enterEntry) {
+        listener.enterEntry(this);
+      }
+    }
+    // @Override
+    exitRule(listener) {
+      if (listener.exitEntry) {
+        listener.exitEntry(this);
+      }
+    }
+    // @Override
+    accept(visitor) {
+      if (visitor.visitEntry) {
+        return visitor.visitEntry(this);
+      } else {
+        return visitor.visitChildren(this);
+      }
+    }
+  };
   var ExpressionContext = class extends import_ParserRuleContext.ParserRuleContext {
     constructor(parent, invokingState) {
       super(parent, invokingState);
@@ -38819,38 +39279,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     copyFrom(ctx) {
       super.copyFrom(ctx);
-    }
-  };
-  var NotExpressionContext = class extends ExpressionContext {
-    MINUS() {
-      return this.getToken(SalParser.MINUS, 0);
-    }
-    expression() {
-      return this.getRuleContext(0, ExpressionContext);
-    }
-    constructor(ctx) {
-      super(ctx.parent, ctx.invokingState);
-      this.copyFrom(ctx);
-    }
-    // @Override
-    enterRule(listener) {
-      if (listener.enterNotExpression) {
-        listener.enterNotExpression(this);
-      }
-    }
-    // @Override
-    exitRule(listener) {
-      if (listener.exitNotExpression) {
-        listener.exitNotExpression(this);
-      }
-    }
-    // @Override
-    accept(visitor) {
-      if (visitor.visitNotExpression) {
-        return visitor.visitNotExpression(this);
-      } else {
-        return visitor.visitChildren(this);
-      }
     }
   };
   var ApplyExpressionContext = class extends ExpressionContext {
@@ -38884,6 +39312,38 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     accept(visitor) {
       if (visitor.visitApplyExpression) {
         return visitor.visitApplyExpression(this);
+      } else {
+        return visitor.visitChildren(this);
+      }
+    }
+  };
+  var NotExpressionContext = class extends ExpressionContext {
+    MINUS() {
+      return this.getToken(SalParser.MINUS, 0);
+    }
+    expression() {
+      return this.getRuleContext(0, ExpressionContext);
+    }
+    constructor(ctx) {
+      super(ctx.parent, ctx.invokingState);
+      this.copyFrom(ctx);
+    }
+    // @Override
+    enterRule(listener) {
+      if (listener.enterNotExpression) {
+        listener.enterNotExpression(this);
+      }
+    }
+    // @Override
+    exitRule(listener) {
+      if (listener.exitNotExpression) {
+        listener.exitNotExpression(this);
+      }
+    }
+    // @Override
+    accept(visitor) {
+      if (visitor.visitNotExpression) {
+        return visitor.visitNotExpression(this);
       } else {
         return visitor.visitChildren(this);
       }
@@ -38998,8 +39458,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     SLASH() {
       return this.getToken(SalParser.SLASH, 0);
     }
-    WORD() {
-      return this.getToken(SalParser.WORD, 0);
+    word() {
+      return this.getRuleContext(0, WordContext);
     }
     expression(i) {
       if (i === void 0) {
@@ -39037,8 +39497,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     AT() {
       return this.getToken(SalParser.AT, 0);
     }
-    parameter() {
-      return this.getRuleContext(0, ParameterContext);
+    WHERE() {
+      return this.getToken(SalParser.WHERE, 0);
     }
     EQUALS() {
       return this.getToken(SalParser.EQUALS, 0);
@@ -39048,6 +39508,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return this.getRuleContexts(ExpressionContext);
       } else {
         return this.getRuleContext(i, ExpressionContext);
+      }
+    }
+    parameter(i) {
+      if (i === void 0) {
+        return this.getRuleContexts(ParameterContext);
+      } else {
+        return this.getRuleContext(i, ParameterContext);
       }
     }
     constructor(ctx) {
@@ -39079,14 +39546,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     AT() {
       return this.getToken(SalParser.AT, 0);
     }
-    parameter() {
-      return this.getRuleContext(0, ParameterContext);
+    FUNCTION() {
+      return this.getToken(SalParser.FUNCTION, 0);
     }
     COLON() {
       return this.getToken(SalParser.COLON, 0);
     }
     expression() {
       return this.getRuleContext(0, ExpressionContext);
+    }
+    parameter(i) {
+      if (i === void 0) {
+        return this.getRuleContexts(ParameterContext);
+      } else {
+        return this.getRuleContext(i, ParameterContext);
+      }
     }
     constructor(ctx) {
       super(ctx.parent, ctx.invokingState);
@@ -39200,9 +39674,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }
   };
-  var WordContext = class extends ExpressionContext {
-    WORD() {
-      return this.getToken(SalParser.WORD, 0);
+  var WordExpressionContext = class extends ExpressionContext {
+    word() {
+      return this.getRuleContext(0, WordContext);
     }
     constructor(ctx) {
       super(ctx.parent, ctx.invokingState);
@@ -39210,20 +39684,86 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     // @Override
     enterRule(listener) {
-      if (listener.enterWord) {
-        listener.enterWord(this);
+      if (listener.enterWordExpression) {
+        listener.enterWordExpression(this);
       }
     }
     // @Override
     exitRule(listener) {
-      if (listener.exitWord) {
-        listener.exitWord(this);
+      if (listener.exitWordExpression) {
+        listener.exitWordExpression(this);
       }
     }
     // @Override
     accept(visitor) {
-      if (visitor.visitWord) {
-        return visitor.visitWord(this);
+      if (visitor.visitWordExpression) {
+        return visitor.visitWordExpression(this);
+      } else {
+        return visitor.visitChildren(this);
+      }
+    }
+  };
+  var ListLiteralExpressionContext = class extends ExpressionContext {
+    expression(i) {
+      if (i === void 0) {
+        return this.getRuleContexts(ExpressionContext);
+      } else {
+        return this.getRuleContext(i, ExpressionContext);
+      }
+    }
+    constructor(ctx) {
+      super(ctx.parent, ctx.invokingState);
+      this.copyFrom(ctx);
+    }
+    // @Override
+    enterRule(listener) {
+      if (listener.enterListLiteralExpression) {
+        listener.enterListLiteralExpression(this);
+      }
+    }
+    // @Override
+    exitRule(listener) {
+      if (listener.exitListLiteralExpression) {
+        listener.exitListLiteralExpression(this);
+      }
+    }
+    // @Override
+    accept(visitor) {
+      if (visitor.visitListLiteralExpression) {
+        return visitor.visitListLiteralExpression(this);
+      } else {
+        return visitor.visitChildren(this);
+      }
+    }
+  };
+  var RecordLiteralExpressionContext = class extends ExpressionContext {
+    entry(i) {
+      if (i === void 0) {
+        return this.getRuleContexts(EntryContext);
+      } else {
+        return this.getRuleContext(i, EntryContext);
+      }
+    }
+    constructor(ctx) {
+      super(ctx.parent, ctx.invokingState);
+      this.copyFrom(ctx);
+    }
+    // @Override
+    enterRule(listener) {
+      if (listener.enterRecordLiteralExpression) {
+        listener.enterRecordLiteralExpression(this);
+      }
+    }
+    // @Override
+    exitRule(listener) {
+      if (listener.exitRecordLiteralExpression) {
+        listener.exitRecordLiteralExpression(this);
+      }
+    }
+    // @Override
+    accept(visitor) {
+      if (visitor.visitRecordLiteralExpression) {
+        return visitor.visitRecordLiteralExpression(this);
       } else {
         return visitor.visitChildren(this);
       }
@@ -39290,19 +39830,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function getWordValue(v) {
     return v.text;
   }
-  function getIdentifierName(e) {
+  function getNameOfWordOrString(e) {
     const v = e.STRING();
     if (v != null) return getStringValue(v);
-    const w = e.WORD();
+    const w = e.word();
     if (w != null) return getWordValue(w);
     return unreachable(e);
   }
   function getParameterName(e) {
-    const w = e.WORD();
+    const w = e.word();
     if (w != null) return getWordValue(w);
     const id2 = e.identifier();
-    if (id2 != null) return getIdentifierName(id2);
+    if (id2 != null) return getNameOfWordOrString(id2);
     return unreachable(e);
+  }
+  function createNestedFunctionOrValue(scope, parameterNames, body) {
+    const [p, ...ps] = parameterNames;
+    if (p == void 0) return scope.visitExpression(body);
+    return done((v) => {
+      scope.environment.set(p, v);
+      return createNestedFunctionOrValue(scope, ps, body);
+    });
   }
   var SalEvaluationVisitor = class _SalEvaluationVisitor {
     constructor(tryResolveParentVariable) {
@@ -39344,13 +39892,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return this.visitExpression(body);
     }
     visitLambdaExpression(e) {
-      const parameterName = getParameterName(e.parameter());
-      const body = e.expression();
       const newScope = new _SalEvaluationVisitor(this.tryResolveVariable);
-      return done((x) => {
-        this.environment.set(parameterName, x);
-        return newScope.visitExpression(body);
-      });
+      const ps = e.parameter().map(getParameterName);
+      const body = e.expression();
+      return createNestedFunctionOrValue(newScope, ps, body);
     }
     *visitNotExpression(e) {
       const not2 = this.resolveVariable("not_");
@@ -39374,15 +39919,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     *visitBinaryExpression(e) {
       const l = yield* this.visitExpression(e._left);
       const op = this.resolveVariable(
-        getWordValue(e.WORD())
+        getWordValue(e.word())
       );
       const r = yield* this.visitExpression(e._right);
       return yield* (yield* op(l))(r);
     }
     *visitWhereExpression(e) {
       const newScope = new _SalEvaluationVisitor(this.tryResolveVariable);
-      const id2 = getParameterName(e.parameter());
-      const value = yield* newScope.visitExpression(e._value);
+      const [param0, ...params] = e.parameter();
+      const id2 = getParameterName(param0);
+      const ps = params.map(getParameterName);
+      const value = yield* createNestedFunctionOrValue(
+        newScope,
+        ps,
+        e._value
+      );
       newScope.environment.set(id2, value);
       return yield* newScope.visitExpression(e._scope);
     }
@@ -39397,11 +39948,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return fromString2(value);
     }
     visitVariable(e) {
-      const name = getIdentifierName(e.identifier());
+      const name = getNameOfWordOrString(e.identifier());
       return done(this.resolveVariable(name));
     }
+    visitWordExpression(e) {
+      return e.word().accept(this);
+    }
     visitWord(e) {
-      const name = getWordValue(e.WORD());
+      const name = getWordValue(e);
       const value = this.tryResolveVariable(name);
       if (value !== void 0) return done(value);
       const fromWord = this.resolveVariable("fromWord");
@@ -39409,6 +39963,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     visitParenthesizedExpression(e) {
       return this.visitExpression(e.expression());
+    }
+    *visitListLiteralExpression(e) {
+      const getEmptyList = this.resolveVariable(
+        "getEmptyList"
+      );
+      let list = yield* getEmptyList(null);
+      let consList;
+      for (const item of e.expression()) {
+        const x = yield* item.accept(this);
+        consList ??= this.resolveVariable("consList");
+        list = yield* (yield* consList(list))(x);
+      }
+      return list;
+    }
+    *visitRecordLiteralExpression(e) {
+      const getEmptyRecord = this.resolveVariable(
+        "getEmptyRecord"
+      );
+      let record3 = yield* getEmptyRecord(null);
+      let consRecord;
+      for (const entry of e.entry()) {
+        const key = getNameOfWordOrString(entry);
+        const value = yield* this.visitExpression(entry.expression());
+        consRecord ??= this.resolveVariable(
+          "consRecord"
+        );
+        record3 = yield* (yield* (yield* consRecord(record3))(key))(value);
+      }
+      return record3;
     }
   };
   function createStandardGlobals() {
@@ -39427,6 +40010,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       },
       fromNumber(x) {
         return done(`fromNumber(${x})`);
+      },
+      getEmptyList(_) {
+        return done([]);
+      },
+      consList(list) {
+        return done((item) => {
+          list.push(item);
+          return done(list);
+        });
+      },
+      getEmptyRecord(_) {
+        const x = /* @__PURE__ */ Object.create(null);
+        return done(x);
+      },
+      consRecord(record3) {
+        return done((k) => {
+          return done((v) => {
+            record3[k] = v;
+            return done(record3);
+          });
+        });
       },
       not_(x) {
         return done(`not(${x})`);
@@ -39459,11 +40063,42 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/draft-filter.ts
-  async function filterDrafts(drafts, source, signal) {
+  function* getCell14Cached(records, p, cache) {
+    const id14 = getCellId(p, 14);
+    let cell14 = cache.get(id14);
+    if (cell14 == null) {
+      const signal = yield* getCancel();
+      cell14 = getCell14Stats(records, p.lat, p.lng, signal);
+      cache.set(id14, cell14);
+    }
+    return yield* awaitPromise(cell14);
+  }
+  function* getCell17Cached(records, p, cache) {
+    const cell14Stat = yield* getCell14Cached(records, p, cache);
+    if (cell14Stat == null) return;
+    const cell17Id = getCellId(p, 17);
+    return cell14Stat.cell17s.get(cell17Id);
+  }
+  function getCellStats(records) {
+    const cell14s = /* @__PURE__ */ new Map();
+    return function() {
+      return done({
+        getCell17Stat(p) {
+          return getCell17Cached(records, p, cell14s);
+        },
+        getCell14Stat(p) {
+          return getCell14Cached(records, p, cell14s);
+        }
+      });
+    };
+  }
+  async function filterDrafts(records, drafts, source, signal) {
     const queryGlobals = createStandardQueries();
     const effective = evaluateExpression(source, (k) => queryGlobals.get(k));
     const filter = await forceAsPromise(effective, signal);
     const queryBuilder = filter;
+    const duration3 = 60 * 60 * 24 * 7;
+    const minFreshDate = Date.now() - duration3 * 1e3;
     const query = await forceAsPromise(
       queryBuilder.initialize({
         getUserLocation() {
@@ -39471,6 +40106,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             lat: 0,
             lng: 0
           });
+        },
+        getCellStats: getCellStats(records),
+        getMinFreshDate() {
+          return done(minFreshDate);
         }
       }),
       signal
@@ -39492,6 +40131,42 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return result;
   }
 
+  // source/drafts-view/query-view/editor.module.css
+  var cssText10 = '.container-d2884e1bfe18458a2c14f99c2858b84b0436b9fe {\r\n    height: 100%;\r\n    width: 100%;\r\n    overflow: hidden;\r\n}\r\n.textarea-9ee51246f4e15195eb839d111a36d9a96536f0f4 {\r\n    height: 100%;\r\n    width: 100%;\r\n    resize: none;\r\n    font-family: "Courier New", Courier, monospace;\r\n\r\n    background-color: transparent;\r\n}\r\n';
+  var editor_default = {
+    container: "container-d2884e1bfe18458a2c14f99c2858b84b0436b9fe",
+    textarea: "textarea-9ee51246f4e15195eb839d111a36d9a96536f0f4"
+  };
+
+  // source/drafts-view/query-view/editor.tsx
+  var setStyle10 = styleSetter(cssText10);
+  function createEditor({ initialText }) {
+    setStyle10();
+    const events = createTypedEventTarget();
+    const textarea = /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        class: editor_default.textarea,
+        oninput: (e) => {
+          const target = e.target;
+          events.dispatchEvent(
+            createTypedCustomEvent("input", target.value)
+          );
+        },
+        children: initialText
+      }
+    );
+    const element = /* @__PURE__ */ jsx("div", { class: editor_default.container, children: textarea });
+    function setSource(value) {
+      textarea.value = value;
+    }
+    return {
+      element,
+      events,
+      setSource
+    };
+  }
+
   // source/drafts-view/draft-list.tsx
   function newFreshId(baseName, definedIds) {
     const names = new Set(definedIds);
@@ -39511,14 +40186,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function isTrivial({ id: id2, contents }, { sources }) {
     return contents === "" || contents.length <= 1 || sources.find((s) => s.id !== id2 && s.contents === contents);
   }
-  var setStyle10 = styleSetter(cssText4);
+  var setStyle11 = styleSetter(cssText4);
   function createDraftList({
     overlay,
     remote,
+    records,
     local,
     handleAsyncError: handleAsyncError2
   }) {
-    setStyle10();
+    setStyle11();
     const events = createTypedEventTarget();
     let allDrafts = Array.from(overlay.drafts.values()).map(
       (view) => view.draft
@@ -39532,6 +40208,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
       title: "\u691C\u7D22\u4E00\u89A7"
+    });
+    const editor = createEditor({ initialText: getSelectedSource() ?? "" });
+    const editorDialog = createDialog(editor.element, {
+      title: "\u691C\u7D22\u30EF\u30FC\u30C9\u3092\u7DE8\u96C6"
     });
     sourceList.events.addEventListener("select", ({ detail: index }) => {
       setCurrentSourcesAndNotify({
@@ -39575,15 +40255,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         sources
       });
     });
+    editor.events.addEventListener("input", ({ detail: value }) => {
+      setSelectedSourceAndNotify(value);
+    });
     function setCurrentSourcesAndNotify(newSources) {
       currentSources = newSources;
       sourceList.setSources(currentSources);
-      filterInput.setValue(getSelectedSource() ?? "");
+      const selectedSource = getSelectedSource() ?? "";
+      filterInput.setValue(selectedSource);
       requestFilterUpdate();
+      editor.setSource(selectedSource);
       local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
       return currentSources.sources[currentSources.selectedIndex ?? -1]?.contents;
+    }
+    function setSelectedSourceAndNotify(newContents) {
+      const index = currentSources.selectedIndex ?? -1;
+      const source = currentSources.sources[index];
+      if (source == null) return;
+      const sources = toSpliced(currentSources.sources, index, 1, {
+        ...source,
+        contents: newContents
+      });
+      setCurrentSourcesAndNotify({ ...currentSources, sources });
     }
     overlay.events.addEventListener("selection-changed", ({ detail: id2 }) => {
       if (id2 == null) {
@@ -39631,22 +40326,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
     const { element: virtualListElement, setItems: setVirtualListItems } = createVirtualList();
     const filterInput = createFilterBar({ value: getSelectedSource() ?? "" });
-    function setSelectedSource(newContents) {
-      const index = currentSources.selectedIndex ?? -1;
-      const source = currentSources.sources[index];
-      if (source == null) return;
-      const sources = toSpliced(currentSources.sources, index, 1, {
-        ...source,
-        contents: newContents
-      });
-      setCurrentSourcesAndNotify({ ...currentSources, sources });
-    }
     filterInput.events.addEventListener("input-changed", () => {
-      setSelectedSource(filterInput.getValue());
-      requestFilterUpdate();
+      setSelectedSourceAndNotify(filterInput.getValue());
     });
     filterInput.events.addEventListener("click-list-button", () => {
       sourceListDialog.show();
+    });
+    filterInput.events.addEventListener("click-edit-button", () => {
+      editorDialog.show();
     });
     const detailName = /* @__PURE__ */ jsx(
       "input",
@@ -39906,7 +40593,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const requestFilterUpdate = () => applyFilterCancelScope(async (signal) => {
       await sleep(200, { signal });
       const query = getSelectedSource() ?? "";
-      filteredDrafts = await filterDrafts(allDrafts, query, signal);
+      filteredDrafts = await filterDrafts(
+        records,
+        allDrafts,
+        query,
+        signal
+      );
       dispatchCountUpdatedEvent();
       updateVirtualList();
     });
@@ -39978,7 +40670,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/drafts-dialog-title.module.css
-  var cssText10 = ":root {\n    --text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907: #333;\n    --secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5: #666;\n    --primary-color-85c1441dbfb39319542140435119ee442e85721a: #007bff;\n    --background-color-light-d3c1d427ed49fb706d5d27ecc2e2bf2144145b42: #f8f9fa;\n    --border-color-0c4d1205af0f0747deb181610984f634e079550a: #dee2e6;\n}\n\n.container-3a7a3702be125e4c680a49a5f6b48a0685a89213 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-0c4d1205af0f0747deb181610984f634e079550a);\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    gap: 10px;\n}\n\n.main-title-af45008e5a094765ba2506a66e549cf852ebcfe3 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    flex-grow: 1;\n}\n\n.counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96 {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5);\n    white-space: nowrap;\n}\n\n.saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-85c1441dbfb39319542140435119ee442e85721a);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-63a9f84c54405daf885a836d67ad7091a22f7475 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
+  var cssText11 = ":root {\n    --text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907: #333;\n    --secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5: #666;\n    --primary-color-85c1441dbfb39319542140435119ee442e85721a: #007bff;\n    --background-color-light-d3c1d427ed49fb706d5d27ecc2e2bf2144145b42: #f8f9fa;\n    --border-color-0c4d1205af0f0747deb181610984f634e079550a: #dee2e6;\n}\n\n.container-3a7a3702be125e4c680a49a5f6b48a0685a89213 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-0c4d1205af0f0747deb181610984f634e079550a);\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    gap: 10px;\n}\n\n.main-title-af45008e5a094765ba2506a66e549cf852ebcfe3 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    flex-grow: 1;\n}\n\n.counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96 {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5);\n    white-space: nowrap;\n}\n\n.saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-85c1441dbfb39319542140435119ee442e85721a);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-63a9f84c54405daf885a836d67ad7091a22f7475 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
   var drafts_dialog_title_default = {
     container: "container-3a7a3702be125e4c680a49a5f6b48a0685a89213",
     "main-title": "main-title-af45008e5a094765ba2506a66e549cf852ebcfe3",
@@ -39988,7 +40680,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/indicator.module.css
-  var cssText11 = ".loader-62b568c1cf31831c16b87cb441cc3a63b60f4dbd {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(\n        circle,\n        rgba(59, 130, 246, 0.95) 0%,\n        rgba(96, 165, 250, 0.6) 45%,\n        rgba(147, 197, 253, 0.25) 75%,\n        transparent 100%\n    );\n    box-shadow:\n        0 0 4px rgba(96, 165, 250, 0.8),\n        0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-02933a59452e89089c97a52e6fe88a96cf4766d4 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-701c23d5aacc00f9e4c0bb8ae539ee979c42e024 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: endFade 0.4s ease-in forwards;\n}\n";
+  var cssText12 = ".loader-62b568c1cf31831c16b87cb441cc3a63b60f4dbd {\n    position: relative;\n    width: 1rem;\n    height: 1rem;\n}\n\n.orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    width: 6px;\n    height: 6px;\n    border-radius: 50%;\n    background: radial-gradient(\n        circle,\n        rgba(59, 130, 246, 0.95) 0%,\n        rgba(96, 165, 250, 0.6) 45%,\n        rgba(147, 197, 253, 0.25) 75%,\n        transparent 100%\n    );\n    box-shadow:\n        0 0 4px rgba(96, 165, 250, 0.8),\n        0 0 8px rgba(147, 197, 253, 0.5);\n    transform: translate(-50%, -50%);\n    opacity: 0;\n    animation: pulse var(--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337, 2.6s) ease-in-out infinite;\n}\n\n@keyframes pulse {\n    0%,\n    100% {\n        opacity: 0.35;\n        filter: blur(0.6px);\n    }\n\n    50% {\n        opacity: 1;\n        filter: blur(0);\n    }\n}\n\n@keyframes softAppear {\n    from {\n        opacity: 0;\n        filter: blur(2px);\n    }\n\n    to {\n        opacity: 0.9;\n        filter: blur(0.6px);\n    }\n}\n\n@keyframes endFade {\n    to {\n        opacity: 0;\n        filter: blur(2px);\n    }\n}\n\n.starting-02933a59452e89089c97a52e6fe88a96cf4766d4 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: softAppear 0.35s ease-out forwards;\n}\n\n.ending-701c23d5aacc00f9e4c0bb8ae539ee979c42e024 .orb-86b430db43d2410a62a17c1ee0232463705b2aa5 {\n    animation: endFade 0.4s ease-in forwards;\n}\n";
   var variables3 = {
     "--pulseDur": "--pulseDur-cefcb0590d6e63a0997f5b774909fa76285c1337"
   };
@@ -40000,9 +40692,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
 
   // source/drafts-view/indicator.tsx
-  var setStyle11 = styleSetter(cssText11);
+  var setStyle12 = styleSetter(cssText12);
   function createIndicator() {
-    setStyle11();
+    setStyle12();
     const loader = /* @__PURE__ */ jsxs("div", { class: indicator_default.loader, "aria-label": "Communicating", children: [
       /* @__PURE__ */ jsx("div", { class: indicator_default.orb }),
       /* @__PURE__ */ jsx("div", { class: indicator_default.orb }),
@@ -40070,9 +40762,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 
   // source/drafts-view/drafts-dialog-title.tsx
-  var setStyle12 = styleSetter(cssText10);
+  var setStyle13 = styleSetter(cssText11);
   function createDraftsDialogTitle({ title }) {
-    setStyle12();
+    setStyle13();
     const mainTitleElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["main-title"], children: title });
     const countsElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["counts-element"] });
     const indicator = createIndicator();
@@ -40145,6 +40837,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const draftList = createDraftList({
       overlay: page.drafts,
       remote: page.remote,
+      records: page.records,
       local: page.local,
       handleAsyncError
     });
