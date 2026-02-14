@@ -1,4 +1,3 @@
-/* eslint-disable no-useless-escape */
 // spell-checker:words antlr vitest
 import { describe, it, expect } from "vitest";
 import { evaluateExpression, type Value } from "../evaluator";

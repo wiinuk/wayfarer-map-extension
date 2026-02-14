@@ -1,14 +1,14 @@
-// spell-checker: words POKESTOP
+// spell-checker: words POKESTOP pois
 import { distance } from "../geometry";
-import type { CellStatistic } from "../poi-records";
+import type { Cell14Statistics, CellStatistic } from "../poi-records";
 import type { Draft } from "../remote";
+import type { LatLng } from "../s2";
 import { done, type Effective } from "../sal/effective";
 import type { Value } from "../sal/evaluator";
 
 export interface CellRepository {
-    getCell17Stat(
-        p: google.maps.LatLngLiteral,
-    ): Effective<CellStatistic<17> | undefined>;
+    getCell14Stat(p: LatLng): Effective<Cell14Statistics | undefined>;
+    getCell17Stat(p: LatLng): Effective<CellStatistic<17> | undefined>;
 }
 export interface QueryEnvironment {
     getMinFreshDate(): Effective<number>;
@@ -154,7 +154,9 @@ export function reachableWith(
     };
 }
 
-function hasPokestopOrGymInCell17(): DraftQueryBuilder {
+function builderOfCellPredicate(
+    predicate: (stat14: Cell14Statistics, stat17: CellStatistic<17>) => boolean,
+): DraftQueryBuilder {
     return {
         isIgnorable: false,
         *initialize(e) {
@@ -174,15 +176,54 @@ function hasPokestopOrGymInCell17(): DraftQueryBuilder {
                         return true;
                     }
 
-                    // セル17にジムかポケストップが存在するか
-                    const count =
-                        (stat17.kindToCount.get("GYM") ?? 0) +
-                        (stat17.kindToCount.get("POKESTOP") ?? 0);
-                    return 0 < count;
+                    const stat14 = yield* stats.getCell14Stat(p);
+                    if (stat14 == null) return true;
+
+                    return predicate(stat14, stat17);
                 },
             };
         },
     };
+}
+
+function hasPokestopOrGymInCell17() {
+    return builderOfCellPredicate((_stat14, stat17) => {
+        // セル17にジムかポケストップが存在するか
+        const count =
+            (stat17.kindToCount.get("GYM") ?? 0) +
+            (stat17.kindToCount.get("POKESTOP") ?? 0);
+        return 0 < count;
+    });
+}
+
+export function getPokestopCountForNextGym(current: number) {
+    let next;
+    if (current < 2) {
+        next = 2;
+    } else if (current < 6) {
+        next = 6;
+    } else if (current < 20) {
+        next = 20;
+    } else {
+        return Infinity;
+    }
+    if (current < next) return Infinity;
+    return next - current;
+}
+
+function stopsForNextGym(expectedCount: number): DraftQueryBuilder {
+    return builderOfCellPredicate((stat14, _stat17) => {
+        const currentCount =
+            (stat14.kindToPois.get("GYM")?.length ?? 0) +
+            (stat14.kindToPois.get("POKESTOP")?.length ?? 0);
+
+        return getPokestopCountForNextGym(currentCount) === expectedCount;
+    });
+}
+function cell14Stops(expectedCount: number): DraftQueryBuilder {
+    return builderOfCellPredicate((stat14, _stat17) => {
+        return stat14.pois.size === expectedCount;
+    });
 }
 
 function binaryBuilder(
@@ -211,7 +252,7 @@ export function createStandardQueries() {
         },
     });
     const seq = binaryBuilder(and);
-    const occupied = builderAsValue(hasPokestopOrGymInCell17());
+    const duplicated = builderAsValue(hasPokestopOrGymInCell17());
     const dict: Record<string, Value> = {
         fromVoid(_) {
             return done(all);
@@ -239,8 +280,14 @@ export function createStandardQueries() {
                 ),
             );
         }),
-        occupied,
-        hasPokestopOrGymInCell17: occupied,
+        duplicated,
+        hasStopInCell17: duplicated,
+        stopsForNextGym(x) {
+            return done(builderAsValue(stopsForNextGym(x as number)));
+        },
+        cell14Stops(x) {
+            return done(builderAsValue(cell14Stops(x as number)));
+        },
     };
     return new Map<string, Value>(Object.entries(dict));
 }

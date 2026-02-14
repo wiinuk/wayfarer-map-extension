@@ -21,19 +21,20 @@ import {
 import { evaluateExpression } from "../sal/evaluator";
 import { getCellId, type Cell14Id } from "../typed-s2cell";
 
-function* getCell17Cached(
-    records: PoiRecords,
-    p: LatLng,
-    cell14Cache: Map<Cell14Id, Promise<Cell14Statistics | undefined>>,
-): Effective<CellStatistic<17> | undefined> {
+type Cell14Cache = Map<Cell14Id, Promise<Cell14Statistics | undefined>>;
+function* getCell14Cached(records: PoiRecords, p: LatLng, cache: Cell14Cache) {
     const id14 = getCellId(p, 14);
-    let cell14 = cell14Cache.get(id14);
+    let cell14 = cache.get(id14);
     if (cell14 == null) {
         const signal = yield* getCancel();
         cell14 = getCell14Stats(records, p.lat, p.lng, signal);
-        cell14Cache.set(id14, cell14);
+        cache.set(id14, cell14);
     }
-    const cell14Stat = yield* awaitPromise(cell14);
+    return yield* awaitPromise(cell14);
+}
+
+function* getCell17Cached(records: PoiRecords, p: LatLng, cache: Cell14Cache) {
+    const cell14Stat = yield* getCell14Cached(records, p, cache);
     if (cell14Stat == null) return;
 
     const cell17Id = getCellId(p, 17);
@@ -46,6 +47,9 @@ function getCellStats(records: PoiRecords): QueryEnvironment["getCellStats"] {
         return done({
             getCell17Stat(p) {
                 return getCell17Cached(records, p, cell14s);
+            },
+            getCell14Stat(p) {
+                return getCell14Cached(records, p, cell14s);
             },
         });
     };
