@@ -5,14 +5,17 @@ import {
     AndExpressionContext,
     ApplyExpressionContext,
     BinaryExpressionContext,
+    EntryContext,
     ExpressionContext,
     IdentifierContext,
     LambdaExpressionContext,
+    ListLiteralExpressionContext,
     NotExpressionContext,
     NumberContext,
     OrExpressionContext,
     ParameterContext,
     ParenthesizedExpressionContext,
+    RecordLiteralExpressionContext,
     SalParser,
     SequenceExpressionContext,
     SourceFileContext,
@@ -75,6 +78,12 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         const i = e.identifier();
         if (i != null) return i.accept(this);
         return e.word()?.accept(this) ?? raise``;
+    }
+    visitEntry(e: EntryContext): string {
+        const name =
+            e.word()?.accept(this) ?? e.STRING()?.accept(this) ?? raise``;
+        const value = this.visitExpression(e.expression());
+        return `${name}: ${value}`;
     }
     visitSourceFile(s: SourceFileContext): string {
         const e = s.expression();
@@ -149,6 +158,22 @@ class PrintWithParenVisitor implements SalVisitor<string> {
     }
     visitParenthesizedExpression(e: ParenthesizedExpressionContext): string {
         return `(${this.visitExpression(e.expression())})`;
+    }
+    visitListLiteralExpression(e: ListLiteralExpressionContext): string {
+        const values = e
+            .expression()
+            .map((e) => this.visitExpression(e))
+            .join(", ");
+
+        return `[${values}]`;
+    }
+    visitRecordLiteralExpression(e: RecordLiteralExpressionContext): string {
+        const entries = e
+            .entry()
+            .map((e) => e.accept(this))
+            .join(", ");
+
+        return `{${entries}}`;
     }
 }
 
@@ -406,6 +431,59 @@ describe("Sal Parser", () => {
 
         it("empty input", () => {
             expect(parseAndPrint("")).toBe("(sourceFile <EOF>)");
+        });
+
+        it("should parse ListLiteralExpression", () => {
+            expect(parseAndPrint("[]")).toStrictEqual(
+                "(sourceFile (expression [ ]) <EOF>)",
+            );
+            expect(parseAndPrint("[1]")).toStrictEqual(
+                "(sourceFile (expression [ (expression 1) ]) <EOF>)",
+            );
+            expect(parseAndPrint("[1, 2]")).toStrictEqual(
+                "(sourceFile (expression [ (expression 1) , (expression 2) ]) <EOF>)",
+            );
+            expect(parseAndPrint("[1, ]")).toStrictEqual(
+                "(sourceFile (expression [ (expression 1) , ]) <EOF>)",
+            );
+            expect(parseAndPrint("[1, 2, ]")).toStrictEqual(
+                "(sourceFile (expression [ (expression 1) , (expression 2) , ]) <EOF>)",
+            );
+            expect(printWithParen("[1, 2, 3]")).toStrictEqual("[1, 2, 3]");
+            expect(printWithParen("[a:b, c:d]")).toStrictEqual(
+                "[(a:b), (c:d)]",
+            );
+        });
+
+        it("should parse RecordLiteralExpression", () => {
+            expect(parseAndPrint("{}")).toStrictEqual(
+                "(sourceFile (expression { }) <EOF>)",
+            );
+            expect(parseAndPrint("{a:1}")).toStrictEqual(
+                "(sourceFile (expression { (entry (word a) : (expression 1)) }) <EOF>)",
+            );
+            expect(parseAndPrint('{ "a":1 }')).toStrictEqual(
+                '(sourceFile (expression { (entry "a" : (expression 1)) }) <EOF>)',
+            );
+            expect(parseAndPrint("{a:1, b:2}")).toStrictEqual(
+                "(sourceFile (expression { (entry (word a) : (expression 1)) , (entry (word b) : (expression 2)) }) <EOF>)",
+            );
+            expect(parseAndPrint("{a:1, }")).toStrictEqual(
+                "(sourceFile (expression { (entry (word a) : (expression 1)) , }) <EOF>)",
+            );
+            expect(parseAndPrint("{a:1, b:2, }")).toStrictEqual(
+                "(sourceFile (expression { (entry (word a) : (expression 1)) , (entry (word b) : (expression 2)) , }) <EOF>)",
+            );
+            expect(printWithParen("{a:1, b:2, c:3}")).toStrictEqual(
+                "{a: 1, b: 2, c: 3}",
+            );
+            expect(printWithParen("{a:1, b:2, c:3,}")).toStrictEqual(
+                "{a: 1, b: 2, c: 3}",
+            );
+            expect(printWithParen("{a:b:c}")).toStrictEqual("{a: (b:c)}");
+            expect(printWithParen("{a:1, b:c:d}")).toStrictEqual(
+                "{a: 1, b: (c:d)}",
+            );
         });
     });
 });

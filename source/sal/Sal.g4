@@ -17,6 +17,7 @@ identifier: AT (word | STRING);
 
 // パラメータは @ を省略可能
 parameter: identifier | word;
+entry: (word | STRING) ':' expression;
 
 expression:
     MINUS expression # NotExpression
@@ -31,6 +32,8 @@ expression:
     | STRING # String
     | identifier # Variable
     | word # WordExpression
+    | '[' (expression (',' expression)*)? ','? ']' # ListLiteralExpression
+    | '{' (entry (',' entry)*)? ','? '}' # RecordLiteralExpression
     | '(' expression ')' # ParenthesizedExpression
 ;
 
@@ -61,7 +64,7 @@ NUMBER: '-'? [0-9]+ ('.' [0-9]+)? ([eE] '-'? [0-9]+)?;
 STRING: '"' ( '\\' . | ~[\\"])* '"';
 
 // 空白(Z)・制御文字(C)・特別な記号・文字列の始まり、を除く全ての文字
-fragment WORD_START: ~[\p{Z}\p{C}:/@"\-'=.,;(){}<>];
+fragment WORD_START: ~[\p{Z}\p{C}:/@"\-'=.,;(){}[\]<>];
 // . - ' は先頭以外で許可
 fragment WORD_PART: (WORD_START | [-.']);
 WORD: WORD_START WORD_PART*;

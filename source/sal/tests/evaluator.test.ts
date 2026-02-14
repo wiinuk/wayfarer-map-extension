@@ -267,6 +267,77 @@ describe("Evaluator", () => {
         });
     });
 
+    describe("List and Record Literals", () => {
+        it("should evaluate empty list literal", async () => {
+            expect(await evaluate("[]")).toEqual([]);
+        });
+
+        it("should evaluate list literal with numbers", async () => {
+            expect(await evaluate("[1, 2, 3]")).toEqual([1, 2, 3]);
+        });
+
+        it("should evaluate list literal with expressions", async () => {
+            expect(await evaluate('[1 /add 2, "hello", -true]')).toEqual([
+                3,
+                "hello",
+                false,
+            ]);
+        });
+
+        it("should evaluate nested list literals", async () => {
+            expect(await evaluate("[1, [2, 3], 4]")).toEqual([1, [2, 3], 4]);
+        });
+
+        it("should evaluate empty record literal", async () => {
+            expect(await evaluate("{}")).toEqual({});
+        });
+
+        it("should evaluate record literal with simple entries", async () => {
+            expect(await evaluate('{a: 1, b: "hello", c: true}')).toEqual({
+                a: 1,
+                b: "hello",
+                c: true,
+            });
+        });
+
+        it("should evaluate record literal with expression values", async () => {
+            expect(await evaluate("{a: 1 /add 2, b: (@fn x: x):5}")).toEqual({
+                a: 3,
+                b: 5,
+            });
+        });
+
+        it("should evaluate record literal with string keys", async () => {
+            expect(
+                await evaluate(
+                    '{ "key with space": 10, "another-key": "value" }',
+                ),
+            ).toEqual({ "key with space": 10, "another-key": "value" });
+        });
+
+        it("should evaluate nested record literals", async () => {
+            expect(await evaluate("{a: 1, b: {c: 2}}")).toEqual({
+                a: 1,
+                b: { c: 2 },
+            });
+        });
+
+        it("should evaluate mixed list and record literals", async () => {
+            const code = `
+                [
+                    {name: "item1", value: 10},
+                    {name: "item2", value: 20},
+                    [1, {nested: true}]
+                ]
+            `;
+            expect(await evaluate(code)).toEqual([
+                { name: "item1", value: 10 },
+                { name: "item2", value: 20 },
+                [1, { nested: true }],
+            ]);
+        });
+    });
+
     describe("Corner Cases and Error Handling", () => {
         it("should fail on syntax error", async () => {
             expect(await evaluate("(1 /add 2")).toBe(3);

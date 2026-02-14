@@ -6,13 +6,14 @@ import {
     ApplyExpressionContext,
     BinaryExpressionContext,
     ExpressionContext,
-    IdentifierContext,
     LambdaExpressionContext,
+    ListLiteralExpressionContext,
     NotExpressionContext,
     NumberContext,
     OrExpressionContext,
     ParameterContext,
     ParenthesizedExpressionContext,
+    RecordLiteralExpressionContext,
     SalParser,
     SequenceExpressionContext,
     SourceFileContext,
@@ -51,7 +52,12 @@ function getStringValue(v: TerminalNode): string {
 function getWordValue(v: WordContext) {
     return v.text;
 }
-function getIdentifierName(e: IdentifierContext) {
+function getNameOfWordOrString(
+    e: {
+        STRING(): TerminalNode | undefined;
+        word(): WordContext | undefined;
+    } & RuleNode,
+) {
     const v = e.STRING();
     if (v != null) return getStringValue(v);
 
@@ -65,7 +71,7 @@ function getParameterName(e: ParameterContext) {
     if (w != null) return getWordValue(w);
 
     const id = e.identifier();
-    if (id != null) return getIdentifierName(id);
+    if (id != null) return getNameOfWordOrString(id);
     return unreachable(e);
 }
 
@@ -225,7 +231,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         return fromString(value);
     }
     visitVariable(e: VariableContext): Effective<Value> {
-        const name = getIdentifierName(e.identifier());
+        const name = getNameOfWordOrString(e.identifier());
         return done(this.resolveVariable(name));
     }
     visitWordExpression(e: WordExpressionContext): Effective<Value> {
@@ -250,6 +256,44 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     ): Effective<Value> {
         return this.visitExpression(e.expression());
     }
+    *visitListLiteralExpression(
+        e: ListLiteralExpressionContext,
+    ): Effective<Value> {
+        // [1, 2] -> consList:(consList:(getEmptyList:null):1):2)
+        const getEmptyList = this.resolveVariable(
+            "getEmptyList",
+        ) as SalFunction;
+
+        let list = yield* getEmptyList(null);
+        let consList;
+        for (const item of e.expression()) {
+            const x = yield* item.accept(this);
+            consList ??= this.resolveVariable("consList") as SalFunctionMany<
+                [Value, Value],
+                Value
+            >;
+            list = yield* (yield* consList(list))(x);
+        }
+        return list;
+    }
+    *visitRecordLiteralExpression(
+        e: RecordLiteralExpressionContext,
+    ): Effective<Value> {
+        const getEmptyRecord = this.resolveVariable(
+            "getEmptyRecord",
+        ) as SalFunction;
+        let record = yield* getEmptyRecord(null);
+        let consRecord;
+        for (const entry of e.entry()) {
+            const key = getNameOfWordOrString(entry);
+            const value = yield* this.visitExpression(entry.expression());
+            consRecord ??= this.resolveVariable(
+                "consRecord",
+            ) as SalFunctionMany<[Value, Value, Value], Value>;
+            record = yield* (yield* (yield* consRecord(record))(key))(value);
+        }
+        return record;
+    }
 }
 
 function createStandardGlobals() {
@@ -268,6 +312,28 @@ function createStandardGlobals() {
         },
         fromNumber(x) {
             return done(`fromNumber(${x})`);
+        },
+
+        getEmptyList(_) {
+            return done([]);
+        },
+        consList(list) {
+            return done((item) => {
+                (list as Value[]).push(item);
+                return done(list);
+            });
+        },
+        getEmptyRecord(_) {
+            const x: Value = Object.create(null);
+            return done(x);
+        },
+        consRecord(record) {
+            return done((k) => {
+                return done((v) => {
+                    (record as Record<string, Value>)[k as string] = v;
+                    return done(record);
+                });
+            });
         },
         not_(x) {
             return done(`not(${x})`);
