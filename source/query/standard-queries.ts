@@ -74,8 +74,8 @@ function not(b: DraftQueryBuilder) {
         *initialize(e) {
             const q = yield* b.initialize(e);
             return {
-                isVisible(d) {
-                    return q.isVisible(d);
+                *isVisible(d) {
+                    return !(yield* q.isVisible(d));
                 },
                 isAny: false,
             };
