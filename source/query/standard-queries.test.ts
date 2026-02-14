@@ -35,6 +35,9 @@ describe("Queries", () => {
                         getCell17Stat() {
                             return done(undefined);
                         },
+                        getCell14Stat() {
+                            return done(undefined);
+                        },
                     });
                 },
             }),
