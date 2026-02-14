@@ -74,4 +74,4 @@ LINE_COMMENT: '//' ~[\r\n]* -> skip;
 BLOCK_COMMENT: '/*' ( BLOCK_COMMENT | .)*? '*/' -> skip;
 
 // 空白
-WS: [\p{Z}]+ -> skip;
+WS: [\p{Z}\p{C}]+ -> skip;

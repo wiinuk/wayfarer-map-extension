@@ -260,6 +260,13 @@ describe("Sal Parser", () => {
             ).getAllTokens();
             expect(tokens.map((t) => t.text)).toEqual(["a", "b"]);
         });
+        it("should skip spaces", () => {
+            const code = `a \u0009\u000B\u000C\u0020\u00A0\uFEFF\u1680\u3000 b`;
+            const tokens = new SalLexer(
+                CharStreams.fromString(code),
+            ).getAllTokens();
+            expect(tokens.map((t) => t.text)).toEqual(["a", "b"]);
+        });
     });
 
     describe("Parse and print", () => {
