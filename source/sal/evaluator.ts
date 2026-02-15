@@ -267,7 +267,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         let list = yield* getEmptyList(null);
         let consList;
         for (const item of e.expression()) {
-            const x = yield* item.accept(this);
+            const x = yield* this.visitExpression(item);
             consList ??= this.resolveVariable("consList") as SalFunctionMany<
                 [Value, Value],
                 Value
