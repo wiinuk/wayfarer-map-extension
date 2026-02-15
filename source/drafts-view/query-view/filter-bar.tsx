@@ -7,7 +7,7 @@ import classNames, { cssText } from "./filter-bar.module.css";
 
 const setStyle = styleSetter(cssText);
 
-export function createFilterBar({ value }: { value: string }) {
+export function createFilterBar({ value: initialValue }: { value: string }) {
     setStyle();
 
     const events = createTypedEventTarget<{
@@ -26,7 +26,6 @@ export function createFilterBar({ value }: { value: string }) {
             }
             classList={[classNames.input]}
             placeholder="🔍キーワードで絞り込み…"
-            value={value}
         />
     ) as HTMLInputElement;
 
@@ -77,6 +76,8 @@ export function createFilterBar({ value }: { value: string }) {
             </div>
         </div>
     );
+
+    let value = "";
     function getValue() {
         if (!value.includes("\n")) return input.value;
 
@@ -93,5 +94,7 @@ export function createFilterBar({ value }: { value: string }) {
         }
         input.value = newValue?.split("\n")[0] ?? "";
     }
+    setValue(initialValue);
+
     return { element, events, getValue, setValue };
 }
