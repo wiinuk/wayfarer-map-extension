@@ -1,5 +1,5 @@
 // spell-checker:words antlr
-import { CharStreams, CommonTokenStream } from "antlr4ts";
+import { CharStreams, CommonTokenStream, Token } from "antlr4ts";
 import { SalLexer } from "./.antlr-generated/SalLexer";
 import {
     AndExpressionContext,
@@ -146,15 +146,24 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         return yield* (yield* f(l))(r);
     }
 
-    visitExpression(e: ExpressionContext): Effective<Value> {
+    *visitExpression(e: ExpressionContext): Effective<Value> {
         // `a or` => `a or fromMissing:null`
         if (e.exception) {
             const fromVoid = this.resolveVariable("fromMissing") as (
                 x: Value,
             ) => Effective<Value>;
-            return fromVoid(null);
+            return yield* fromVoid(null);
         }
-        return e.accept(this);
+        try {
+            return yield* e.accept(this);
+        } catch (error) {
+            function showPosition({ line, charPositionInLine }: Token) {
+                return `${line}:${charPositionInLine}`;
+            }
+            const start = showPosition(e.start);
+            const stop = e.stop ? `,${showPosition(e.stop)}` : "";
+            return raise`[${start}${stop}]: ${error}`;
+        }
     }
     visitSourceFile(e: SourceFileContext): Effective<Value> {
         const body = e.expression();
