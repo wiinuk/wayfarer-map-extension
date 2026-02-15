@@ -30,9 +30,21 @@ export function createFilterBar({ value }: { value: string }) {
         />
     ) as HTMLInputElement;
 
+    const multiLineIndicator = (
+        <span
+            classList={[
+                classNames["multi-line-indicator"],
+                classNames["hidden"],
+            ]}
+        >
+            ...
+        </span>
+    ) as HTMLSpanElement;
+
     const element = (
         <div classList={[classNames.wrapper]}>
             {input}
+            {multiLineIndicator}
             <div class={classNames.buttons}>
                 <button
                     class={classNames.button}
@@ -66,10 +78,20 @@ export function createFilterBar({ value }: { value: string }) {
         </div>
     );
     function getValue() {
-        return input.value;
+        if (!value.includes("\n")) return input.value;
+
+        const rest = value.split("\n").slice(1);
+        return input.value + "\n" + rest;
     }
-    function setValue(value: string) {
-        return (input.value = value);
+    function setValue(newValue: string) {
+        value = newValue;
+        const isMultiLine = newValue.includes("\n");
+        if (isMultiLine) {
+            multiLineIndicator.classList.remove(classNames["hidden"]);
+        } else {
+            multiLineIndicator.classList.add(classNames["hidden"]);
+        }
+        input.value = newValue?.split("\n")[0] ?? "";
     }
     return { element, events, getValue, setValue };
 }

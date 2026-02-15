@@ -52,3 +52,13 @@
 .button:active {
     transform: scale(0.96);
 }
+
+.multi-line-indicator {
+    margin-left: 5px;
+    font-weight: bold;
+    color: #888;
+}
+
+.hidden {
+    display: none;
+}
