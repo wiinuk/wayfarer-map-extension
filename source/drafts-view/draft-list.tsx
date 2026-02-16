@@ -305,6 +305,7 @@ export function createDraftList({
                 if (!selectedDraft) return;
                 selectedDraft.name = (event.target as HTMLInputElement).value;
                 overlay.updateDraftTitle(selectedDraft);
+                updateVirtualList();
                 saveDraftChanges(selectedDraft);
             }}
         />
