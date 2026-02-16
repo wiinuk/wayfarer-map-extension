@@ -107,3 +107,45 @@ export function createAsyncCancelScope(
         });
     };
 }
+
+export function cached<T>(f: () => T) {
+    let hasValue = false;
+    let value: T;
+    return () => {
+        if (!hasValue) {
+            hasValue = true;
+            value = f();
+        }
+        return value;
+    };
+}
+export function memoize<T extends null | boolean | string | symbol, R>(
+    f: (x: T) => R,
+) {
+    const memo = new Map<T, R>();
+    return (x: T) => {
+        let r = memo.get(x);
+        if (r === undefined) {
+            r = f(x);
+            memo.set(x, r);
+        }
+        return r;
+    };
+}
+
+export function memoizeWith<
+    TArgs extends unknown[],
+    K extends null | boolean | string | symbol,
+    R,
+>(getKey: (...x: TArgs) => K, f: (k: K, ...args: TArgs) => R) {
+    const memo = new Map<K, R>();
+    return (...x: TArgs) => {
+        const k = getKey(...x);
+        let r = memo.get(k);
+        if (r === undefined) {
+            r = f(k, ...x);
+            memo.set(k, r);
+        }
+        return r;
+    };
+}
