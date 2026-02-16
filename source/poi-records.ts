@@ -403,11 +403,9 @@ function isGymOrPokestop(g: Gmo) {
 }
 export async function getCell14Stats(
     records: PoiRecords,
-    lat: number,
-    lng: number,
+    cell: Cell<14>,
     signal: AbortSignal,
 ) {
-    const cell = createCellFromCoordinates({ lat, lng }, 14);
     const cellId = cell.toString();
     let cell14: Cell14Statistics | undefined;
     const collectPois = (poi: PoiRecord) => {

@@ -237,8 +237,7 @@ async function renderViewsInCell14(
     scheduler: Scheduler,
     signal: AbortSignal,
 ) {
-    const { lat, lng } = nearlyCell14.getLatLng();
-    const cell14 = await getCell14Stats(records, lat, lng, signal);
+    const cell14 = await getCell14Stats(records, nearlyCell14, signal);
     if (cell14 == null) return;
 
     clearMarkersInCell14(overlay, cell14.id);
