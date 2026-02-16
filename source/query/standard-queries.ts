@@ -155,7 +155,11 @@ export function reachableWith(
 }
 
 function builderOfCellPredicate(
-    predicate: (stat14: Cell14Statistics, stat17: CellStatistic<17>) => boolean,
+    predicate: (
+        stat14: Cell14Statistics,
+        stat17: CellStatistic<17>,
+        draft: Draft,
+    ) => boolean,
 ): DraftQueryBuilder {
     return {
         isIgnorable: false,
@@ -179,7 +183,7 @@ function builderOfCellPredicate(
                     const stat14 = yield* stats.getCell14Stat(p);
                     if (stat14 == null) return true;
 
-                    return predicate(stat14, stat17);
+                    return predicate(stat14, stat17, d);
                 },
             };
         },
