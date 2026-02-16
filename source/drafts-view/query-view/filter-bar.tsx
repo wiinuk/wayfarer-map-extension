@@ -79,10 +79,9 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
 
     let value = "";
     function getValue() {
-        if (!value.includes("\n")) return input.value;
-
-        const rest = value.split("\n").slice(1);
-        return input.value + "\n" + rest;
+        const index = value.indexOf("\n");
+        if (index < 0) return input.value;
+        return input.value + "\n" + value.slice(index + 1);
     }
     function setValue(newValue: string) {
         value = newValue;
