@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.4.4
+// @version      0.4.5
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -40452,6 +40452,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!selectedDraft) return;
           selectedDraft.name = event.target.value;
           overlay.updateDraftTitle(selectedDraft);
+          updateVirtualList();
           saveDraftChanges(selectedDraft);
         }
       }
