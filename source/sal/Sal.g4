@@ -13,10 +13,9 @@ grammar Sal;
 sourceFile: expression? EOF;
 
 word: WHERE | FUNCTION | WORD;
-identifier: AT (word | STRING);
 
 // パラメータは @ を省略可能
-parameter: identifier | word;
+parameter: AT? word;
 entry: (word | STRING) ':' expression;
 
 expression:
@@ -28,9 +27,9 @@ expression:
     | left= expression SLASH word right= expression # BinaryExpression
     | scope= expression AT WHERE parameter+ EQUALS value= expression # WhereExpression
     | AT FUNCTION parameter+ COLON expression # LambdaExpression
-    | NUMBER # Number
-    | STRING # String
-    | identifier # Variable
+    | AT? NUMBER # Number
+    | AT? STRING # String
+    | AT word # Variable
     | word # WordExpression
     | '[' (expression (',' expression)*)? ','? ']' # ListLiteralExpression
     | '{' (entry (',' entry)*)? ','? '}' # RecordLiteralExpression

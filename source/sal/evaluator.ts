@@ -67,15 +67,10 @@ function getNameOfWordOrString(
     return unreachable(e);
 }
 function getParameterName(e: ParameterContext) {
-    const w = e.word();
-    if (w != null) return getWordValue(w);
-
-    const id = e.identifier();
-    if (id != null) return getNameOfWordOrString(id);
-    return unreachable(e);
+    return getWordValue(e.word());
 }
 
-type SalFunction<T extends Value = Value, R extends Value = Value> = (
+type SalFunction<in T extends Value = Value, out R extends Value = Value> = (
     x: T,
 ) => Effective<R>;
 
@@ -111,6 +106,13 @@ function createNestedFunctionOrValue(
     });
 }
 
+function forceAsFunction<T extends Value = Value, R extends Value = Value>(
+    x: Value,
+) {
+    if (typeof x !== "function") return raise`${x} is not function`;
+    return x as SalFunction<T, R>;
+}
+
 class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     visit: (tree: ParseTree) => Effective<Value> = unreachable;
     visitChildren: (node: RuleNode) => Effective<Value> = unreachable;
@@ -138,10 +140,9 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         right: ExpressionContext,
     ) {
         const l = yield* this.visitExpression(left);
-        const f = this.resolveVariable(opName) as SalFunctionMany<
-            [Value, Value],
-            Value
-        >;
+        const f = forceAsFunction<Value, SalFunction>(
+            this.resolveVariable(opName),
+        );
         const r = yield* this.visitExpression(right);
         return yield* (yield* f(l))(r);
     }
@@ -149,9 +150,9 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     *visitExpression(e: ExpressionContext): Effective<Value> {
         // `a or` => `a or fromMissing:null`
         if (e.exception) {
-            const fromVoid = this.resolveVariable("fromMissing") as (
-                x: Value,
-            ) => Effective<Value>;
+            const fromVoid = forceAsFunction(
+                this.resolveVariable("fromMissing"),
+            );
             return yield* fromVoid(null);
         }
         try {
@@ -168,7 +169,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     visitSourceFile(e: SourceFileContext): Effective<Value> {
         const body = e.expression();
         if (body == null) {
-            const fromEmpty = this.resolveVariable("fromVoid") as SalFunction;
+            const fromEmpty = forceAsFunction(this.resolveVariable("fromVoid"));
             return fromEmpty(null);
         }
         return this.visitExpression(body);
@@ -180,12 +181,12 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         return createNestedFunctionOrValue(newScope, ps, body);
     }
     *visitNotExpression(e: NotExpressionContext): Effective<Value> {
-        const not = this.resolveVariable("not_") as SalFunction;
+        const not = forceAsFunction(this.resolveVariable("not_"));
         const v = yield* this.visitExpression(e.expression());
         return yield* not(v);
     }
     *visitApplyExpression(e: ApplyExpressionContext): Effective<Value> {
-        const f = (yield* this.visitExpression(e._left)) as SalFunction;
+        const f = forceAsFunction(yield* this.visitExpression(e._left));
         const x = yield* this.visitExpression(e._right);
         return yield* f(x);
     }
@@ -200,9 +201,9 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     }
     *visitBinaryExpression(e: BinaryExpressionContext): Effective<Value> {
         const l = yield* this.visitExpression(e._left);
-        const op = this.resolveVariable(
-            getWordValue(e.word()),
-        ) as SalFunctionMany<[Value, Value], Value>;
+        const op = forceAsFunction<Value, SalFunction>(
+            this.resolveVariable(getWordValue(e.word())),
+        );
         const r = yield* this.visitExpression(e._right);
         return yield* (yield* op(l))(r);
     }
@@ -225,22 +226,24 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     }
     visitNumber(e: NumberContext): Effective<Value> {
         const value = getNumberValue(e.NUMBER());
-        const fromNumber = this.resolveVariable("fromNumber") as SalFunction<
-            number,
-            Value
-        >;
+        if (e.AT() != null) return done(value);
+
+        const fromNumber = forceAsFunction<number, Value>(
+            this.resolveVariable("fromNumber"),
+        );
         return fromNumber(value);
     }
     visitString(e: StringContext): Effective<Value> {
         const value = getStringValue(e.STRING());
-        const fromString = this.resolveVariable("fromString") as SalFunction<
-            string,
-            Value
-        >;
+        if (e.AT() != null) return done(value);
+
+        const fromString = forceAsFunction<string, Value>(
+            this.resolveVariable("fromString"),
+        );
         return fromString(value);
     }
     visitVariable(e: VariableContext): Effective<Value> {
-        const name = getNameOfWordOrString(e.identifier());
+        const name = getWordValue(e.word());
         return done(this.resolveVariable(name));
     }
     visitWordExpression(e: WordExpressionContext): Effective<Value> {
@@ -254,10 +257,9 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
         if (value !== undefined) return done(value);
 
         // 存在しないなら文字列
-        const fromWord = this.resolveVariable("fromWord") as SalFunction<
-            string,
-            Value
-        >;
+        const fromWord = forceAsFunction<string, Value>(
+            this.resolveVariable("fromWord"),
+        );
         return fromWord(name);
     }
     visitParenthesizedExpression(
@@ -265,22 +267,31 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     ): Effective<Value> {
         return this.visitExpression(e.expression());
     }
+
+    evaluateExpressionAsLiteral(e: ExpressionContext) {
+        if (e instanceof NumberContext) {
+            return done(getNumberValue(e.NUMBER()));
+        }
+        if (e instanceof StringContext) {
+            return done(getStringValue(e.STRING()));
+        }
+        return this.visitExpression(e);
+    }
     *visitListLiteralExpression(
         e: ListLiteralExpressionContext,
     ): Effective<Value> {
         // [1, 2] -> consList:(consList:(getEmptyList:null):1):2)
-        const getEmptyList = this.resolveVariable(
-            "getEmptyList",
-        ) as SalFunction;
+        const getEmptyList = forceAsFunction(
+            this.resolveVariable("getEmptyList"),
+        );
 
         let list = yield* getEmptyList(null);
         let consList;
         for (const item of e.expression()) {
-            const x = yield* this.visitExpression(item);
-            consList ??= this.resolveVariable("consList") as SalFunctionMany<
-                [Value, Value],
-                Value
-            >;
+            const x = yield* this.evaluateExpressionAsLiteral(item);
+            consList ??= forceAsFunction<Value, SalFunction>(
+                this.resolveVariable("consList"),
+            );
             list = yield* (yield* consList(list))(x);
         }
         return list;
@@ -288,17 +299,20 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     *visitRecordLiteralExpression(
         e: RecordLiteralExpressionContext,
     ): Effective<Value> {
-        const getEmptyRecord = this.resolveVariable(
-            "getEmptyRecord",
-        ) as SalFunction;
+        const getEmptyRecord = forceAsFunction(
+            this.resolveVariable("getEmptyRecord"),
+        );
         let record = yield* getEmptyRecord(null);
         let consRecord;
         for (const entry of e.entry()) {
             const key = getNameOfWordOrString(entry);
-            const value = yield* this.visitExpression(entry.expression());
-            consRecord ??= this.resolveVariable(
-                "consRecord",
-            ) as SalFunctionMany<[Value, Value, Value], Value>;
+            const value = yield* this.evaluateExpressionAsLiteral(
+                entry.expression(),
+            );
+            consRecord ??= forceAsFunction<
+                Value,
+                SalFunctionMany<[Value, Value], Value>
+            >(this.resolveVariable("consRecord"));
             record = yield* (yield* (yield* consRecord(record))(key))(value);
         }
         return record;

@@ -9,7 +9,6 @@ import {
     type Effective,
 } from "../effective";
 import { sleep } from "../../standard-extensions";
-import { createStandardQueries } from "../../query/standard-queries";
 
 const createStandardLibrary = () => {
     const lib = new Map<string, Value>();
@@ -112,9 +111,6 @@ async function evaluate(source: string, globals?: ReadonlyMap<string, Value>) {
     });
     const { signal } = new AbortController();
     return await forceAsPromise(effective, signal);
-}
-async function evaluateAsQuery(source: string) {
-    return await evaluate(source, createStandardQueries());
 }
 
 describe("Evaluator", () => {
@@ -292,8 +288,48 @@ describe("Evaluator", () => {
             expect(await evaluate("[1, [2, 3], 4]")).toEqual([1, [2, 3], 4]);
         });
 
-        it("should evaluate empty record literal", async () => {
-            expect(await evaluate("{}")).toEqual({});
+        it("should evaluate sequence of list and custom value", async () => {
+            expect(
+                await evaluate(
+                    "[1] 2",
+                    new Map([["fromNumber", (x) => done({ fromNumber: x })]]),
+                ),
+            ).toEqual([[1], { fromNumber: 2 }]);
+        });
+        it("should evaluate sequence of list and custom value", async () => {
+            const globals = new Map<string, Value>([
+                ["fromString", (x) => done({ fromString: x })],
+                ["fromNumber", (x) => done({ fromNumber: x })],
+            ]);
+            expect(await evaluate(`[1, "a"] 2 "b"`, globals)).toEqual([
+                [[1, "a"], { fromNumber: 2 }],
+                { fromString: "b" },
+            ]);
+        });
+        it("should evaluate sequence of record and custom value", async () => {
+            const globals = new Map<string, Value>([
+                ["fromString", (x) => done({ fromString: x })],
+                ["fromNumber", (x) => done({ fromNumber: x })],
+            ]);
+            expect(await evaluate(`{ k1: 1, k2: "a" } 2 "b"`, globals)).toEqual(
+                [[{ k1: 1, k2: "a" }, { fromNumber: 2 }], { fromString: "b" }],
+            );
+        });
+        it("should evaluate sequence of record and custom value", async () => {
+            expect(
+                await evaluate(
+                    "[1] 2",
+                    new Map([["fromNumber", (x) => done({ fromNumber: x })]]),
+                ),
+            ).toEqual([[1], { fromNumber: 2 }]);
+        });
+        it("should evaluate sequence of string record and custom value", async () => {
+            expect(
+                await evaluate(
+                    `["a"] "b"`,
+                    new Map([["fromString", (x) => done({ fromString: x })]]),
+                ),
+            ).toEqual([["a"], { fromString: "b" }]);
         });
 
         it("should evaluate record literal with simple entries", async () => {
@@ -358,7 +394,7 @@ describe("Evaluator", () => {
                 (@fn z: @z /mul 100)
                 : (
                     (5 /add 3) /div (2 /mul 2)
-                    @where @"y" = 10
+                    @where @y = 10
                 )
             `;
             expect(await evaluate(code)).toBe(200);

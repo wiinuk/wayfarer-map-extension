@@ -7,7 +7,6 @@ import {
     BinaryExpressionContext,
     EntryContext,
     ExpressionContext,
-    IdentifierContext,
     LambdaExpressionContext,
     ListLiteralExpressionContext,
     NotExpressionContext,
@@ -68,16 +67,8 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         if (w != null) return w.accept(this);
         return e.text;
     }
-    visitIdentifier(e: IdentifierContext): string {
-        const w = e.word();
-        const name =
-            w != null ? w.accept(this) : (e.STRING()?.accept(this) ?? raise``);
-        return `${e.AT().text}${name}`;
-    }
     visitParameter(e: ParameterContext): string {
-        const i = e.identifier();
-        if (i != null) return i.accept(this);
-        return e.word()?.accept(this) ?? raise``;
+        return `${e.AT()?.text ?? ""}${e.word().accept(this)}`;
     }
     visitEntry(e: EntryContext): string {
         const name =
@@ -151,7 +142,7 @@ class PrintWithParenVisitor implements SalVisitor<string> {
         return e.STRING().accept(this);
     }
     visitVariable(e: VariableContext): string {
-        return e.identifier().accept(this);
+        return `@${e.word().accept(this)}`;
     }
     visitWordExpression(e: WordExpressionContext): string {
         return this.visitWord(e.word());
@@ -278,7 +269,7 @@ describe("Sal Parser", () => {
                 `(sourceFile (expression "a string") <EOF>)`,
             );
             expect(parseAndPrint("@identifier")).toStrictEqual(
-                "(sourceFile (expression (identifier @ (word identifier))) <EOF>)",
+                "(sourceFile (expression @ (word identifier)) <EOF>)",
             );
             expect(parseAndPrint("aWord")).toStrictEqual(
                 "(sourceFile (expression (word aWord)) <EOF>)",
@@ -304,7 +295,7 @@ describe("Sal Parser", () => {
             );
             // 3トークン
             expect(parseAndPrint("-@ident")).toStrictEqual(
-                "(sourceFile (expression - (expression (identifier @ (word ident)))) <EOF>)",
+                "(sourceFile (expression - (expression @ (word ident))) <EOF>)",
             );
             // 2トークン
             expect(parseAndPrint("-x")).toStrictEqual(
@@ -373,7 +364,7 @@ describe("Sal Parser", () => {
             );
 
             expect(parseAndPrint("a @where @x = 1 @where y = 2")).toStrictEqual(
-                "(sourceFile (expression (expression (expression (word a)) @ where (parameter (identifier @ (word x))) = (expression 1)) @ where (parameter (word y)) = (expression 2)) <EOF>)",
+                "(sourceFile (expression (expression (expression (word a)) @ where (parameter @ (word x)) = (expression 1)) @ where (parameter (word y)) = (expression 2)) <EOF>)",
             );
             expect(
                 parseAndPrint("a @where x = (b @where c = 1) @where y = 2"),
@@ -393,7 +384,7 @@ describe("Sal Parser", () => {
                 "(sourceFile (expression @ fn (parameter (word x)) : (expression (word x))) <EOF>)",
             );
             expect(parseAndPrint("@fn @x: x")).toStrictEqual(
-                "(sourceFile (expression @ fn (parameter (identifier @ (word x))) : (expression (word x))) <EOF>)",
+                "(sourceFile (expression @ fn (parameter @ (word x)) : (expression (word x))) <EOF>)",
             );
             expect(parseAndPrint("@fn x y z: 0")).toStrictEqual(
                 "(sourceFile (expression @ fn (parameter (word x)) (parameter (word y)) (parameter (word z)) : (expression 0)) <EOF>)",
