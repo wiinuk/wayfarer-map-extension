@@ -119,18 +119,13 @@ function setupDraftManagerDialog(page: PageResource) {
     draftList.events.addEventListener("count-changed", (e) => {
         title.setCounts(e.detail);
     });
+    draftList.events.addEventListener("filter-start", () => title.pushIsBusy());
+    draftList.events.addEventListener("filter-end", () => title.popIsBusy());
 
-    let fetchCount = 0;
-    page.remote.events.addEventListener("fetch-start", () => {
-        fetchCount++;
-        title.setIsSaving(true);
-    });
-    page.remote.events.addEventListener("fetch-end", () => {
-        fetchCount--;
-        if (fetchCount <= 0) {
-            title.setIsSaving(false);
-        }
-    });
+    page.remote.events.addEventListener("fetch-start", () =>
+        title.pushIsBusy(),
+    );
+    page.remote.events.addEventListener("fetch-end", () => title.popIsBusy());
 
     page.drafts.events.addEventListener("drafts-updated", (e) =>
         draftList.setDrafts(e.detail),

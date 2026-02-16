@@ -17,7 +17,19 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
             {indicator.element}
         </div>
     );
-    let currentSaving: boolean | undefined;
+    let busyCount = 0;
+    let currentIsBusy: boolean | undefined;
+    function changeIsBusy() {
+        const isBusy = 0 < busyCount;
+        if (currentIsBusy !== isBusy) {
+            if (isBusy) {
+                indicator.start();
+            } else {
+                indicator.stop();
+            }
+            currentIsBusy = isBusy;
+        }
+    }
     return {
         element,
         setCounts({
@@ -33,15 +45,13 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
                 countsElement.innerText = `${totalCount}件`;
             }
         },
-        setIsSaving(isSaving: boolean) {
-            if (currentSaving !== isSaving) {
-                if (isSaving) {
-                    indicator.start();
-                } else {
-                    indicator.stop();
-                }
-                currentSaving = isSaving;
-            }
+        pushIsBusy() {
+            busyCount++;
+            changeIsBusy();
+        },
+        popIsBusy() {
+            busyCount--;
+            changeIsBusy();
         },
     };
 }

@@ -36,6 +36,8 @@ interface DraftListEventMap {
         totalCount: number;
         filteredCount: number;
     };
+    "filter-start": undefined;
+    "filter-end": undefined;
 }
 
 export interface QuerySource {
@@ -577,14 +579,24 @@ export function createDraftList({
     const applyFilterCancelScope = createAsyncCancelScope(handleAsyncError);
     const requestFilterUpdate = () =>
         applyFilterCancelScope(async (signal) => {
-            await sleep(200, { signal });
+            await sleep(500, { signal });
             const query = getSelectedSource() ?? "";
-            filteredDrafts = await filterDrafts(
-                records,
-                allDrafts,
-                query,
-                signal,
+
+            events.dispatchEvent(
+                createTypedCustomEvent("filter-start", undefined),
             );
+            try {
+                filteredDrafts = await filterDrafts(
+                    records,
+                    allDrafts,
+                    query,
+                    signal,
+                );
+            } finally {
+                events.dispatchEvent(
+                    createTypedCustomEvent("filter-end", undefined),
+                );
+            }
             dispatchCountUpdatedEvent();
             updateVirtualList();
         });
