@@ -340,6 +340,7 @@ export interface CellStatistic<TLevel extends number> {
     readonly center: Readonly<LatLng>;
     readonly cell: Cell<TLevel>;
     readonly kindToCount: Map<EntityKind, number>;
+    // poi のみ取得したセルは undefined
     lastFetchDate: ClientDate | undefined;
 }
 type CellStatisticMap<TLevel extends number> = Map<
@@ -374,15 +375,16 @@ function updateCellStatisticsByCell<TLevel extends number>(
     lastFetchDate: ClientDate | undefined,
 ) {
     const key = cell.toString();
-    return (
+    const stat: CellStatistic<TLevel> =
         cells.get(key) ??
         setEntry(cells, key, {
             cell,
             center: cell.getLatLng(),
             kindToCount: new Map(),
             lastFetchDate,
-        })
-    );
+        });
+    stat.lastFetchDate ||= lastFetchDate;
+    return stat;
 }
 function updateCellStatisticsByPoi<TLevel extends number>(
     cells: CellStatisticMap<TLevel>,
