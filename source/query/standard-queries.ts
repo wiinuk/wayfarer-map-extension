@@ -2,18 +2,49 @@
 import { distance } from "../geometry";
 import type { Cell14Statistics, CellStatistic } from "../poi-records";
 import type { Draft } from "../remote";
-import type { LatLng } from "../s2";
 import { done, type Effective } from "../sal/effective";
 import type { Value } from "../sal/evaluator";
+import {
+    type Cell14Id,
+    createCellFromCoordinates,
+    type Cell,
+    type Cell17Id,
+    getCellId,
+} from "../typed-s2cell";
 
-export interface CellRepository {
-    getCell14Stat(p: LatLng): Effective<Cell14Statistics | undefined>;
-    getCell17Stat(p: LatLng): Effective<CellStatistic<17> | undefined>;
+export interface Cell14DraftStat {
+    readonly potentialStops: number;
 }
+
+export interface Cell14DraftMap {
+    readonly cell14: Cell<14>;
+    readonly cell17Drafts: Set<Cell17Id>;
+}
+
 export interface QueryEnvironment {
     getMinFreshDate(): Effective<number>;
-    getCellStats(): Effective<CellRepository>;
+    getCell14Stat(d: Draft): Effective<Cell14Statistics | undefined>;
+    getCell17Stat(d: Draft): Effective<CellStatistic<17> | undefined>;
+    getCell14DraftStat(d: Draft): Effective<Cell14DraftStat | undefined>;
     getUserLocation(): Effective<{ lat: number; lng: number }>;
+}
+
+export function buildDraftMap(drafts: readonly Draft[]) {
+    const cell14s = new Map<Cell14Id, Cell14DraftMap>();
+    for (const draft of drafts) {
+        const p = draft.coordinates[0];
+        const cell14 = createCellFromCoordinates(p, 14);
+        const cell14Id = cell14.toString();
+        let cell17Drafts = cell14s.get(cell14Id)?.cell17Drafts;
+        if (cell17Drafts == null) {
+            cell14s.set(cell14Id, {
+                cell14,
+                cell17Drafts: (cell17Drafts = new Set()),
+            });
+        }
+        cell17Drafts.add(getCellId(p, 17));
+    }
+    return cell14s;
 }
 
 export interface DraftQuery {
@@ -154,6 +185,32 @@ export function reachableWith(
     };
 }
 
+function builderOfPredicate(
+    predicate: (e: QueryEnvironment, d: Draft) => Effective<boolean>,
+): DraftQueryBuilder {
+    return {
+        isIgnorable: false,
+        initialize(e) {
+            return done({
+                isVisible(d) {
+                    return predicate(e, d);
+                },
+            });
+        },
+    };
+}
+function* getFreshCell17(e: QueryEnvironment, d: Draft) {
+    const minFetchDate = yield* e.getMinFreshDate();
+    const stat17 = yield* e.getCell17Stat(d);
+    if (
+        stat17 == null ||
+        stat17.lastFetchDate == null ||
+        stat17.lastFetchDate < minFetchDate
+    ) {
+        return;
+    }
+    return stat17;
+}
 function builderOfCellPredicate(
     predicate: (
         stat14: Cell14Statistics,
@@ -163,35 +220,29 @@ function builderOfCellPredicate(
 ): DraftQueryBuilder {
     return {
         isIgnorable: false,
-        *initialize(e) {
-            const minFetchDate = yield* e.getMinFreshDate();
-            const stats = yield* e.getCellStats();
-            return {
+        initialize(e) {
+            return done({
                 *isVisible(d) {
-                    const [p] = d.coordinates;
-                    const stat17 = yield* stats.getCell17Stat(p);
+                    const stat17 = yield* getFreshCell17(e, d);
 
                     // セル情報が取得されていないか古いなら検索にヒットさせる
-                    if (
-                        stat17 == null ||
-                        stat17.lastFetchDate == null ||
-                        stat17.lastFetchDate < minFetchDate
-                    ) {
-                        return true;
-                    }
+                    if (stat17 == null) return true;
 
-                    const stat14 = yield* stats.getCell14Stat(p);
+                    const stat14 = yield* e.getCell14Stat(d);
                     if (stat14 == null) return true;
 
                     return predicate(stat14, stat17, d);
                 },
-            };
+            });
         },
     };
 }
 
 function hasPokestopOrGymInCell17() {
-    return builderOfCellPredicate((_stat14, stat17) => {
+    return builderOfPredicate(function* (e, d) {
+        const stat17 = yield* getFreshCell17(e, d);
+        if (stat17 == null) return true;
+
         // セル17にジムかポケストップが存在するか
         const count =
             (stat17.kindToCount.get("GYM") ?? 0) +
@@ -200,28 +251,47 @@ function hasPokestopOrGymInCell17() {
     });
 }
 
-export function getPokestopCountForNextGym(current: number) {
-    let next;
-    if (current < 2) {
-        next = 2;
-    } else if (current < 6) {
-        next = 6;
-    } else if (current < 20) {
-        next = 20;
-    } else {
-        return Infinity;
+const gymThresholds = Object.freeze([2, 6, 20]);
+function getGymCount(stopCount: number) {
+    for (let i = 0; i < gymThresholds.length; i++) {
+        const threshold = gymThresholds[i]!;
+        if (stopCount < threshold) {
+            return i;
+        }
     }
-    if (current < next) return Infinity;
+    return gymThresholds.length;
+}
+export function getPokestopCountForNextGym(current: number) {
+    let next = Infinity;
+    for (const threshold of gymThresholds) {
+        if (current < threshold) {
+            next = threshold;
+            break;
+        }
+    }
     return next - current;
 }
 
 function stopsForNextGym(expectedCount: number): DraftQueryBuilder {
-    return builderOfCellPredicate((stat14, _stat17) => {
-        const currentCount =
-            (stat14.kindToPois.get("GYM")?.length ?? 0) +
-            (stat14.kindToPois.get("POKESTOP")?.length ?? 0);
+    return builderOfPredicate(function* (e, d) {
+        const stat14 = yield* e.getCell14Stat(d);
+        if (stat14 == null) return true;
 
-        return getPokestopCountForNextGym(currentCount) === expectedCount;
+        const gymCount = stat14.kindToPois.get("GYM")?.length ?? 0;
+        const pokestopCount = stat14.kindToPois.get("POKESTOP")?.length ?? 0;
+        const stopCount = gymCount + pokestopCount;
+
+        const draftStat14 = yield* e.getCell14DraftStat(d);
+        if (draftStat14 == null) return true;
+
+        return (
+            // 次のジムに必要なポケストップ数が指定された数で
+            getPokestopCountForNextGym(stopCount) === expectedCount &&
+            // 候補の数が指定された数以上で
+            expectedCount <= draftStat14.potentialStops &&
+            // ジムの数が正常（スポンサーポケストップなどは表示されない）
+            getGymCount(stopCount) === gymCount
+        );
     });
 }
 function cell14Stops(expectedCount: number): DraftQueryBuilder {

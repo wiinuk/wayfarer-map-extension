@@ -30,15 +30,14 @@ describe("Queries", () => {
                 getMinFreshDate() {
                     return done(0);
                 },
-                getCellStats() {
-                    return done({
-                        getCell17Stat() {
-                            return done(undefined);
-                        },
-                        getCell14Stat() {
-                            return done(undefined);
-                        },
-                    });
+                getCell17Stat() {
+                    return done(undefined);
+                },
+                getCell14Stat() {
+                    return done(undefined);
+                },
+                getCell14DraftStat() {
+                    return done(undefined);
                 },
             }),
             signal,
