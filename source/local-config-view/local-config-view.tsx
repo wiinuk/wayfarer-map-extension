@@ -1,5 +1,5 @@
 import classNames, { cssText } from "./local-config-view.module.css";
-import { ConfigSchema, type LocalConfigAccessor } from "../local-config";
+import { type LocalConfigAccessor } from "../local-config";
 import { createStringItemInput } from "./item-input-string";
 import { createJsonItemInput } from "./item-input-json";
 import { styleSetter } from "../dom-extensions";
@@ -83,7 +83,7 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
                     | undefined,
             };
 
-            ConfigSchema.parse(newConfig);
+            configAccessor.schema.parse(newConfig);
 
             configAccessor.setConfig(newConfig);
             statusMessageElement.textContent = "Saved successfully!";

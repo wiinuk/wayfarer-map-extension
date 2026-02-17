@@ -18,7 +18,6 @@ import {
 } from "./drafts-overlay";
 import PoiRecordsWorker from "./poi-records.worker.ts?worker";
 import type { PageEventMap, PageEventTarget } from "./page-events";
-import * as Comlink from "comlink";
 import { openRecords, type PoiRecords } from "./poi-records";
 import { createDialog } from "./drafts-view/dialog";
 import { createDraftList } from "./drafts-view/draft-list";
@@ -71,7 +70,9 @@ export type MainApi = {
     ): void;
 };
 
-function setupWorkerRecorder(events: PageEventTarget) {
+async function setupWorkerRecorder(events: PageEventTarget) {
+    const Comlink =
+        await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
     const mainApi: MainApi = {
         dispatchEvent(type, data) {
             events.dispatchEvent(createTypedCustomEvent(type, data));
@@ -139,7 +140,7 @@ async function asyncSetup(signal: AbortSignal) {
 
     const map = await getGMapObject({ signal });
     const events = createTypedEventTarget<PageEventMap>();
-    const local = createConfigAccessor(localConfigKey);
+    const local = await createConfigAccessor(localConfigKey);
     local.events.addEventListener("config-changed", () =>
         events.dispatchEvent(
             createTypedCustomEvent("config-changed", undefined),
@@ -160,7 +161,7 @@ async function asyncSetup(signal: AbortSignal) {
     };
     document.head.appendChild(page.styleElement);
 
-    setupWorkerRecorder(events);
+    await setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
     setupDraftManagerDialog(page);
     await setupDraftsOverlay(page.drafts, local, scheduler);

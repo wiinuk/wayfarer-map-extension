@@ -1,7 +1,6 @@
 // spell-checker: ignore Pois
 import { createAsyncQueue, type AsyncQueue } from "./async-queue";
 import { createScheduler, type Scheduler } from "./dom-extensions";
-import { GcsQueriesSchema, GcsResponseSchema } from "./gcs-schema";
 import {
     openRecords,
     updateRecordsOfReceivedPoisInCells,
@@ -12,6 +11,7 @@ import { createTypedCustomEvent } from "./typed-event-target";
 import { tokenToCell, type CellId, type S2Token } from "./typed-s2cell";
 import * as Bounds from "./bounds";
 import type { PageEventTarget } from "./page-events";
+import type { GcsSchemas } from "./gcs-schema";
 
 interface GcsLog {
     readonly queries: Readonly<Record<string, unknown>>;
@@ -46,7 +46,11 @@ export const gcsCellLevel = 14;
 export type GcsCellLevel = typeof gcsCellLevel;
 
 type Gcs = Awaited<ReturnType<typeof parseGcsLogs>>;
-async function parseGcsLogs(logs: readonly GcsLog[], scheduler: Scheduler) {
+async function parseGcsLogs(
+    schemas: GcsSchemas,
+    logs: readonly GcsLog[],
+    scheduler: Scheduler,
+) {
     const cells = new Map<
         CellId<typeof gcsCellLevel>,
         CellWithPois<GcsCellLevel>
@@ -54,10 +58,10 @@ async function parseGcsLogs(logs: readonly GcsLog[], scheduler: Scheduler) {
     const bounds = [];
     for (const { queries, responseText } of logs) {
         await scheduler.yield();
-        const response = GcsResponseSchema.parse(JSON.parse(responseText));
+        const response = schemas.parseGcsResponse(responseText);
         if (response.captcha || !response.result.success) continue;
 
-        const bound = GcsQueriesSchema.parse(queries);
+        const bound = schemas.parseGcsQueries(queries);
         bounds.push(Bounds.fromSwNe(bound.sw, bound.ne));
 
         for (const { metadata, pois } of response.result.data) {
@@ -74,6 +78,7 @@ async function parseGcsLogs(logs: readonly GcsLog[], scheduler: Scheduler) {
 }
 
 export async function createGcsHandler(
+    schemas: GcsSchemas,
     events: PageEventTarget,
     handleAsyncError: (reason: unknown) => void,
 ) {
@@ -82,7 +87,7 @@ export async function createGcsHandler(
         const { signal } = new AbortController();
         const scheduler = createScheduler(signal);
 
-        const receivedPois = await parseGcsLogs(items, scheduler);
+        const receivedPois = await parseGcsLogs(schemas, items, scheduler);
         await processGcsRequests(records, events, receivedPois, signal);
     }, handleAsyncError);
 

@@ -1,11 +1,11 @@
 // spell-checker: ignore comlink
-import * as Comlink from "comlink";
 import { createGcsHandler } from "./gcs-recorder";
 import {
     createTypedEventTarget,
     type TypedCustomEvent,
 } from "./typed-event-target";
 import { pageEventTypes, type PageEventMap } from "./page-events";
+import { createGcsSchemas } from "./gcs-schema";
 
 export interface WorkerApi {
     hello(message: string): string;
@@ -16,9 +16,12 @@ function handleAsyncError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
 }
 async function setup() {
+    const Comlink =
+        await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
     const mainAPI = Comlink.wrap<import("./setup").MainApi>(
-        self as Comlink.Endpoint,
+        self as import("comlink").Endpoint,
     );
+    const schemas = await createGcsSchemas();
 
     const events = createTypedEventTarget<PageEventMap>();
     const transferEvent = (
@@ -32,7 +35,7 @@ async function setup() {
         events.addEventListener(type, transferEvent),
     );
 
-    const handler = await createGcsHandler(events, handleAsyncError);
+    const handler = await createGcsHandler(schemas, events, handleAsyncError);
     const api: WorkerApi = {
         hello(e) {
             return `Worker received: ${e}`;
