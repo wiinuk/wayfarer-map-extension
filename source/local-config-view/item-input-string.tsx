@@ -62,7 +62,7 @@ export function createStringItemInput(label: string) {
         enabledCheckbox.checked = hasUserId;
         input.disabled = !hasUserId;
         inputContainer.style.display = hasUserId ? "" : "none";
-        input.value = hasUserId ? (value ?? "") : "";
+        input.value = hasUserId ? value : "";
     }
     function getValue() {
         if (enabledCheckbox.checked) {

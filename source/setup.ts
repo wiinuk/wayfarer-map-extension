@@ -95,7 +95,7 @@ async function setupWorkerRecorder(events: PageEventTarget) {
 function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
     const lang = navigator.language;
     return (
-        page.local.getConfig()?.dictionaries?.[lang]?.[key] ??
+        page.local.getConfig().dictionaries?.[lang]?.[key] ??
         page.defaultDictionary[key]
     );
 }

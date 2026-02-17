@@ -632,9 +632,7 @@ export function createDraftList({
                     updateVirtualList();
                 };
                 const onDblclick = () => {
-                    if (draft) {
-                        overlay.map.setCenter(draft.coordinates[0]);
-                    }
+                    overlay.map.setCenter(draft.coordinates[0]);
                 };
 
                 // firefox で click と dblclick が干渉するので対策

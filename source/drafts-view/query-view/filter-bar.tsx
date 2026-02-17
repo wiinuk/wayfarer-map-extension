@@ -91,7 +91,7 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
         } else {
             multiLineIndicator.classList.add(classNames["hidden"]);
         }
-        input.value = newValue?.split("\n")[0] ?? "";
+        input.value = newValue.split("\n")[0] ?? "";
     }
     setValue(initialValue);
 

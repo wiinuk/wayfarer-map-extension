@@ -30,7 +30,7 @@ export async function awaitElement<T>(
 ): Promise<NonNullable<T>> {
     let currentInterval = 100;
     const maxInterval = 500;
-    while (true) {
+    for (;;) {
         const ref = get();
         if (ref) return ref;
         await sleep(Math.min((currentInterval *= 2), maxInterval), options);

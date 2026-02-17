@@ -55,7 +55,7 @@ export function parseCoordinates(coordinatesText: string) {
     if (result.length === 0) {
         throw new Error();
     }
-    return result as LatLng[];
+    return result;
 }
 
 export function coordinatesToString(coords: readonly LatLng[]): string {

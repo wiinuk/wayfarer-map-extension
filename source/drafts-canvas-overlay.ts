@@ -62,7 +62,6 @@ export function createCanvasOverlay(
         // 地図が動いたりズームしたりする度に呼ばれる
         override draw() {
             const projection = this.getProjection();
-            if (!projection) return;
 
             const map = this.getMap();
             const canvas = this.canvas;
