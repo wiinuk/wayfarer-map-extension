@@ -192,7 +192,7 @@ function renderCell14(overlay: PoisOverlay, cell14: Cell14Statistics) {
     polygon.setPath(cell14.corner);
 }
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
-    return cell17.kindToCount.get(kind) ?? 0 !== 0;
+    return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 function renderCell17(
     overlay: PoisOverlay,
