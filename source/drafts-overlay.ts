@@ -68,8 +68,13 @@ export interface ViewConfig {
         };
     };
     readonly selected: {
-        readonly tooClose: CircleConfig;
-        readonly submissionDistance: CircleConfig;
+        readonly circles: {
+            readonly submissionTooClose: CircleConfig;
+            readonly tooClose: CircleConfig;
+            readonly pogoTouchable: CircleConfig;
+            readonly powerSpotTooClose: CircleConfig;
+            readonly submissionDistance: CircleConfig;
+        };
         readonly cell: Readonly<Record<`${number}`, PolygonConfig>>;
     };
 }
@@ -97,6 +102,13 @@ function createDefaultViewConfig(): ViewConfig {
         fillColor: "rgba(240, 252, 249, 0.4)",
         fill: true,
     };
+    const selectedCircleBase: CircleConfig = {
+        radius: 20,
+        strokeColor: "rgb(240, 252, 249)",
+        strokeWeight: 2,
+        dashLength: 30,
+        dashRatio: 3,
+    };
     return {
         minDetailZoom: 16,
         baseZIndex: 3100,
@@ -112,19 +124,34 @@ function createDefaultViewConfig(): ViewConfig {
             },
         },
         selected: {
-            tooClose: {
-                radius: 20,
-                strokeColor: "rgb(240, 252, 249)",
-                strokeWeight: 2,
-                dashLength: 30,
-                dashRatio: 3,
-            },
-            submissionDistance: {
-                radius: 10 * 1000,
-                strokeColor: "rgb(231, 18, 196)",
-                strokeWeight: 5,
-                dashLength: 50,
-                dashRatio: 3,
+            circles: {
+                submissionTooClose: {
+                    ...selectedCircleBase,
+                    radius: 2,
+                    strokeWeight: 1,
+                    dashLength: 30,
+                    dashRatio: 5,
+                },
+                tooClose: selectedCircleBase,
+                powerSpotTooClose: {
+                    ...selectedCircleBase,
+                    radius: 40,
+                    strokeColor: "rgb(247, 158, 255)",
+                    strokeWeight: 1,
+                },
+                pogoTouchable: {
+                    ...selectedCircleBase,
+                    radius: 80,
+                    strokeColor: "rgb(160, 201, 255)",
+                    strokeWeight: 1,
+                },
+                submissionDistance: {
+                    ...selectedCircleBase,
+                    radius: 10 * 1000,
+                    strokeColor: "rgb(231, 18, 196)",
+                    strokeWeight: 5,
+                    dashLength: 50,
+                },
             },
             cell: {
                 14: cell,

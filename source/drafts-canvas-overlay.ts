@@ -125,24 +125,20 @@ function drawSelectedViews(
 ) {
     const center = selected.draft.coordinates[0];
     const pixelsPerMeter = getPixelsPerMeter(center, projection);
-    renderCircle(
-        ctx,
-        center,
-        config.tooClose,
-        projection,
-        pixelsPerMeter,
-        deviceX,
-        deviceY,
-    );
-    renderCircle(
-        ctx,
-        center,
-        config.submissionDistance,
-        projection,
-        pixelsPerMeter,
-        deviceX,
-        deviceY,
-    );
+    for (const circleKey in config.circles) {
+        const circleConfig =
+            config.circles[circleKey as keyof typeof config.circles];
+
+        renderCircle(
+            ctx,
+            center,
+            circleConfig,
+            projection,
+            pixelsPerMeter,
+            deviceX,
+            deviceY,
+        );
+    }
 
     for (const key in config.cell) {
         const cellConfig = config.cell[key as `${number}`]!;
