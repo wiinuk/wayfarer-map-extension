@@ -53,6 +53,9 @@ export default defineConfig([
             ],
             "@typescript-eslint/await-thenable": "error",
             "@typescript-eslint/no-misused-promises": "error",
+            "@typescript-eslint/no-unnecessary-condition": "warn",
+            "@typescript-eslint/no-unnecessary-type-assertion": "warn",
+
             "object-shorthand": "warn",
             "no-useless-rename": "warn",
             "no-duplicate-imports": "warn",
