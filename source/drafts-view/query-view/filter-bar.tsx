@@ -19,22 +19,25 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
     const input = (
         <input
             type="text"
-            oninput={() =>
-                events.dispatchEvent(
-                    createTypedCustomEvent("input-changed", undefined),
-                )
-            }
+            oninput={onInput}
             classList={[classNames.input]}
             placeholder="🔍キーワードで絞り込み…"
         />
     ) as HTMLInputElement;
 
+    const clearButton = (
+        <button
+            classList={[classNames["clear-button"], classNames.hidden]}
+            onclick={onClickClear}
+            aria-label="検索ワードを削除"
+        >
+            ✕
+        </button>
+    ) as HTMLButtonElement;
+
     const multiLineIndicator = (
         <span
-            classList={[
-                classNames["multi-line-indicator"],
-                classNames["hidden"],
-            ]}
+            classList={[classNames["multi-line-indicator"], classNames.hidden]}
         >
             ...
         </span>
@@ -43,6 +46,7 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
     const element = (
         <div classList={[classNames.wrapper]}>
             {input}
+            {clearButton}
             {multiLineIndicator}
             <div class={classNames.buttons}>
                 <button
@@ -87,12 +91,39 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
         value = newValue;
         const isMultiLine = newValue.includes("\n");
         if (isMultiLine) {
-            multiLineIndicator.classList.remove(classNames["hidden"]);
+            multiLineIndicator.classList.remove(classNames.hidden);
         } else {
-            multiLineIndicator.classList.add(classNames["hidden"]);
+            multiLineIndicator.classList.add(classNames.hidden);
         }
         input.value = newValue.split("\n")[0] ?? "";
+        updateClearButtonVisibility();
     }
+
+    function updateClearButtonVisibility() {
+        const isMultiLine = value.includes("\n");
+        const hasValue = input.value.length > 0;
+        if (!isMultiLine && hasValue) {
+            clearButton.classList.remove(classNames.hidden);
+        } else {
+            clearButton.classList.add(classNames.hidden);
+        }
+    }
+
+    function onInput() {
+        events.dispatchEvent(
+            createTypedCustomEvent("input-changed", undefined),
+        );
+        updateClearButtonVisibility();
+    }
+
+    function onClickClear() {
+        setValue("");
+        input.focus();
+        events.dispatchEvent(
+            createTypedCustomEvent("input-changed", undefined),
+        );
+    }
+
     setValue(initialValue);
 
     return { element, events, getValue, setValue };
