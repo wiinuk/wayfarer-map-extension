@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.4.6
+// @version      0.4.7
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -23186,29 +23186,31 @@
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText4 = ':root {\n    --border-color-51631c833743ba2a62500c30df9174e36f9b9673: #ccc;\n    --selected-background-color-1bc6cb676d23da8289c0d6a0b3bb2cdf3610faee: #2563eb;\n    --selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd: #fff;\n    --text-muted-022faf9d53e3d59f9848f2691abf286e5ee97d8e: #666;\n    --background-color-light-f430ca9112788979e76b190123afd7a26a88e9c9: #f8f9fa;\n    --primary-color-68a3ef2f2c6d3344d237a9856025adfe18fd107c: #2563eb;\n    --primary-color-dark-be35b3b230419a40a8bdc9ef9018e8a06e7d5f66: #0056b3;\n}\n\n.container-bcca77d95a0c238b622ad40e7361a62dc25cd3d3 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-319235de682839e4738c9ef400f355f6631287b5 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-319235de682839e4738c9ef400f355f6631287b5:focus {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.input-error-9992f803f35644f2d22186012a38d080999233f3 {\n    border: 1px solid red;\n}\n\n.list-container-b9ec8abc5ee696908aa8198c1fed3c63294688b3 {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    border-radius: 4px;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80:last-child {\n    border-bottom: none;\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80.selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446 {\n    background-color: var(--selected-background-color-1bc6cb676d23da8289c0d6a0b3bb2cdf3610faee);\n    color: var(--selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd);\n}\n\n.item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80.selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446 .item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518 {\n    color: var(--selected-text-color-5e45dd64c7efb30e9b0c2c3c63b17f0dd093bdfd);\n}\n\n.item-name-d565d6e49fc154926305fcf6100601a298cc223a {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518 {\n    font-size: 0.8em;\n    color: var(--text-muted-022faf9d53e3d59f9848f2691abf286e5ee97d8e);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-51631c833743ba2a62500c30df9174e36f9b9673);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca[open] > .detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1::after {\n    content: "\u2212";\n}\n\n.detail-name-068298090b376b2e49849d1866736a9c17833d13 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-c585478c67fd2886b55072144a65681cb2110f7d,\n.detail-note-0a41dc9710d7c916f069cfdbfd5f3f890bf15e44,\n.detail-coordinates-1bcea9690df40975a760d07d77861165f2b74873 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-dfe140a008e33f532dbc0a6511c731307b56a5b4 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113,\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e {\n    background-color: var(--primary-color-68a3ef2f2c6d3344d237a9856025adfe18fd107c);\n}\n\n.map-button-908d4aa41c19b78316d582a681067fd5d9c8c515:hover,\n.create-button-3ea22a965c69c8451c019dc09bf6578724443113:hover,\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c:hover,\n.config-button-fbedbd8bad00446b85fd186f85264068c070686e:hover {\n    background-color: var(--primary-color-dark-be35b3b230419a40a8bdc9ef9018e8a06e7d5f66);\n}\n\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553 {\n    background-color: #dc3545;\n}\n\n.delete-button-25c3a2ec4558be37b257180f32e60df742dad553:hover {\n    background-color: #c82333;\n}\n\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c.is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e {\n    background-color: #28a745;\n}\n\n.template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c.is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e:hover {\n    background-color: #218838;\n}\n\n.input-error-9992f803f35644f2d22186012a38d080999233f3 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
+  var cssText4 = ':root {\n    --border-color-40d85bb0a4cd9e18e1675213e27926067e14ec44: #ccc;\n    --selected-background-color-15395d257dc2a9dbc4d35bf4e8636decf66fb580: #2563eb;\n    --selected-text-color-2fafe4abcba384c428e6663a12c8ebcb4becf7c4: #fff;\n    --text-muted-e054f4904a1b966f2001aa63511aed50f1a7eb4b: #666;\n    --background-color-light-f43ca1891bfeb3b68364b309b269e758feb5983e: #f8f9fa;\n    --primary-color-5bcad8b481171789894dde44ae88f0732a00a933: #2563eb;\n    --primary-color-dark-f1398bfd0df9f9d323d5b8be1e96aa7944a782d3: #0056b3;\n}\n\n.container-d616a65ee94eb3e65d06174907e8ea47361d285e {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-0f1ad47e6e58c954331ca21516ad3a9658f81d2d {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-0f1ad47e6e58c954331ca21516ad3a9658f81d2d:focus {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n}\n\n.input-error-599c6c6df62264a0a1d2659fb5c9b7420f2c5b1a {\n    border: 1px solid red;\n}\n\n.list-container-83113acafdacffc7acf580cacc0ff14397b9275b {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-40d85bb0a4cd9e18e1675213e27926067e14ec44);\n    border-radius: 4px;\n}\n\n.item-37e25f2b2abeb01ef28100917b7d3a0587af5e2f {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-40d85bb0a4cd9e18e1675213e27926067e14ec44);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-37e25f2b2abeb01ef28100917b7d3a0587af5e2f:last-child {\n    border-bottom: none;\n}\n\n.item-37e25f2b2abeb01ef28100917b7d3a0587af5e2f.selected-e87247b5a5cfd84b8e590c984f8df84a31990d3a {\n    background-color: var(--selected-background-color-15395d257dc2a9dbc4d35bf4e8636decf66fb580);\n    color: var(--selected-text-color-2fafe4abcba384c428e6663a12c8ebcb4becf7c4);\n}\n\n.item-37e25f2b2abeb01ef28100917b7d3a0587af5e2f.selected-e87247b5a5cfd84b8e590c984f8df84a31990d3a .item-note-325785ce02e5733f3b97abf9c4719f0032b08735 {\n    color: var(--selected-text-color-2fafe4abcba384c428e6663a12c8ebcb4becf7c4);\n}\n\n.item-name-90a023abd12df4503fcbdd00805349cbd8befdf2 {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-325785ce02e5733f3b97abf9c4719f0032b08735 {\n    font-size: 0.8em;\n    color: var(--text-muted-e054f4904a1b966f2001aa63511aed50f1a7eb4b);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-a8d855bbdd738b9c86079022d60a620d9a5a4fb9 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-40d85bb0a4cd9e18e1675213e27926067e14ec44);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-d29161e7893ffbf485c82b4a3c9d703838e80ce6 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-d29161e7893ffbf485c82b4a3c9d703838e80ce6::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-d29161e7893ffbf485c82b4a3c9d703838e80ce6::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-a8d855bbdd738b9c86079022d60a620d9a5a4fb9[open] > .detail-summary-d29161e7893ffbf485c82b4a3c9d703838e80ce6::after {\n    content: "\u2212";\n}\n\n.detail-name-3f57af7f77d5d8f8aec7751a1a233375ac2c0598 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-254fb1e1ae0cdc0f865d95ae463db64d2867ec52,\n.detail-note-733aa354e8cd8b62b720404353736b49ef0cc57d,\n.detail-coordinates-91eda1507122fc7266e8a73f8c592295e4da8bca {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-d078eaeb8bd5e4f289484bc4bc835c8dd8ade5c0 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.coordinates-container-f262f03ca4b1310e60e0588a145d7845d604051d {\n    display: flex;\n    width: 100%;\n    gap: 4px;\n}\n\n.detail-coordinates-91eda1507122fc7266e8a73f8c592295e4da8bca {\n    flex-grow: 1;\n}\n\n.open-map-button-d0469846eff8ab2c5bbbf8279fe8939e10807acb {\n    padding: 4px;\n    border: none;\n    border-radius: 4px;\n    background-color: var(--primary-color-5bcad8b481171789894dde44ae88f0732a00a933);\n    color: white;\n    cursor: pointer;\n}\n\n.open-map-button-d0469846eff8ab2c5bbbf8279fe8939e10807acb:hover {\n    background-color: var(--primary-color-dark-f1398bfd0df9f9d323d5b8be1e96aa7944a782d3);\n}\n\n.map-button-1746b9bfb3076b8c29a3974dd83457a853c70236,\n.create-button-67f1537ff4fdf26ca6cfb4d6f15c201ad15e5e6d,\n.delete-button-ff6b0a755638b349e9da00f921a2056e31592ac4,\n.template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca,\n.config-button-e520a405714cc54cc83204febea7e8f1e108cd20 {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-1746b9bfb3076b8c29a3974dd83457a853c70236,\n.create-button-67f1537ff4fdf26ca6cfb4d6f15c201ad15e5e6d,\n.template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca,\n.config-button-e520a405714cc54cc83204febea7e8f1e108cd20 {\n    background-color: var(--primary-color-5bcad8b481171789894dde44ae88f0732a00a933);\n}\n\n.map-button-1746b9bfb3076b8c29a3974dd83457a853c70236:hover,\n.create-button-67f1537ff4fdf26ca6cfb4d6f15c201ad15e5e6d:hover,\n.template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca:hover,\n.config-button-e520a405714cc54cc83204febea7e8f1e108cd20:hover {\n    background-color: var(--primary-color-dark-f1398bfd0df9f9d323d5b8be1e96aa7944a782d3);\n}\n\n.delete-button-ff6b0a755638b349e9da00f921a2056e31592ac4 {\n    background-color: #dc3545;\n}\n\n.delete-button-ff6b0a755638b349e9da00f921a2056e31592ac4:hover {\n    background-color: #c82333;\n}\n\n.template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca.is-template-a08083e78a7a21d71d45b82e8a7d612af147b55c {\n    background-color: #28a745;\n}\n\n.template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca.is-template-a08083e78a7a21d71d45b82e8a7d612af147b55c:hover {\n    background-color: #218838;\n}\n\n.input-error-599c6c6df62264a0a1d2659fb5c9b7420f2c5b1a {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
   var draft_list_default = {
-    container: "container-bcca77d95a0c238b622ad40e7361a62dc25cd3d3",
-    "input-field": "input-field-319235de682839e4738c9ef400f355f6631287b5",
-    "input-error": "input-error-9992f803f35644f2d22186012a38d080999233f3",
-    "list-container": "list-container-b9ec8abc5ee696908aa8198c1fed3c63294688b3",
-    item: "item-53f6e8c2e4ae94556a783051b8d2e0f75243ab80",
-    selected: "selected-82f59d7114a0c5666cae0781a1f3b436c4c1d446",
-    "item-note": "item-note-364dd75c466d5cbe30232b5aea6c4a84bc40b518",
-    "item-name": "item-name-d565d6e49fc154926305fcf6100601a298cc223a",
-    "detail-pane": "detail-pane-34aa27f0b608fb8f69c007db534ce96870f96eca",
-    "detail-summary": "detail-summary-2bce7072691ec97815d24dd4fbd692422322ddd1",
-    "detail-name": "detail-name-068298090b376b2e49849d1866736a9c17833d13",
-    "detail-description": "detail-description-c585478c67fd2886b55072144a65681cb2110f7d",
-    "detail-note": "detail-note-0a41dc9710d7c916f069cfdbfd5f3f890bf15e44",
-    "detail-coordinates": "detail-coordinates-1bcea9690df40975a760d07d77861165f2b74873",
-    "detail-content-wrapper": "detail-content-wrapper-dfe140a008e33f532dbc0a6511c731307b56a5b4",
-    "map-button": "map-button-908d4aa41c19b78316d582a681067fd5d9c8c515",
-    "create-button": "create-button-3ea22a965c69c8451c019dc09bf6578724443113",
-    "delete-button": "delete-button-25c3a2ec4558be37b257180f32e60df742dad553",
-    "template-button": "template-button-9c4bd97db3e61d62a4ece62bbbd83ae975bf4a2c",
-    "config-button": "config-button-fbedbd8bad00446b85fd186f85264068c070686e",
-    "is-template": "is-template-a3d4766334eaaa9ff04666eed54ef572d8cd166e"
+    container: "container-d616a65ee94eb3e65d06174907e8ea47361d285e",
+    "input-field": "input-field-0f1ad47e6e58c954331ca21516ad3a9658f81d2d",
+    "input-error": "input-error-599c6c6df62264a0a1d2659fb5c9b7420f2c5b1a",
+    "list-container": "list-container-83113acafdacffc7acf580cacc0ff14397b9275b",
+    item: "item-37e25f2b2abeb01ef28100917b7d3a0587af5e2f",
+    selected: "selected-e87247b5a5cfd84b8e590c984f8df84a31990d3a",
+    "item-note": "item-note-325785ce02e5733f3b97abf9c4719f0032b08735",
+    "item-name": "item-name-90a023abd12df4503fcbdd00805349cbd8befdf2",
+    "detail-pane": "detail-pane-a8d855bbdd738b9c86079022d60a620d9a5a4fb9",
+    "detail-summary": "detail-summary-d29161e7893ffbf485c82b4a3c9d703838e80ce6",
+    "detail-name": "detail-name-3f57af7f77d5d8f8aec7751a1a233375ac2c0598",
+    "detail-description": "detail-description-254fb1e1ae0cdc0f865d95ae463db64d2867ec52",
+    "detail-note": "detail-note-733aa354e8cd8b62b720404353736b49ef0cc57d",
+    "detail-coordinates": "detail-coordinates-91eda1507122fc7266e8a73f8c592295e4da8bca",
+    "detail-content-wrapper": "detail-content-wrapper-d078eaeb8bd5e4f289484bc4bc835c8dd8ade5c0",
+    "coordinates-container": "coordinates-container-f262f03ca4b1310e60e0588a145d7845d604051d",
+    "open-map-button": "open-map-button-d0469846eff8ab2c5bbbf8279fe8939e10807acb",
+    "map-button": "map-button-1746b9bfb3076b8c29a3974dd83457a853c70236",
+    "create-button": "create-button-67f1537ff4fdf26ca6cfb4d6f15c201ad15e5e6d",
+    "delete-button": "delete-button-ff6b0a755638b349e9da00f921a2056e31592ac4",
+    "template-button": "template-button-3d054d6b00ab67976c9b50498ca799ae22db71ca",
+    "config-button": "config-button-e520a405714cc54cc83204febea7e8f1e108cd20",
+    "is-template": "is-template-a08083e78a7a21d71d45b82e8a7d612af147b55c"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -23553,14 +23555,15 @@
   }
 
   // source/drafts-view/query-view/filter-bar.module.css
-  var cssText8 = ".wrapper-1127d7f98522db31ea6e2d9ebde2e6f989e09c50 {\n    display: flex;\n    align-items: center;\n    border-radius: 14px;\n    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);\n    padding: 6px 8px 6px 14px;\n    transition:\n        box-shadow 0.2s ease,\n        transform 0.15s ease;\n}\n\n.wrapper-1127d7f98522db31ea6e2d9ebde2e6f989e09c50:focus-within {\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);\n    background: #ffffff;\n    transform: translateY(-1px);\n}\n\n.input-c8987b531e2f53a0aa08ad6c358fe761a37a7e68 {\n    flex: 1;\n    border: none;\n    outline: none;\n    font-size: 15px;\n    padding: 10px 8px;\n    background: transparent;\n}\n\n.input-c8987b531e2f53a0aa08ad6c358fe761a37a7e68::placeholder {\n    color: #9aa0a6;\n}\n\n.buttons-db006727adfac2106ebab10ff34478280c4d1409 {\n    display: flex;\n    gap: 6px;\n}\n\n.button-503025e02322df0b9123077f2cf5d579b81f603f {\n    border: none;\n    background: #f1f3f4;\n    border-radius: 10px;\n    padding: 8px 10px;\n    cursor: pointer;\n    font-size: 16px;\n    transition:\n        background 0.2s ease,\n        transform 0.1s ease;\n}\n\n.button-503025e02322df0b9123077f2cf5d579b81f603f:hover {\n    background: #e3e6e8;\n}\n\n.button-503025e02322df0b9123077f2cf5d579b81f603f:active {\n    transform: scale(0.96);\n}\n\n.multi-line-indicator-fae52819e070d6d15651ab1f5fbb63ada4c2a5f3 {\n    margin-left: 5px;\n    font-weight: bold;\n    color: #888;\n}\n\n.hidden-d10c12e79073622c37eb2546648b946ac2b6b7a8 {\n    display: none;\n}";
+  var cssText8 = ".wrapper-8bc4a3b3977b2502079737f94abf28c055aa3ed0 {\n    display: flex;\n    align-items: center;\n    border-radius: 14px;\n    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);\n    padding: 6px 8px 6px 14px;\n    transition:\n        box-shadow 0.2s ease,\n        transform 0.15s ease;\n}\n\n.wrapper-8bc4a3b3977b2502079737f94abf28c055aa3ed0:focus-within {\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);\n    background: #ffffff;\n    transform: translateY(-1px);\n}\n\n.input-a3cd597a7edd16a5b8f98f87bf268700118ebc1b {\n    flex: 1;\n    border: none;\n    outline: none;\n    font-size: 15px;\n    padding: 10px 8px;\n    background: transparent;\n}\n\n.input-a3cd597a7edd16a5b8f98f87bf268700118ebc1b::placeholder {\n    color: #9aa0a6;\n}\n\n.buttons-8a3903d509aa03820963c9f588309b28f2a65315 {\n    display: flex;\n    gap: 6px;\n}\n\n.button-d9b4764b58f22085151b077b4baf95772b011154 {\n    border: none;\n    background: #f1f3f4;\n    border-radius: 10px;\n    padding: 8px 10px;\n    cursor: pointer;\n    font-size: 16px;\n    transition:\n        background 0.2s ease,\n        transform 0.1s ease;\n}\n\n.button-d9b4764b58f22085151b077b4baf95772b011154:hover {\n    background: #e3e6e8;\n}\n\n.button-d9b4764b58f22085151b077b4baf95772b011154:active {\n    transform: scale(0.96);\n}\n\n.clear-button-f08da52c4c717ecbc8c2fa8b108b7ed7028c62a6 {\n    border: none;\n    background: transparent;\n    border-radius: 50%;\n    padding: 4px;\n    margin: 0 4px;\n    cursor: pointer;\n    font-size: 14px;\n    color: #5f6368;\n    line-height: 1;\n    width: 24px;\n    height: 24px;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n}\n\n.clear-button-f08da52c4c717ecbc8c2fa8b108b7ed7028c62a6:hover {\n    background: #f1f3f4;\n}\n\n.multi-line-indicator-4862b152d03b535aaca8b17d707c54068055edc2 {\n    margin-left: 5px;\n    font-weight: bold;\n    color: #888;\n}\n\n.hidden-19cdfb0022842aa1f15c1db445435adb67773ce5 {\n    display: none;\n}\n";
   var filter_bar_default = {
-    wrapper: "wrapper-1127d7f98522db31ea6e2d9ebde2e6f989e09c50",
-    input: "input-c8987b531e2f53a0aa08ad6c358fe761a37a7e68",
-    buttons: "buttons-db006727adfac2106ebab10ff34478280c4d1409",
-    button: "button-503025e02322df0b9123077f2cf5d579b81f603f",
-    "multi-line-indicator": "multi-line-indicator-fae52819e070d6d15651ab1f5fbb63ada4c2a5f3",
-    hidden: "hidden-d10c12e79073622c37eb2546648b946ac2b6b7a8"
+    wrapper: "wrapper-8bc4a3b3977b2502079737f94abf28c055aa3ed0",
+    input: "input-a3cd597a7edd16a5b8f98f87bf268700118ebc1b",
+    buttons: "buttons-8a3903d509aa03820963c9f588309b28f2a65315",
+    button: "button-d9b4764b58f22085151b077b4baf95772b011154",
+    "clear-button": "clear-button-f08da52c4c717ecbc8c2fa8b108b7ed7028c62a6",
+    "multi-line-indicator": "multi-line-indicator-4862b152d03b535aaca8b17d707c54068055edc2",
+    hidden: "hidden-19cdfb0022842aa1f15c1db445435adb67773ce5"
   };
 
   // source/drafts-view/query-view/filter-bar.tsx
@@ -23572,25 +23575,30 @@
       "input",
       {
         type: "text",
-        oninput: () => events.dispatchEvent(
-          createTypedCustomEvent("input-changed", void 0)
-        ),
+        oninput: onInput,
         classList: [filter_bar_default.input],
         placeholder: "\u{1F50D}\u30AD\u30FC\u30EF\u30FC\u30C9\u3067\u7D5E\u308A\u8FBC\u307F\u2026"
+      }
+    );
+    const clearButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        classList: [filter_bar_default["clear-button"], filter_bar_default.hidden],
+        onclick: onClickClear,
+        "aria-label": "\u691C\u7D22\u30EF\u30FC\u30C9\u3092\u524A\u9664",
+        children: "\u2715"
       }
     );
     const multiLineIndicator = /* @__PURE__ */ jsx(
       "span",
       {
-        classList: [
-          filter_bar_default["multi-line-indicator"],
-          filter_bar_default["hidden"]
-        ],
+        classList: [filter_bar_default["multi-line-indicator"], filter_bar_default.hidden],
         children: "..."
       }
     );
     const element = /* @__PURE__ */ jsxs("div", { classList: [filter_bar_default.wrapper], children: [
       input,
+      clearButton,
       multiLineIndicator,
       /* @__PURE__ */ jsxs("div", { class: filter_bar_default.buttons, children: [
         /* @__PURE__ */ jsx(
@@ -23637,11 +23645,34 @@
       value = newValue;
       const isMultiLine = newValue.includes("\n");
       if (isMultiLine) {
-        multiLineIndicator.classList.remove(filter_bar_default["hidden"]);
+        multiLineIndicator.classList.remove(filter_bar_default.hidden);
       } else {
-        multiLineIndicator.classList.add(filter_bar_default["hidden"]);
+        multiLineIndicator.classList.add(filter_bar_default.hidden);
       }
       input.value = newValue.split("\n")[0] ?? "";
+      updateClearButtonVisibility();
+    }
+    function updateClearButtonVisibility() {
+      const isMultiLine = value.includes("\n");
+      const hasValue = input.value.length > 0;
+      if (!isMultiLine && hasValue) {
+        clearButton.classList.remove(filter_bar_default.hidden);
+      } else {
+        clearButton.classList.add(filter_bar_default.hidden);
+      }
+    }
+    function onInput() {
+      events.dispatchEvent(
+        createTypedCustomEvent("input-changed", void 0)
+      );
+      updateClearButtonVisibility();
+    }
+    function onClickClear() {
+      setValue("");
+      input.focus();
+      events.dispatchEvent(
+        createTypedCustomEvent("input-changed", void 0)
+      );
     }
     setValue(initialValue);
     return { element, events, getValue: getValue2, setValue };
@@ -26137,6 +26168,13 @@
   function isTrivial({ id: id2, contents }, { sources }) {
     return contents === "" || contents.length <= 1 || sources.find((s) => s.id !== id2 && s.contents === contents);
   }
+  function isAndroid() {
+    return /android/i.test(navigator.userAgent);
+  }
+  function openGoogleMaps(lat, lng) {
+    const url = isAndroid() ? `intent://${lat},${lng}?q=${lat},${lng}#Intent;scheme=geo;package=com.google.android.apps.maps;end` : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    window.open(url, "_blank");
+  }
   var setStyle11 = styleSetter(cssText4);
   function createDraftList({
     overlay,
@@ -26356,7 +26394,21 @@
           }
           overlay.updateDraftCoordinates(selectedDraft);
           saveDraftChanges(selectedDraft);
-        }
+        },
+        onfocus: (event) => event.target.select()
+      }
+    );
+    const openMapButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: draft_list_default["open-map-button"],
+        onclick: () => {
+          if (selectedDraft) {
+            const { lat, lng } = selectedDraft.coordinates[0];
+            openGoogleMaps(lat, lng);
+          }
+        },
+        children: "\u{1F5FA}\uFE0F"
       }
     );
     const deleteButton = /* @__PURE__ */ jsx(
@@ -26446,7 +26498,10 @@
         /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
           detailDescription,
           detailNote,
-          detailCoordinates,
+          /* @__PURE__ */ jsxs("div", { class: draft_list_default["coordinates-container"], children: [
+            detailCoordinates,
+            openMapButton
+          ] }),
           /* @__PURE__ */ jsx(
             "button",
             {
@@ -26518,6 +26573,7 @@
         );
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "";
+        openMapButton.style.display = "";
         deleteButton.style.display = "";
         templateToggleButton.style.display = "";
         if (getDraftIsTemplate(selectedDraft)) {
@@ -26536,6 +26592,7 @@
         detailCoordinates.value = "";
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "none";
+        openMapButton.style.display = "none";
         deleteButton.style.display = "none";
         templateToggleButton.style.display = "none";
       }
