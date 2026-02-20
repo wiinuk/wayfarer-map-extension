@@ -107,6 +107,17 @@ function isTrivial(
     );
 }
 
+function isAndroid(): boolean {
+    return /android/i.test(navigator.userAgent);
+}
+
+function openGoogleMaps(lat: number, lng: number) {
+    const url = isAndroid()
+        ? `intent://${lat},${lng}?q=${lat},${lng}#Intent;scheme=geo;package=com.google.android.apps.maps;end`
+        : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    window.open(url, "_blank");
+}
+
 const setStyle = styleSetter(cssText);
 export function createDraftList({
     overlay,
@@ -373,8 +384,23 @@ export function createDraftList({
                 overlay.updateDraftCoordinates(selectedDraft);
                 saveDraftChanges(selectedDraft);
             }}
+            onfocus={(event) => (event.target as HTMLInputElement).select()}
         />
     ) as HTMLInputElement;
+
+    const openMapButton = (
+        <button
+            class={classNames["open-map-button"]}
+            onclick={() => {
+                if (selectedDraft) {
+                    const { lat, lng } = selectedDraft.coordinates[0];
+                    openGoogleMaps(lat, lng);
+                }
+            }}
+        >
+            🗺️
+        </button>
+    ) as HTMLButtonElement;
 
     const deleteButton = (
         <button
@@ -476,7 +502,10 @@ export function createDraftList({
                 <div class={classNames["detail-content-wrapper"]}>
                     {detailDescription}
                     {detailNote}
-                    {detailCoordinates}
+                    <div class={classNames["coordinates-container"]}>
+                        {detailCoordinates}
+                        {openMapButton}
+                    </div>
                     <button
                         class={classNames["create-button"]}
                         onclick={() => addNewDraft()}
@@ -553,6 +582,7 @@ export function createDraftList({
             );
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
+            openMapButton.style.display = "";
             deleteButton.style.display = "";
             templateToggleButton.style.display = "";
             if (getDraftIsTemplate(selectedDraft)) {
@@ -571,6 +601,7 @@ export function createDraftList({
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
+            openMapButton.style.display = "none";
             deleteButton.style.display = "none";
             templateToggleButton.style.display = "none";
         }

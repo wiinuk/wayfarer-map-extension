@@ -138,6 +138,29 @@
     gap: 8px;
 }
 
+.coordinates-container {
+    display: flex;
+    width: 100%;
+    gap: 4px;
+}
+
+.detail-coordinates {
+    flex-grow: 1;
+}
+
+.open-map-button {
+    padding: 4px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+}
+
+.open-map-button:hover {
+    background-color: var(--primary-color-dark);
+}
+
 .map-button,
 .create-button,
 .delete-button,
