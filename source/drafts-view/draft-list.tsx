@@ -111,9 +111,10 @@ function isAndroid(): boolean {
     return /android/i.test(navigator.userAgent);
 }
 
-function openGoogleMaps(lat: number, lng: number) {
+function openGoogleMaps({ lat, lng }: LatLng, title: string) {
     const url = isAndroid()
-        ? `intent://${lat},${lng}?q=${lat},${lng}#Intent;scheme=geo;package=com.google.android.apps.maps;end`
+        ? // &z=${zoom}
+          `intent://0,0?q=${lat},${lng}%20(${encodeURIComponent(title)})#Intent;scheme=geo;package=com.google.android.apps.maps;end`
         : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     window.open(url, "_blank");
 }
@@ -393,8 +394,8 @@ export function createDraftList({
             class={classNames["open-map-button"]}
             onclick={() => {
                 if (selectedDraft) {
-                    const { lat, lng } = selectedDraft.coordinates[0];
-                    openGoogleMaps(lat, lng);
+                    const coord = selectedDraft.coordinates[0];
+                    openGoogleMaps(coord, selectedDraft.name);
                 }
             }}
         >

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.4.7
+// @version      0.4.8
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -26171,8 +26171,11 @@
   function isAndroid() {
     return /android/i.test(navigator.userAgent);
   }
-  function openGoogleMaps(lat, lng) {
-    const url = isAndroid() ? `intent://${lat},${lng}?q=${lat},${lng}#Intent;scheme=geo;package=com.google.android.apps.maps;end` : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  function openGoogleMaps({ lat, lng }, title) {
+    const url = isAndroid() ? (
+      // &z=${zoom}
+      `intent://0,0?q=${lat},${lng}%20(${encodeURIComponent(title)})#Intent;scheme=geo;package=com.google.android.apps.maps;end`
+    ) : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     window.open(url, "_blank");
   }
   var setStyle11 = styleSetter(cssText4);
@@ -26404,8 +26407,8 @@
         class: draft_list_default["open-map-button"],
         onclick: () => {
           if (selectedDraft) {
-            const { lat, lng } = selectedDraft.coordinates[0];
-            openGoogleMaps(lat, lng);
+            const coord = selectedDraft.coordinates[0];
+            openGoogleMaps(coord, selectedDraft.name);
           }
         },
         children: "\u{1F5FA}\uFE0F"
