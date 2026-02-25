@@ -79,6 +79,36 @@ function latLngToScreenPoint(
     return worldPointToScreenPoint(viewport, pWorld, result);
 }
 
+function getEllipsisTextWithMetrics(
+    ctx: RenderingContext,
+    text: string,
+    maxWidth: number,
+    ellipsis = "…",
+) {
+    const fullMetrics = ctx.measureText(text);
+    if (fullMetrics.width <= maxWidth) return fullMetrics;
+
+    let low = 0;
+    let high = text.length;
+    let bestText = ellipsis;
+    let bestMetrics = ctx.measureText(ellipsis);
+    while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const testString = text.substring(0, mid) + ellipsis;
+        const testMetrics = ctx.measureText(testString);
+
+        if (testMetrics.width <= maxWidth) {
+            bestText = testString;
+            bestMetrics = testMetrics;
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    return { bestText, bestMetrics };
+}
+
 function drawPolygons(
     context: RecordsRenderingContext,
     paths: readonly Path[],
@@ -383,22 +413,28 @@ function drawCell14PoiNames(
         const textX = x;
         const textY = y + 15;
 
-        const box = measureTextBox(ctx, name, x, textY, guid);
+        let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
+        let truncatedText = name;
+        if (!(truncatedMetrics instanceof TextMetrics)) {
+            truncatedText = truncatedMetrics.bestText;
+            truncatedMetrics = truncatedMetrics.bestMetrics;
+        }
+
+        const box = getTextBox(ctx, truncatedMetrics, textX, textY, guid);
         if (checker.check(box)) continue;
         checker.addBox(box);
 
-        ctx.strokeText(name, textX, textY);
-        ctx.fillText(name, textX, textY);
+        ctx.strokeText(truncatedText, textX, textY);
+        ctx.fillText(truncatedText, textX, textY);
     }
 }
-function measureTextBox(
+function getTextBox(
     ctx: RenderingContext,
-    name: string,
+    metrics: TextMetrics,
     textX: number,
     textY: number,
     guid: string,
 ) {
-    const metrics = ctx.measureText(name);
     const actualHeight =
         metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
     const textWidth =
