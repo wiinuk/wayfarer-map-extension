@@ -341,13 +341,15 @@ function entityKindToCircleOptions(kind: EntityKind | "") {
 }
 
 const wayspotLabelOptions = Object.freeze({
+    font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
     strokeColor: "rgb(0, 0, 0)",
     fillColor: "#FFFFBB",
     strokeWeight: 2,
 });
 const gymLabelOptions = Object.freeze({
     ...wayspotLabelOptions,
-    strokeColor: "#ffffffb0",
+    font: `bold ` + wayspotLabelOptions.font,
+    strokeColor: "#ffffffd5",
     fillColor: "#9c1933",
 });
 const powerspotLabelOptions = Object.freeze({
@@ -469,16 +471,38 @@ function drawCell14PoiNames(
     const { ctx, checker } = context;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.font = `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
 
     const pois = context._pois_cache;
     try {
         for (const poi of stat14.pois.values()) pois.push(poi);
         pois.sort(comparePoiByImportance);
 
+        // 基準となるズームレベル
+        const referenceZoom = 16;
+        // 基準となるズームレベルでの最大POI数
+        const maxPoisAtReferenceZoom = 12;
+        const maxPois = Math.max(
+            1,
+            Math.ceil(
+                maxPoisAtReferenceZoom * 2 ** (context.zoom - referenceZoom),
+            ),
+        );
+        pois.length = Math.min(pois.length, maxPois);
+
         for (const poi of pois) {
             const { lat, lng, data, guid, name } = poi;
             if (!data.isCommunityContributed) continue;
+
+            const options = entityKindToLabelOptions(getKind(poi));
+
+            ctx.font = options.font;
+            ctx.strokeStyle = options.strokeColor;
+            ctx.lineJoin = "round";
+            ctx.lineWidth = options.strokeWeight;
+
+            ctx.shadowColor = options.strokeColor;
+            ctx.shadowBlur = 1;
+            ctx.fillStyle = options.fillColor;
 
             const { x, y } = latLngToScreenPoint(
                 context,
@@ -501,16 +525,7 @@ function drawCell14PoiNames(
             if (checker.check(box)) continue;
             checker.addBox(box);
 
-            const options = entityKindToLabelOptions(getKind(poi));
-
-            ctx.strokeStyle = options.strokeColor;
-            ctx.lineJoin = "round";
-            ctx.lineWidth = options.strokeWeight;
             ctx.strokeText(truncatedText, textX, textY);
-
-            ctx.shadowColor = options.strokeColor;
-            ctx.shadowBlur = 1;
-            ctx.fillStyle = options.fillColor;
             ctx.fillText(truncatedText, textX, textY);
         }
     } finally {
