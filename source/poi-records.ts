@@ -355,7 +355,7 @@ export interface Cell14Statistics {
     readonly cell: Cell<14>;
     readonly id: CellId<14>;
     readonly pois: Map<string, PoiRecord>;
-    readonly kindToPois: Map<EntityKind, PoiRecord[]>;
+    readonly kindToPois: Map<EntityKind | "", PoiRecord[]>;
 }
 function createEmptyCell14Statistics(cell: Cell<14>): Cell14Statistics {
     return {
@@ -401,6 +401,16 @@ function updateCellStatisticsByPoi<TLevel extends number>(
 function isGymOrPokestop(g: Gmo) {
     return g.entity === "GYM" || g.entity === "POKESTOP";
 }
+function addToKindToPois(
+    cell14: Cell14Statistics,
+    entity: EntityKind | "",
+    poi: PoiRecord,
+) {
+    const pois =
+        cell14.kindToPois.get(entity) ??
+        setEntry(cell14.kindToPois, entity, []);
+    pois.push(poi);
+}
 export async function getCell14Stats(
     records: PoiRecords,
     cell: Cell<14>,
@@ -414,13 +424,16 @@ export async function getCell14Stats(
         if (cell14.pois.get(coordinateKey) != null) return "continue";
 
         cell14.pois.set(coordinateKey, poi);
-        for (const { entity } of poi.data.gmo) {
-            const pois =
-                cell14.kindToPois.get(entity) ??
-                setEntry(cell14.kindToPois, entity, []);
-            pois.push(poi);
+
+        const { gmo } = poi.data;
+        for (const { entity } of gmo) {
+            addToKindToPois(cell14, entity, poi);
         }
-        if (poi.data.gmo.some(isGymOrPokestop)) {
+        if (gmo.length === 0) {
+            addToKindToPois(cell14, "", poi);
+        }
+
+        if (gmo.some(isGymOrPokestop)) {
             updateCellStatisticsByPoi(cell14.cell16s, poi, 16);
             updateCellStatisticsByPoi(cell14.cell17s, poi, 17);
         }
