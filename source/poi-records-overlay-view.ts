@@ -327,7 +327,7 @@ const powerspotOptions = Object.freeze({
     fillColor: "#f195eb",
 });
 
-function entityKindToOptions(kind: EntityKind | "") {
+function entityKindToCircleOptions(kind: EntityKind | "") {
     switch (kind) {
         case "GYM":
             return gymOptions;
@@ -337,6 +337,33 @@ function entityKindToOptions(kind: EntityKind | "") {
             return powerspotOptions;
         default:
             return wayspotOptions;
+    }
+}
+
+const wayspotLabelOptions = Object.freeze({
+    strokeColor: "rgb(0, 0, 0)",
+    fillColor: "#FFFFBB",
+    strokeWeight: 2,
+});
+const gymLabelOptions = Object.freeze({
+    ...wayspotLabelOptions,
+    strokeColor: "#ffffffb0",
+    fillColor: "#9c1933",
+});
+const powerspotLabelOptions = Object.freeze({
+    ...wayspotLabelOptions,
+    strokeColor: "#e762d3",
+});
+function entityKindToLabelOptions(kind: EntityKind | "") {
+    switch (kind) {
+        case "GYM":
+            return gymLabelOptions;
+        case "POKESTOP":
+            return wayspotLabelOptions;
+        case "POWERSPOT":
+            return powerspotLabelOptions;
+        default:
+            return wayspotLabelOptions;
     }
 }
 
@@ -360,7 +387,7 @@ function drawCell14PoiCircles(
 ) {
     const { ctx } = context;
     for (const [kind, pois] of stat14.kindToPois) {
-        const options = entityKindToOptions(kind);
+        const options = entityKindToCircleOptions(kind);
         const radius =
             context.zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
 
@@ -422,12 +449,17 @@ function getPoiImportance({ data }: PoiRecord) {
         importance += 0.05;
     }
     if (data.hasAdditionalImages) {
-        importance += 0.05;
+        importance += 0.01;
     }
     return importance;
 }
 function comparePoiByImportance(p1: PoiRecord, p2: PoiRecord) {
     return getPoiImportance(p2) - getPoiImportance(p1);
+}
+
+function getKind(poi: PoiRecord) {
+    for (const { entity } of poi.data.gmo) return entity;
+    return "";
 }
 
 function drawCell14PoiNames(
@@ -439,20 +471,13 @@ function drawCell14PoiNames(
     ctx.textAlign = "center";
     ctx.font = `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
 
-    ctx.shadowColor = "rgb(0, 0, 0)";
-    ctx.shadowBlur = 1;
-    ctx.fillStyle = "#FFFFBB";
-
-    ctx.strokeStyle = "rgb(0, 0, 0)";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 2;
-
     const pois = context._pois_cache;
     try {
         for (const poi of stat14.pois.values()) pois.push(poi);
         pois.sort(comparePoiByImportance);
 
-        for (const { lat, lng, data, guid, name } of pois) {
+        for (const poi of pois) {
+            const { lat, lng, data, guid, name } = poi;
             if (!data.isCommunityContributed) continue;
 
             const { x, y } = latLngToScreenPoint(
@@ -476,7 +501,16 @@ function drawCell14PoiNames(
             if (checker.check(box)) continue;
             checker.addBox(box);
 
+            const options = entityKindToLabelOptions(getKind(poi));
+
+            ctx.strokeStyle = options.strokeColor;
+            ctx.lineJoin = "round";
+            ctx.lineWidth = options.strokeWeight;
             ctx.strokeText(truncatedText, textX, textY);
+
+            ctx.shadowColor = options.strokeColor;
+            ctx.shadowBlur = 1;
+            ctx.fillStyle = options.fillColor;
             ctx.fillText(truncatedText, textX, textY);
         }
     } finally {
