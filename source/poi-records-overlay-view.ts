@@ -64,8 +64,8 @@ function worldPointToScreenPoint(
     const x = (pWorld.x - nwWorld.x) * scale;
     const y = (pWorld.y - nwWorld.y) * scale;
 
-    result.x = x;
-    result.y = y;
+    result.x = x | 0;
+    result.y = y | 0;
     return result;
 }
 
