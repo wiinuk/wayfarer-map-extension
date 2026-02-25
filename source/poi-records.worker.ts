@@ -8,7 +8,6 @@ import { pageEventTypes, type PageEventMap } from "./page-events";
 import { createGcsSchemas } from "./gcs-schema";
 
 export interface WorkerApi {
-    hello(message: string): string;
     onGcsReceived(url: string, responseText: string): void;
 }
 
@@ -37,9 +36,6 @@ async function setup() {
 
     const handler = await createGcsHandler(schemas, events, handleAsyncError);
     const api: WorkerApi = {
-        hello(e) {
-            return `Worker received: ${e}`;
-        },
         onGcsReceived(url, responseText) {
             handler(new URL(url), responseText);
         },
