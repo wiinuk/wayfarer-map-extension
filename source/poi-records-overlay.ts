@@ -134,7 +134,7 @@ export async function createPoiRecordsCanvasOverlay(
                 this.anchorCenterLatLng,
             )!;
 
-            const scale = Math.pow(2, currentZoom - this.anchorZoom);
+            const scale = 2 ** (currentZoom - this.anchorZoom);
 
             const canvasX =
                 currentCenterPos.x + this.offsetFromCenterToNW.x * scale;

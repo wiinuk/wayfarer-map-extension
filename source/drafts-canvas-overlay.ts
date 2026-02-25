@@ -24,7 +24,7 @@ function getPixelsPerMeter(
     );
     const p1 = projection.fromLatLngToDivPixel(center)!;
     const p2 = projection.fromLatLngToDivPixel(offsetLatLng)!;
-    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
 }
 
 export type DraftCanvasOverlay = ReturnType<typeof createCanvasOverlay>;
