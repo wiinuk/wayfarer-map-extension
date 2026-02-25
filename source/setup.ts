@@ -1,4 +1,4 @@
-// spell-checker: ignore wfmapmods pois Comlink
+// spell-checker: ignore pois Comlink
 import { injectGcsListener } from "./gcs";
 import {
     createPoisOverlay,
@@ -134,10 +134,6 @@ function setupDraftManagerDialog(page: PageResource) {
 }
 
 async function asyncSetup(signal: AbortSignal) {
-    await awaitElement(() => document.querySelector("#wfmapmods-side-panel"), {
-        signal,
-    });
-
     const map = await getGMapObject({ signal });
     const events = createTypedEventTarget<PageEventMap>();
     const local = await createConfigAccessor(localConfigKey);
