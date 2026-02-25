@@ -133,6 +133,7 @@ function drawCell14Label(
     ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
 
     ctx.lineWidth = 4;
+    ctx.lineJoin = "round";
     ctx.strokeStyle = "#c54545";
     ctx.strokeText(text, x, y);
 
@@ -524,10 +525,10 @@ export async function renderRecordsOverlayView(
         checker,
     };
 
-    await waitAnimationFrame(signal);
     views.canvas.width = width;
     views.canvas.height = height;
     ctx.clearRect(0, 0, width, height);
+    await waitAnimationFrame(signal);
 
     if (zoom <= 12) return;
 
