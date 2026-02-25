@@ -124,7 +124,11 @@ export async function createPoiRecordsCanvasOverlay(
             const map = this.getMap();
             if (!(map instanceof google.maps.Map)) return;
 
-            const projection = this.getProjection();
+            const projection = this.getProjection() as
+                | google.maps.MapCanvasProjection
+                | undefined;
+            if (projection == null) return;
+
             const currentZoom = map.getZoom()!;
             const currentCenterPos = projection.fromLatLngToDivPixel(
                 this.anchorCenterLatLng,
@@ -144,8 +148,13 @@ export async function createPoiRecordsCanvasOverlay(
             const map = this.getMap();
             if (!(map instanceof google.maps.Map)) return;
 
-            const projection = this.getProjection();
-            const zoom = map.getZoom()!;
+            const zoom = map.getZoom();
+            if (zoom == null) return;
+
+            const projection = this.getProjection() as
+                | google.maps.MapCanvasProjection
+                | undefined;
+            if (projection == null) return;
 
             const bounds = map.getBounds()!;
             const center = map.getCenter()!;
