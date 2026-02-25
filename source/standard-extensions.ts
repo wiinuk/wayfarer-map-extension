@@ -149,3 +149,19 @@ export function memoizeWith<
         return r;
     };
 }
+
+export function waitAnimationFrame(signal: AbortSignal) {
+    return new Promise<DOMHighResTimeStamp>((resolve, reject) => {
+        if (signal.aborted) return reject(signal.reason);
+
+        const cleanup = () => {
+            cancelAnimationFrame(handle);
+            signal.removeEventListener("abort", cleanup);
+        };
+        const handle = requestAnimationFrame((time) => {
+            cleanup();
+            resolve(time);
+        });
+        signal.addEventListener("abort", cleanup, { once: true });
+    });
+}
