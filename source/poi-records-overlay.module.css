@@ -1,7 +1,0 @@
-.count-label {
-    --stroke: 4px #c54545;
-
-    -webkit-text-stroke: var(--stroke);
-    text-stroke: var(--stroke);
-    paint-order: stroke;
-}

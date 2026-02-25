@@ -153,7 +153,7 @@ async function asyncSetup(signal: AbortSignal) {
         styleElement: document.createElement("style"),
         map,
         defaultAsyncErrorHandler: handleAsyncError,
-        overlay: createPoisOverlay(map),
+        overlay: await createPoisOverlay(map, handleAsyncError),
         events,
         local,
         drafts: createDraftsOverlay(map, handleAsyncError),
