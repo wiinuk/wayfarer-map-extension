@@ -1,4 +1,4 @@
-// spell-checker:words antlr vitest
+// spell-checker:words vitest
 import { describe, it, expect } from "vitest";
 import { evaluateExpression, type Value } from "../evaluator";
 import {
