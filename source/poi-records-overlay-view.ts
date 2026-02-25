@@ -1,5 +1,6 @@
-//spell-checker:words Lngs POKESTOP Pois pokestops Hiragino Kaku Meiryo Neue
+//spell-checker:words Lngs POKESTOP Pois pokestops Hiragino Kaku Meiryo Neue POWERSPOT wayspot
 import type { LatLngBounds } from "./bounds";
+import { createCollisionChecker } from "./collision-checker";
 import type { EntityKind } from "./gcs-schema";
 import {
     type Cell14Statistics,
@@ -23,6 +24,7 @@ export interface Viewport {
 }
 export interface RecordsRenderingContext extends OverlayView, Viewport {
     readonly ctx: RenderingContext;
+    readonly checker: ReturnType<typeof createCollisionChecker>;
 }
 
 const TILE_SIZE = 256;
@@ -269,6 +271,155 @@ function drawCell17Bounds(
         gyms.length = 0;
     }
 }
+
+const wayspotOptions = Object.freeze({
+    markerSize: 8,
+    borderColor: "#ff6600",
+    borderWidth: 2,
+    fillColor: "#ff660080",
+});
+const gymOptions = Object.freeze({
+    ...wayspotOptions,
+    borderColor: "#ffffff",
+    fillColor: "#ff2450",
+});
+const pokestopOptions = Object.freeze({
+    ...wayspotOptions,
+    borderColor: "#0000cd",
+    fillColor: "#00bfff",
+});
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const powerspotOptions = Object.freeze({
+    ...wayspotOptions,
+    borderColor: "#e762d3",
+    fillColor: "#f195eb",
+});
+
+function entityKindToOptions(kind: EntityKind | "") {
+    switch (kind) {
+        case "GYM":
+            return gymOptions;
+        case "POKESTOP":
+            return pokestopOptions;
+        case "POWERSPOT":
+        default:
+            return wayspotOptions;
+    }
+}
+
+function enterRenderingScope<T1, R>(
+    scope: (context: RecordsRenderingContext, arg1: T1) => R,
+    context: RecordsRenderingContext,
+    arg1: T1,
+): R {
+    const { ctx } = context;
+    ctx.save();
+    try {
+        return scope(context, arg1);
+    } finally {
+        ctx.restore();
+    }
+}
+
+function drawCell14PoiCircles(
+    context: RecordsRenderingContext,
+    stat14: Cell14Statistics,
+) {
+    const { ctx } = context;
+    for (const [kind, pois] of stat14.kindToPois) {
+        const options = entityKindToOptions(kind);
+        const radius =
+            context.zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
+
+        ctx.beginPath();
+        for (const { lat, lng, data } of pois) {
+            if (!data.isCommunityContributed) continue;
+
+            const { x, y } = latLngToScreenPoint(
+                context,
+                lat,
+                lng,
+                context._point_result_cache,
+            );
+            ctx.moveTo(x + radius, y);
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = options.fillColor;
+        ctx.fill();
+
+        ctx.strokeStyle = options.borderColor;
+        ctx.lineWidth = options.borderWidth;
+        ctx.stroke();
+    }
+}
+function drawCell14PoiNames(
+    context: RecordsRenderingContext,
+    stat14: Cell14Statistics,
+) {
+    const { ctx, checker } = context;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.font = `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
+
+    ctx.shadowColor = "rgb(0, 0, 0)";
+    ctx.shadowBlur = 1;
+    ctx.fillStyle = "#FFFFBB";
+
+    ctx.strokeStyle = "rgb(0, 0, 0)";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    for (const { lat, lng, data, guid, name } of stat14.pois.values()) {
+        if (!data.isCommunityContributed) continue;
+
+        const { x, y } = latLngToScreenPoint(
+            context,
+            lat,
+            lng,
+            context._point_result_cache,
+        );
+
+        const textX = x;
+        const textY = y + 15;
+
+        const box = measureTextBox(ctx, name, x, textY, guid);
+        if (checker.check(box)) continue;
+        checker.addBox(box);
+
+        ctx.strokeText(name, textX, textY);
+        ctx.fillText(name, textX, textY);
+    }
+}
+function measureTextBox(
+    ctx: RenderingContext,
+    name: string,
+    textX: number,
+    textY: number,
+    guid: string,
+) {
+    const metrics = ctx.measureText(name);
+    const actualHeight =
+        metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+    const textWidth =
+        metrics.width +
+        ctx.lineWidth +
+        ctx.shadowBlur +
+        Math.abs(ctx.shadowOffsetX);
+    const textHeight =
+        actualHeight +
+        ctx.lineWidth +
+        ctx.shadowBlur +
+        Math.abs(ctx.shadowOffsetY);
+
+    const box = {
+        centerX: textX,
+        centerY: textY,
+        width: textWidth,
+        height: textHeight,
+        key: guid,
+    };
+    return box;
+}
+
 async function drawCell14(
     context: RecordsRenderingContext,
     cell14: Cell<14>,
@@ -280,11 +431,17 @@ async function drawCell14(
     if (stat14 == null) return;
 
     if (14 < zoom) {
-        drawCell17Bounds(context, stat14);
+        enterRenderingScope(drawCell17Bounds, context, stat14);
     }
     drawCell14Bound(context, stat14);
+    if (14 < zoom && zoom < 18) {
+        enterRenderingScope(drawCell14PoiCircles, context, stat14);
+    }
+    if (14 < zoom) {
+        enterRenderingScope(drawCell14PoiNames, context, stat14);
+    }
     if (13 < zoom) {
-        drawCell17CountLabel(context, stat14);
+        enterRenderingScope(drawCell17CountLabel, context, stat14);
     }
 }
 
@@ -356,15 +513,18 @@ export async function renderRecordsOverlayView(
 ) {
     const { zoom, bounds, width, height } = port;
 
-    await waitAnimationFrame(signal);
-    const ctx = views.canvas.getContext("2d");
+    const ctx = views.canvas.getContext("2d") as RenderingContext | null;
     if (ctx == null) return;
 
+    const checker = createCollisionChecker();
     const context: RecordsRenderingContext = {
         ...views,
         ...port,
         ctx,
+        checker,
     };
+
+    await waitAnimationFrame(signal);
     views.canvas.width = width;
     views.canvas.height = height;
     ctx.clearRect(0, 0, width, height);
