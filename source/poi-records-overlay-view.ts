@@ -21,6 +21,7 @@ export interface Viewport {
     readonly nwWorld: Point;
     readonly width: number;
     readonly height: number;
+    readonly devicePixelRatio: number;
 }
 export interface RecordsRenderingContext extends OverlayView, Viewport {
     readonly ctx: RenderingContext;
@@ -512,7 +513,7 @@ export async function renderRecordsOverlayView(
     port: Viewport,
     signal: AbortSignal,
 ) {
-    const { zoom, bounds, width, height } = port;
+    const { zoom, bounds, width, height, devicePixelRatio } = port;
 
     const ctx = views.canvas.getContext("2d") as RenderingContext | null;
     if (ctx == null) return;
@@ -525,8 +526,10 @@ export async function renderRecordsOverlayView(
         checker,
     };
 
-    views.canvas.width = width;
-    views.canvas.height = height;
+    views.canvas.width = width * devicePixelRatio;
+    views.canvas.height = height * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+
     ctx.clearRect(0, 0, width, height);
     await waitAnimationFrame(signal);
 

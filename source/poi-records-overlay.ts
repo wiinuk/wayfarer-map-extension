@@ -217,6 +217,7 @@ export async function createPoiRecordsCanvasOverlay(
                     .fromLatLngToPoint(bufferedNWLatLng)!,
                 width: canvasWidth,
                 height: canvasHeight,
+                devicePixelRatio: window.devicePixelRatio || 1,
             } satisfies Viewport;
 
             this.drawer(port);
