@@ -21673,6 +21673,8 @@
           y: centerPixel.y + this.offsetFromCenterToNW.y
         };
         this.canvas.style.transform = `translate(${canvasNWPixel.x}px, ${canvasNWPixel.y}px) scale(1)`;
+        this.canvas.style.width = canvasWidth + "px";
+        this.canvas.style.height = canvasHeight + "px";
         const bufferedNWLatLng = projection.fromDivPixelToLatLng(
           new google.maps.Point(canvasNWPixel.x, canvasNWPixel.y)
         );
