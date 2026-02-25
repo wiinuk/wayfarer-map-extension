@@ -320,7 +320,6 @@ const pokestopOptions = Object.freeze({
     borderColor: "#0000cd",
     fillColor: "#00bfff",
 });
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const powerspotOptions = Object.freeze({
     ...wayspotOptions,
     borderColor: "#e762d3",
@@ -334,6 +333,7 @@ function entityKindToOptions(kind: EntityKind | "") {
         case "POKESTOP":
             return pokestopOptions;
         case "POWERSPOT":
+            return powerspotOptions;
         default:
             return wayspotOptions;
     }
