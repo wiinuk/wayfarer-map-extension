@@ -21,6 +21,9 @@ export interface Viewport {
     readonly width: number;
     readonly height: number;
 }
+export interface RecordsRenderingContext extends OverlayView, Viewport {
+    readonly ctx: RenderingContext;
+}
 
 const TILE_SIZE = 256;
 const PI = Math.PI;
@@ -74,17 +77,16 @@ function latLngToScreenPoint(
 }
 
 function drawPolygons(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     paths: readonly Path[],
     options: Cell17Options,
 ) {
+    const { ctx } = context;
     if (paths.length === 0) return;
 
     ctx.beginPath();
     for (const path of paths) {
-        setSubPath(views, port, path, ctx);
+        setSubPath(context, path);
     }
     ctx.fillStyle = options.fillColor;
     ctx.fill();
@@ -95,14 +97,13 @@ function drawPolygons(
 }
 
 function drawPolygon(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     path: Path,
     options: typeof cell17EmptyOptions,
 ) {
+    const { ctx } = context;
     ctx.beginPath();
-    setSubPath(views, port, path, ctx);
+    setSubPath(context, path);
 
     ctx.fillStyle = options.fillColor;
     ctx.fill();
@@ -113,17 +114,16 @@ function drawPolygon(
 }
 
 function drawCell14Label(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     text: string,
     center: LatLng,
 ) {
+    const { ctx } = context;
     const { x, y } = latLngToScreenPoint(
-        port,
+        context,
         center.lat,
         center.lng,
-        views._point_result_cache,
+        context._point_result_cache,
     );
 
     ctx.textBaseline = "middle";
@@ -218,27 +218,23 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
 }
 
 function drawCell14Bound(
-    view: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     cell14: Cell14Statistics,
 ) {
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(entityCount, coverRate);
-    drawPolygon(view, port, ctx, cell14.corner, options);
+    drawPolygon(context, cell14.corner, options);
 }
 
 function drawCell17CountLabel(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     cell14: Cell14Statistics,
 ) {
     const count = sumGymAndPokestopCount(cell14);
     if (count <= 0) return;
 
-    drawCell14Label(views, port, ctx, `${count}`, cell14.center);
+    drawCell14Label(context, `${count}`, cell14.center);
 }
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
@@ -246,14 +242,12 @@ function has(kind: EntityKind, cell17: CellStatistic<17>) {
 }
 
 function drawCell17Bounds(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     stat14: Cell14Statistics,
 ) {
-    const gyms = views._gyms_cache;
-    const stops = views._pokestops_cache;
-    const empties = views._empties_cache;
+    const gyms = context._gyms_cache;
+    const stops = context._pokestops_cache;
+    const empties = context._empties_cache;
     try {
         for (const cell17 of stat14.cell17s.values()) {
             const path = cell17.cell.getCornerLatLngs();
@@ -266,9 +260,9 @@ function drawCell17Bounds(
                 empties.push(path);
             }
         }
-        drawPolygons(views, port, ctx, empties, cell17EmptyOptions);
-        drawPolygons(views, port, ctx, stops, cell17PokestopOptions);
-        drawPolygons(views, port, ctx, gyms, cell17GymOptions);
+        drawPolygons(context, empties, cell17EmptyOptions);
+        drawPolygons(context, stops, cell17PokestopOptions);
+        drawPolygons(context, gyms, cell17GymOptions);
     } finally {
         empties.length = 0;
         stops.length = 0;
@@ -276,24 +270,21 @@ function drawCell17Bounds(
     }
 }
 async function drawCell14(
-    views: OverlayView,
-    port: Viewport,
-    ctx: RenderingContext,
+    context: RecordsRenderingContext,
     cell14: Cell<14>,
     signal: AbortSignal,
 ) {
-    const { records } = views;
-    const { zoom } = port;
+    const { records, zoom } = context;
 
     const stat14 = await getCell14Stats(records, cell14, signal);
     if (stat14 == null) return;
 
     if (14 < zoom) {
-        drawCell17Bounds(views, port, ctx, stat14);
+        drawCell17Bounds(context, stat14);
     }
-    drawCell14Bound(views, port, ctx, stat14);
+    drawCell14Bound(context, stat14);
     if (13 < zoom) {
-        drawCell17CountLabel(views, port, ctx, stat14);
+        drawCell17CountLabel(context, stat14);
     }
 }
 
@@ -317,29 +308,25 @@ type RenderingContext =
     | CanvasRenderingContext2D
     | OffscreenCanvasRenderingContext2D;
 
-function setSubPath(
-    views: OverlayView,
-    port: Viewport,
-    path: Path,
-    ctx: RenderingContext,
-) {
+function setSubPath(context: RecordsRenderingContext, path: Path) {
+    const { ctx } = context;
     const start = path[0];
     if (start != null) {
         const { x, y } = latLngToScreenPoint(
-            port,
+            context,
             start.lat,
             start.lng,
-            views._point_result_cache,
+            context._point_result_cache,
         );
         ctx.moveTo(x, y);
 
         for (let i = 1; i < path.length; i++) {
             const p = path[i]!;
             const { x, y } = latLngToScreenPoint(
-                port,
+                context,
                 p.lat,
                 p.lng,
-                views._point_result_cache,
+                context._point_result_cache,
             );
             ctx.lineTo(x, y);
         }
@@ -372,6 +359,12 @@ export async function renderRecordsOverlayView(
     await waitAnimationFrame(signal);
     const ctx = views.canvas.getContext("2d");
     if (ctx == null) return;
+
+    const context: RecordsRenderingContext = {
+        ...views,
+        ...port,
+        ctx,
+    };
     views.canvas.width = width;
     views.canvas.height = height;
     ctx.clearRect(0, 0, width, height);
@@ -380,6 +373,6 @@ export async function renderRecordsOverlayView(
 
     const cell14s = getNearlyCellsForBounds(bounds, 14);
     for (const cell14 of cell14s) {
-        await drawCell14(views, port, ctx, cell14, signal);
+        await drawCell14(context, cell14, signal);
     }
 }
