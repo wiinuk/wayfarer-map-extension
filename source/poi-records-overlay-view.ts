@@ -9,6 +9,7 @@ import {
     type PoiRecords,
     openRecords,
     getNearlyCellsForBounds,
+    type PoiRecord,
 } from "./poi-records";
 import type { LatLng } from "./s2";
 import { waitAnimationFrame } from "./standard-extensions";
@@ -384,6 +385,51 @@ function drawCell14PoiCircles(
         ctx.stroke();
     }
 }
+
+function getPoiImportance({ data }: PoiRecord) {
+    let importance = 0;
+    if (data.isCommunityContributed) {
+        importance += 0.5;
+    }
+    let hasActive = false;
+    let hasGym = false;
+    let hasPokestop = false;
+    let hasPowerspot = false;
+    for (const { status, entity } of data.gmo) {
+        if (status === "ACTIVE") hasActive = true;
+        switch (entity) {
+            case "GYM":
+                hasGym = true;
+                break;
+            case "POKESTOP":
+                hasPokestop = true;
+                break;
+            case "POWERSPOT":
+                hasPowerspot = true;
+                break;
+        }
+    }
+    if (hasActive) {
+        importance += 0.5;
+    }
+    if (hasGym) {
+        importance += 0.4;
+    }
+    if (hasPokestop) {
+        importance += 0.1;
+    }
+    if (hasPowerspot) {
+        importance += 0.05;
+    }
+    if (data.hasAdditionalImages) {
+        importance += 0.05;
+    }
+    return importance;
+}
+function comparePoiByImportance(p1: PoiRecord, p2: PoiRecord) {
+    return getPoiImportance(p2) - getPoiImportance(p1);
+}
+
 function drawCell14PoiNames(
     context: RecordsRenderingContext,
     stat14: Cell14Statistics,
@@ -400,32 +446,41 @@ function drawCell14PoiNames(
     ctx.strokeStyle = "rgb(0, 0, 0)";
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
-    for (const { lat, lng, data, guid, name } of stat14.pois.values()) {
-        if (!data.isCommunityContributed) continue;
 
-        const { x, y } = latLngToScreenPoint(
-            context,
-            lat,
-            lng,
-            context._point_result_cache,
-        );
+    const pois = context._pois_cache;
+    try {
+        for (const poi of stat14.pois.values()) pois.push(poi);
+        pois.sort(comparePoiByImportance);
 
-        const textX = x;
-        const textY = y + 15;
+        for (const { lat, lng, data, guid, name } of pois) {
+            if (!data.isCommunityContributed) continue;
 
-        let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
-        let truncatedText = name;
-        if (!(truncatedMetrics instanceof TextMetrics)) {
-            truncatedText = truncatedMetrics.bestText;
-            truncatedMetrics = truncatedMetrics.bestMetrics;
+            const { x, y } = latLngToScreenPoint(
+                context,
+                lat,
+                lng,
+                context._point_result_cache,
+            );
+
+            const textX = x;
+            const textY = y + 15;
+
+            let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
+            let truncatedText = name;
+            if (!(truncatedMetrics instanceof TextMetrics)) {
+                truncatedText = truncatedMetrics.bestText;
+                truncatedMetrics = truncatedMetrics.bestMetrics;
+            }
+
+            const box = getTextBox(ctx, truncatedMetrics, textX, textY, guid);
+            if (checker.check(box)) continue;
+            checker.addBox(box);
+
+            ctx.strokeText(truncatedText, textX, textY);
+            ctx.fillText(truncatedText, textX, textY);
         }
-
-        const box = getTextBox(ctx, truncatedMetrics, textX, textY, guid);
-        if (checker.check(box)) continue;
-        checker.addBox(box);
-
-        ctx.strokeText(truncatedText, textX, textY);
-        ctx.fillText(truncatedText, textX, textY);
+    } finally {
+        pois.length = 0;
     }
 }
 function getTextBox(
@@ -497,6 +552,7 @@ export interface OverlayView {
     readonly _gyms_cache: Path[];
     readonly _pokestops_cache: Path[];
     readonly _empties_cache: Path[];
+    readonly _pois_cache: PoiRecord[];
 }
 
 type RenderingContext =
@@ -541,6 +597,7 @@ export async function createRecordsOverlayView(
         _empties_cache: [],
         _gyms_cache: [],
         _pokestops_cache: [],
+        _pois_cache: [],
     };
 }
 
