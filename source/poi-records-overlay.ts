@@ -186,6 +186,8 @@ export async function createPoiRecordsCanvasOverlay(
                 y: centerPixel.y + this.offsetFromCenterToNW.y,
             };
             this.canvas.style.transform = `translate(${canvasNWPixel.x}px, ${canvasNWPixel.y}px) scale(1)`;
+            this.canvas.style.width = canvasWidth + "px";
+            this.canvas.style.height = canvasHeight + "px";
 
             // 拡張後の領域を計算
             const bufferedNWLatLng = projection.fromDivPixelToLatLng(
@@ -217,6 +219,7 @@ export async function createPoiRecordsCanvasOverlay(
                     .fromLatLngToPoint(bufferedNWLatLng)!,
                 width: canvasWidth,
                 height: canvasHeight,
+                devicePixelRatio: window.devicePixelRatio || 1,
             } satisfies Viewport;
 
             this.drawer(port);
