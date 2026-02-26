@@ -55,7 +55,7 @@ const TokenKinds = Object.freeze({
 function parseMagicComments(comments) {
     const space = `[^\\S\\n\\r]`;
     const spaces0 = `${space}*`;
-    const directiveHeaderStart = `spell-checker`;
+    const directiveHeaderStart = `spell-checker|spell`;
     const directiveHeaderStartPattern = new RegExp(directiveHeaderStart, "gi");
     const directiveHeaderContinuePattern = new RegExp(
         `${spaces0}:${spaces0}(ignore|words)`,
