@@ -108,6 +108,23 @@ export function createAsyncCancelScope(
     };
 }
 
+export function createCancelScope<T>(): (
+    task: (signal: AbortSignal) => Promise<T>,
+) => Promise<T | undefined> {
+    let activeController: AbortController | undefined;
+    return async (task) => {
+        activeController?.abort();
+        const controller = new AbortController();
+        activeController = controller;
+        try {
+            return await task(controller.signal);
+        } catch (e) {
+            if (isAbortError(e)) return;
+            throw e;
+        }
+    };
+}
+
 export function cached<T>(f: () => T) {
     let hasValue = false;
     let value: T;
@@ -164,4 +181,58 @@ export function waitAnimationFrame(signal: AbortSignal) {
         });
         signal.addEventListener("abort", cleanup, { once: true });
     });
+}
+
+export function wrapCancellable<TArgs extends unknown[], R>(
+    task: (requestId: number, ...args: TArgs) => Promise<R>,
+    cancelTask: (requestId: number) => Promise<void>,
+) {
+    let id = 1;
+    return async (signal: AbortSignal, ...args: TArgs) => {
+        const requestId = id++;
+
+        const onAbort = () => {
+            cancelTask(requestId).catch(() => {
+                // ignore
+            });
+        };
+
+        if (signal.aborted) {
+            onAbort();
+            throw new DOMException("Aborted", "AbortError");
+        }
+
+        signal.addEventListener("abort", onAbort, { once: true });
+
+        try {
+            return await task(requestId, ...args);
+        } finally {
+            signal.removeEventListener("abort", onAbort);
+        }
+    };
+}
+
+export function createCancellableWorker<TArgs extends unknown[], R>(
+    task: (signal: AbortSignal, ...args: TArgs) => R,
+) {
+    const tasks = new Map<number, AbortController>();
+    return {
+        async task(requestId: number, ...args: TArgs) {
+            const controller = new AbortController();
+            tasks.set(requestId, controller);
+
+            try {
+                return await task(controller.signal, ...args);
+            } finally {
+                tasks.delete(requestId);
+            }
+        },
+        cancelTask(requestId: number) {
+            const controller = tasks.get(requestId);
+            if (controller) {
+                controller.abort();
+                tasks.delete(requestId);
+            }
+        },
+    };
 }
