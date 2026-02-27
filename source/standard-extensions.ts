@@ -211,7 +211,7 @@ export function wrapCancellable<TArgs extends unknown[], R>(
 }
 
 export function createCancellableWorker<TArgs extends unknown[], R>(
-    task: (signal: AbortSignal, ...args: TArgs) => R,
+    task: (signal: AbortSignal, ...args: TArgs) => Promise<R>,
 ) {
     const tasks = new Map<number, AbortController>();
     return {
