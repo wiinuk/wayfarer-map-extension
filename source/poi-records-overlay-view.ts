@@ -753,18 +753,9 @@ async function drawAndWait(
     port: Viewport,
     signal: AbortSignal,
 ) {
-    let done = false;
-    signal.addEventListener(
-        "abort",
-        () => (!done ? console.debug("canceled") : 0),
-        {
-            once: true,
-        },
-    );
     drawOverlay(overlay, port);
     await waitAnimationFrame(signal);
     copyToFrontCanvas(overlay);
-    done = true;
 }
 
 function clearOutOfRangeCellViews(
