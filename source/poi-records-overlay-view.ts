@@ -264,7 +264,6 @@ function getCell14Options(entityCount: number, coverRate: number) {
         strokeWeight:
             options.strokeWeight * 2 +
             options.strokeWeight * 10 * (1 - coverRate),
-        strokePosition: google.maps.StrokePosition.INSIDE,
         strokeOpacity: 0.3 + 0.4 * coverRate,
 
         fillColor: "transparent",
