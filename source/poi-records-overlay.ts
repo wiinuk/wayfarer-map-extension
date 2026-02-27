@@ -227,10 +227,10 @@ export async function createPoiRecordsCanvasOverlay(
             const nePixel = projection.fromLatLngToDivPixel(ne)!;
 
             // 地図のサイズ[px]
-            const canvasWidth = Math.abs(nePixel.x - swPixel.x);
-            const canvasHeight = Math.abs(swPixel.y - nePixel.y);
-            this.canvas.style.width = `${canvasWidth | 0}px`;
-            this.canvas.style.height = `${canvasHeight | 0}px`;
+            const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
+            const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
+            this.canvas.style.width = `${canvasWidth}px`;
+            this.canvas.style.height = `${canvasHeight}px`;
 
             // 地図の左上[世界座標]
             const nwWorld = pointClassToRecord(
