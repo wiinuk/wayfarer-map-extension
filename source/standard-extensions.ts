@@ -192,9 +192,7 @@ export function wrapCancellable<TArgs extends unknown[], R>(
         const requestId = id++;
 
         const onAbort = () => {
-            cancelTask(requestId).catch(() => {
-                // ignore
-            });
+            cancelTask(requestId).catch(ignore);
         };
 
         if (signal.aborted) {
