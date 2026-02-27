@@ -7,7 +7,11 @@ import {
 } from "./poi-records-overlay-view";
 import PoisOverlayWorker from "./poi-records-overlay.worker.ts?worker";
 import type { PageResource } from "./setup";
-import { createAsyncCancelScope } from "./standard-extensions";
+import {
+    createAsyncCancelScope,
+    sleep,
+    wrapCancellable,
+} from "./standard-extensions";
 import * as Bounds from "./bounds";
 
 interface ViewOptions {
@@ -64,9 +68,47 @@ async function createDrawerForWorker(
     const mainApi = createMainApi(Comlink, canvas, handleAsyncError);
     Comlink.expose(mainApi, overlayWorker);
 
-    return (viewport: Viewport) => {
-        workerApi.draw(viewport).catch(handleAsyncError);
-    };
+    return wrapCancellable(workerApi.draw, workerApi.drawCancel);
+}
+
+function pointClassToRecord({ x, y }: google.maps.Point) {
+    return { x, y };
+}
+
+function padBoundsRelative(
+    map: google.maps.Map,
+    bounds: google.maps.LatLngBounds,
+    ratio: number,
+) {
+    const projection = map.getProjection()!;
+
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+
+    // 画面サイズ[世界座標]を計算
+    const swWorld = projection.fromLatLngToPoint(sw)!;
+    const neWorld = projection.fromLatLngToPoint(ne)!;
+    const worldWidth = Math.abs(neWorld.x - swWorld.x);
+    const worldHeight = Math.abs(swWorld.y - neWorld.y);
+
+    // 拡張されたサイズ[世界座標]を計算
+    const padX = worldWidth * ratio;
+    const padY = worldHeight * ratio;
+    const paddedSwWorld = new google.maps.Point(
+        swWorld.x - padX,
+        swWorld.y + padY,
+    );
+    const paddedNeWorld = new google.maps.Point(
+        neWorld.x + padX,
+        neWorld.y - padY,
+    );
+
+    // 拡張された領域[緯度経度]を計算
+    const paddedSw = projection.fromPointToLatLng(paddedSwWorld)!;
+    const paddedNe = projection.fromPointToLatLng(paddedNeWorld)!;
+    const paddedBounds = new google.maps.LatLngBounds(paddedSw, paddedNe);
+    const nwLatLng = new google.maps.LatLng(paddedNe.lat(), paddedSw.lng());
+    return { paddedBounds, nwLatLng };
 }
 
 export type PoiRecordsCanvasOverlay = Awaited<
@@ -75,19 +117,14 @@ export type PoiRecordsCanvasOverlay = Awaited<
 export async function createPoiRecordsCanvasOverlay(
     handleAsyncError: (reason: unknown) => void,
 ) {
-    // バッファ倍率
-    const BUFFER_RATIO = 1.5;
-
+    const bufferRatio = 0.5;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
         private canvas: HTMLCanvasElement;
-        private drawer!: (parameters: Viewport) => void;
-        private idleListener: google.maps.MapsEventListener | undefined;
-
-        private anchorCenterLatLng: google.maps.LatLng | undefined;
-        private anchorZoom: number | undefined;
-
-        /** 中心から Canvas 左上へのオフセット */
-        private offsetFromCenterToNW = { x: 0, y: 0 };
+        private drawer!: (
+            signal: AbortSignal,
+            parameters: Viewport,
+        ) => Promise<void>;
+        private debounceScope = createAsyncCancelScope(handleAsyncError);
 
         constructor() {
             super();
@@ -97,6 +134,7 @@ export async function createPoiRecordsCanvasOverlay(
             this.canvas.style.transformOrigin = "0 0";
             this.canvas.style.left = "0px";
             this.canvas.style.top = "0px";
+            this.canvas.style.imageRendering = "pixelated";
         }
         async init(handleAsyncError: (reason: unknown) => void) {
             this.drawer = await createDrawerForWorker(
@@ -108,121 +146,121 @@ export async function createPoiRecordsCanvasOverlay(
         override onAdd() {
             const panes = this.getPanes()!;
             panes.overlayLayer.appendChild(this.canvas);
-            this.idleListener = this.getMap()?.addListener("idle", () =>
-                this.drawFull(),
-            );
         }
 
         override onRemove() {
-            this.canvas.parentNode?.removeChild(this.canvas);
-            this.idleListener?.remove();
+            this.canvas.remove();
         }
 
+        private renderedBounds: google.maps.LatLngBounds | null = null;
+        private renderedNWLatLng: google.maps.LatLng | null = null;
+        private renderedZoom: number | null = null;
         override draw() {
-            if (!this.anchorCenterLatLng || this.anchorZoom == null) return;
-
-            const map = this.getMap();
-            if (!(map instanceof google.maps.Map)) return;
-
             const projection = this.getProjection() as
                 | google.maps.MapCanvasProjection
                 | undefined;
-            if (projection == null) return;
+            const map = this.getMap();
+            if (!projection || !(map instanceof google.maps.Map)) return;
 
-            const currentZoom = map.getZoom()!;
-            const currentCenterPos = projection.fromLatLngToDivPixel(
-                this.anchorCenterLatLng,
-            )!;
+            const currentZoom = map.getZoom();
+            const currentBounds = map.getBounds()!;
+            if (this.renderedNWLatLng && this.renderedZoom !== null) {
+                const currentWorldWidth = projection.getWorldWidth();
+                const renderedWorldWidth = 256 * 2 ** this.renderedZoom;
+                const scale = currentWorldWidth / renderedWorldWidth;
 
-            const scale = 2 ** (currentZoom - this.anchorZoom);
+                const currentPos = projection.fromLatLngToDivPixel(
+                    this.renderedNWLatLng,
+                )!;
+                this.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+            }
 
-            const canvasX =
-                currentCenterPos.x + this.offsetFromCenterToNW.x * scale;
-            const canvasY =
-                currentCenterPos.y + this.offsetFromCenterToNW.y * scale;
-
-            this.canvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${scale})`;
+            let needsRedraw = false;
+            if (!this.renderedBounds || this.renderedZoom !== currentZoom) {
+                needsRedraw = true;
+            } else {
+                const { paddedBounds: bounds } = padBoundsRelative(
+                    map,
+                    currentBounds,
+                    bufferRatio / 2,
+                );
+                if (
+                    !this.renderedBounds.contains(bounds.getSouthWest()) ||
+                    !this.renderedBounds.contains(bounds.getNorthEast())
+                ) {
+                    needsRedraw = true;
+                }
+            }
+            if (needsRedraw) {
+                this.debounceScope(async (signal) => {
+                    await sleep(300, { signal });
+                    await this.fullDraw(signal);
+                });
+            }
         }
-
-        drawFull() {
+        async fullDraw(signal: AbortSignal) {
             const map = this.getMap();
             if (!(map instanceof google.maps.Map)) return;
-
-            const zoom = map.getZoom();
-            if (zoom == null) return;
 
             const projection = this.getProjection() as
                 | google.maps.MapCanvasProjection
                 | undefined;
+
             if (projection == null) return;
 
-            const bounds = map.getBounds()!;
+            const zoom = map.getZoom()!;
+
+            // スクロールに対応するため拡張
+            const { paddedBounds: bounds, nwLatLng: nw } = padBoundsRelative(
+                map,
+                map.getBounds()!,
+                bufferRatio,
+            );
             const center = map.getCenter()!;
 
-            this.anchorCenterLatLng = center;
-            this.anchorZoom = zoom;
+            const sw = bounds.getSouthWest();
+            const ne = bounds.getNorthEast();
 
-            const centerPixel = projection.fromLatLngToDivPixel(center)!;
-            const swPixel = projection.fromLatLngToDivPixel(
-                bounds.getSouthWest(),
-            )!;
-            const nePixel = projection.fromLatLngToDivPixel(
-                bounds.getNorthEast(),
-            )!;
+            // 地図の左下[px]
+            const swPixel = projection.fromLatLngToDivPixel(sw)!;
+            // 地図の右上[px]
+            const nePixel = projection.fromLatLngToDivPixel(ne)!;
 
-            // 画面の正規サイズ
-            const screenWidth = nePixel.x - swPixel.x;
-            const screenHeight = swPixel.y - nePixel.y;
+            // 地図のサイズ[px]
+            const canvasWidth = Math.abs(nePixel.x - swPixel.x);
+            const canvasHeight = Math.abs(swPixel.y - nePixel.y);
+            this.canvas.style.width = `${canvasWidth | 0}px`;
+            this.canvas.style.height = `${canvasHeight | 0}px`;
 
-            // バッファ適用後サイズ
-            const canvasWidth = Math.ceil(screenWidth * BUFFER_RATIO);
-            const canvasHeight = Math.ceil(screenHeight * BUFFER_RATIO);
-            this.offsetFromCenterToNW = {
-                x: -canvasWidth / 2,
-                y: -canvasHeight / 2,
-            };
-            const canvasNWPixel = {
-                x: centerPixel.x + this.offsetFromCenterToNW.x,
-                y: centerPixel.y + this.offsetFromCenterToNW.y,
-            };
-            this.canvas.style.transform = `translate(${canvasNWPixel.x}px, ${canvasNWPixel.y}px) scale(1)`;
-            this.canvas.style.width = canvasWidth + "px";
-            this.canvas.style.height = canvasHeight + "px";
-
-            // 拡張後の領域を計算
-            const bufferedNWLatLng = projection.fromDivPixelToLatLng(
-                new google.maps.Point(canvasNWPixel.x, canvasNWPixel.y),
-            )!;
-            const bufferedSELatLng = projection.fromDivPixelToLatLng(
-                new google.maps.Point(
-                    canvasNWPixel.x + canvasWidth,
-                    canvasNWPixel.y + canvasHeight,
-                ),
-            )!;
-            const extendedBounds = new google.maps.LatLngBounds(
-                new google.maps.LatLng(
-                    bufferedSELatLng.lat(),
-                    bufferedNWLatLng.lng(),
-                ),
-                new google.maps.LatLng(
-                    bufferedNWLatLng.lat(),
-                    bufferedSELatLng.lng(),
-                ),
+            // 地図の左上[世界座標]
+            const nwWorld = pointClassToRecord(
+                map.getProjection()!.fromLatLngToPoint(nw)!,
             );
 
             const port: Viewport = {
                 zoom,
-                bounds: Bounds.fromClass(extendedBounds),
+                bounds: Bounds.fromClass(bounds),
                 center: toLatLngLiteral(center),
-                nwWorld: map
-                    .getProjection()!
-                    .fromLatLngToPoint(bufferedNWLatLng)!,
+                nwWorld,
                 width: canvasWidth,
                 height: canvasHeight,
                 devicePixelRatio: window.devicePixelRatio || 1,
-            } satisfies Viewport;
+            };
 
-            this.drawer(port);
+            await this.drawer(signal, port);
+            // キャンバスをずらすため必要な、最後の描画時の情報を記録
+            this.renderedBounds = bounds;
+            this.renderedZoom = zoom;
+            this.renderedNWLatLng = nw;
+
+            // 現在の地図状態に合わせてキャンパスを調整
+            const latestProjection = this.getProjection() as
+                | google.maps.MapCanvasProjection
+                | undefined;
+            if (latestProjection) {
+                const currentPos = latestProjection.fromLatLngToDivPixel(nw)!;
+                this.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
+            }
         }
     }
     const overlay = new PoiRecordsCanvasOverlay();
@@ -253,6 +291,6 @@ export async function createPoisOverlay(
 export function setupPoiRecordOverlay(page: PageResource) {
     const { canvasOverlay } = page.overlay;
     canvasOverlay.setMap(page.map);
-    canvasOverlay.drawFull();
-    page.events.addEventListener("gcs-saved", () => canvasOverlay.drawFull());
+    canvasOverlay.draw();
+    page.events.addEventListener("gcs-saved", () => canvasOverlay.draw());
 }

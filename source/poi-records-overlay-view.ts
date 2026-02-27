@@ -1,4 +1,4 @@
-//spell-checker:words Lngs POKESTOP Pois pokestops Hiragino Kaku Meiryo Neue POWERSPOT wayspot
+//spell-checker:words Lngs POKESTOP Pois Hiragino Kaku Meiryo Neue POWERSPOT wayspot
 import type { LatLngBounds } from "./bounds";
 import { createCollisionChecker } from "./collision-checker";
 import type { EntityKind } from "./gcs-schema";
@@ -12,8 +12,8 @@ import {
     type PoiRecord,
 } from "./poi-records";
 import type { LatLng } from "./s2";
-import { waitAnimationFrame } from "./standard-extensions";
-import type { Cell } from "./typed-s2cell";
+import { ignore, raise, waitAnimationFrame } from "./standard-extensions";
+import type { Cell, Cell14Id } from "./typed-s2cell";
 
 export interface Viewport {
     readonly zoom: number;
@@ -58,26 +58,17 @@ interface Point {
 
 function worldPointToScreenPoint(
     { nwWorld, zoom }: Readonly<Viewport>,
-    pWorld: Readonly<Point>,
+    worldX: number,
+    worldY: number,
     result: Point,
 ) {
     const scale = 2 ** zoom;
-    const x = (pWorld.x - nwWorld.x) * scale;
-    const y = (pWorld.y - nwWorld.y) * scale;
+    const x = (worldX - nwWorld.x) * scale;
+    const y = (worldY - nwWorld.y) * scale;
 
     result.x = x | 0;
     result.y = y | 0;
     return result;
-}
-
-function latLngToScreenPoint(
-    viewport: Viewport,
-    lat: number,
-    lng: number,
-    result: Point,
-) {
-    const pWorld = latLngToWorldPoint(lat, lng, result);
-    return worldPointToScreenPoint(viewport, pWorld, result);
 }
 
 function getEllipsisTextWithMetrics(
@@ -110,77 +101,111 @@ function getEllipsisTextWithMetrics(
     return { bestText, bestMetrics };
 }
 
-function drawPolygons(
-    context: RecordsRenderingContext,
-    paths: readonly Path[],
+const Point_size = 2;
+const Point_x = 0;
+const Point_y = 1;
+
+function createCellBounds(
+    cornerPaths: readonly LatLngPath[],
     options: Cell17Options,
 ) {
-    const { ctx } = context;
-    if (paths.length === 0) return;
-
-    ctx.beginPath();
-    for (const path of paths) {
-        setSubPath(context, path);
+    const pathCount = cornerPaths.length;
+    const cornerCount = 4;
+    const buffer = new Float64Array(pathCount * cornerCount * Point_size);
+    let bufferIndex = 0;
+    const pointResultCache = createZeroPoint();
+    for (const cornerPath of cornerPaths) {
+        if (cornerPath.length !== cornerCount) return raise`internal error`;
+        for (const { lat, lng } of cornerPath) {
+            const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+            buffer[bufferIndex++] = x;
+            buffer[bufferIndex++] = y;
+        }
     }
-    ctx.fillStyle = options.fillColor;
-    ctx.fill();
+    return {
+        zIndex: options.zIndex,
+        draw: (context: RecordsRenderingContext) => {
+            const { ctx } = context;
 
-    ctx.strokeStyle = options.strokeColor;
-    ctx.lineWidth = options.strokeWeight;
-    ctx.stroke();
+            ctx.beginPath();
+            for (let pathIndex = 0; pathIndex < pathCount; pathIndex++) {
+                const pathPointer = pathIndex * cornerCount * Point_size;
+                for (
+                    let cornerIndex = 0;
+                    cornerIndex < cornerCount;
+                    cornerIndex++
+                ) {
+                    const pointPointer = pathPointer + cornerIndex * Point_size;
+                    const worldX = buffer[pointPointer + Point_x]!;
+                    const worldY = buffer[pointPointer + Point_y]!;
+                    const { x, y } = worldPointToScreenPoint(
+                        context,
+                        worldX,
+                        worldY,
+                        pointResultCache,
+                    );
+                    if (cornerIndex === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.closePath();
+            }
+            ctx.fillStyle = options.fillColor;
+            ctx.fill();
+
+            ctx.strokeStyle = options.strokeColor;
+            ctx.lineWidth = options.strokeWeight;
+            ctx.stroke();
+        },
+    };
 }
 
-function drawPolygon(
-    context: RecordsRenderingContext,
-    path: Path,
-    options: typeof cell17EmptyOptions,
-) {
-    const { ctx } = context;
-    ctx.beginPath();
-    setSubPath(context, path);
-
-    ctx.fillStyle = options.fillColor;
-    ctx.fill();
-
-    ctx.strokeStyle = options.strokeColor;
-    ctx.lineWidth = options.strokeWeight;
-    ctx.stroke();
-}
-
-function drawCell14Label(
-    context: RecordsRenderingContext,
-    text: string,
-    center: LatLng,
-) {
-    const { ctx } = context;
-    const { x, y } = latLngToScreenPoint(
-        context,
-        center.lat,
-        center.lng,
-        context._point_result_cache,
+function createCell14Label(text: string, { lat, lng }: LatLng) {
+    const pointResultCache = createZeroPoint();
+    const { x: worldX, y: worldY } = latLngToWorldPoint(
+        lat,
+        lng,
+        pointResultCache,
     );
 
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-    ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
+    return {
+        zIndex: statLabelBaseZIndex,
+        draw: (context: RecordsRenderingContext) => {
+            const { ctx } = context;
+            const { x, y } = worldPointToScreenPoint(
+                context,
+                worldX,
+                worldY,
+                pointResultCache,
+            );
+            ctx.textBaseline = "middle";
+            ctx.textAlign = "center";
+            ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
 
-    ctx.lineWidth = 4;
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#c54545";
-    ctx.strokeText(text, x, y);
+            ctx.lineWidth = 4;
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = "#c54545";
+            ctx.strokeText(text, x, y);
 
-    ctx.fillStyle = "rgb(255, 255, 255)";
-    ctx.fillText(text, x, y);
+            ctx.fillStyle = "rgb(255, 255, 255)";
+            ctx.fillText(text, x, y);
+        },
+    };
 }
 
-const baseZIndex = 3100;
+const cellBaseZIndex = 3100;
+const poiBaseZIndex = cellBaseZIndex + 100;
+const poiLabelBaseZIndex = poiBaseZIndex + 100;
+const statLabelBaseZIndex = poiLabelBaseZIndex + 100;
 
 const cell17EmptyOptions = Object.freeze({
     strokeColor: "rgba(253, 255, 114, 0.4)",
     strokeWeight: 1,
     fillColor: "#0000002d",
     clickable: false,
-    zIndex: baseZIndex + 1,
+    zIndex: cellBaseZIndex + 1,
 } satisfies google.maps.PolygonOptions);
 
 const cell17PokestopOptions = Object.freeze({
@@ -188,7 +213,7 @@ const cell17PokestopOptions = Object.freeze({
 
     fillColor: "rgba(0, 191, 255, 0.4)",
     strokeColor: "rgba(0, 191, 255, 0.6)",
-    zIndex: baseZIndex,
+    zIndex: cellBaseZIndex,
 } satisfies google.maps.PolygonOptions);
 
 const cell17GymOptions = Object.freeze({
@@ -203,7 +228,7 @@ const cell14Options = Object.freeze({
     strokeWeight: 2,
     fillColor: "transparent",
     clickable: false,
-    zIndex: baseZIndex + 2,
+    zIndex: cellBaseZIndex + 2,
 } satisfies google.maps.PolygonOptions);
 
 const cell14OptionsEmpty = cell14Options;
@@ -252,57 +277,48 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 
-function drawCell14Bound(
-    context: RecordsRenderingContext,
-    cell14: Cell14Statistics,
-) {
+function createCell14Bound(cell14: Cell14Statistics) {
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(entityCount, coverRate);
-    drawPolygon(context, cell14.corner, options);
+    return createCellBounds([cell14.corner], options);
 }
 
-function drawCell17CountLabel(
-    context: RecordsRenderingContext,
-    cell14: Cell14Statistics,
-) {
+const noDraw = {
+    zIndex: 0,
+    draw: ignore,
+};
+function createCell17CountLabel(cell14: Cell14Statistics) {
     const count = sumGymAndPokestopCount(cell14);
-    if (count <= 0) return;
+    if (count <= 0) return noDraw;
 
-    drawCell14Label(context, `${count}`, cell14.center);
+    return createCell14Label(`${count}`, cell14.center);
 }
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
-function drawCell17Bounds(
-    context: RecordsRenderingContext,
-    stat14: Cell14Statistics,
-) {
-    const gyms = context._gyms_cache;
-    const stops = context._pokestops_cache;
-    const empties = context._empties_cache;
-    try {
-        for (const cell17 of stat14.cell17s.values()) {
-            const path = cell17.cell.getCornerLatLngs();
+function createCell17Bounds(stat14: Cell14Statistics) {
+    const gyms = [];
+    const stops = [];
+    const empties = [];
+    for (const cell17 of stat14.cell17s.values()) {
+        const path = cell17.cell.getCornerLatLngs();
 
-            if (has("GYM", cell17)) {
-                gyms.push(path);
-            } else if (has("POKESTOP", cell17)) {
-                stops.push(path);
-            } else {
-                empties.push(path);
-            }
+        if (has("GYM", cell17)) {
+            gyms.push(path);
+        } else if (has("POKESTOP", cell17)) {
+            stops.push(path);
+        } else {
+            empties.push(path);
         }
-        drawPolygons(context, empties, cell17EmptyOptions);
-        drawPolygons(context, stops, cell17PokestopOptions);
-        drawPolygons(context, gyms, cell17GymOptions);
-    } finally {
-        empties.length = 0;
-        stops.length = 0;
-        gyms.length = 0;
     }
+    return [
+        createCellBounds(empties, cell17EmptyOptions),
+        createCellBounds(stops, cell17PokestopOptions),
+        createCellBounds(gyms, cell17GymOptions),
+    ];
 }
 
 const wayspotOptions = Object.freeze({
@@ -310,6 +326,7 @@ const wayspotOptions = Object.freeze({
     borderColor: "#ff6600",
     borderWidth: 2,
     fillColor: "#ff660080",
+    zIndex: poiBaseZIndex,
 });
 const gymOptions = Object.freeze({
     ...wayspotOptions,
@@ -340,12 +357,14 @@ function entityKindToCircleOptions(kind: EntityKind | "") {
     }
 }
 
-const wayspotLabelOptions = Object.freeze({
+const wayspotLabelOptions = {
     font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
     strokeColor: "rgb(0, 0, 0)",
     fillColor: "#FFFFBB",
     strokeWeight: 2,
-});
+    lineJoin: "round" as CanvasLineJoin,
+    shadowBlur: 1,
+};
 const gymLabelOptions = Object.freeze({
     ...wayspotLabelOptions,
     font: `bold ` + wayspotLabelOptions.font,
@@ -369,50 +388,58 @@ function entityKindToLabelOptions(kind: EntityKind | "") {
     }
 }
 
-function enterRenderingScope<T1, R>(
-    scope: (context: RecordsRenderingContext, arg1: T1) => R,
-    context: RecordsRenderingContext,
-    arg1: T1,
-): R {
-    const { ctx } = context;
-    ctx.save();
-    try {
-        return scope(context, arg1);
-    } finally {
-        ctx.restore();
+function createPoiCircles(
+    { zoom }: Viewport,
+    pois: readonly PoiRecord[],
+    kind: EntityKind | "",
+) {
+    const poisLength = pois.length;
+    const options = entityKindToCircleOptions(kind);
+    const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
+
+    const pointResultCache = createZeroPoint();
+    const buffer = new Float64Array(poisLength * Point_size);
+    let bufferIndex = 0;
+    for (const { lat, lng, data } of pois) {
+        if (!data.isCommunityContributed) continue;
+
+        const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+        buffer[bufferIndex++] = x;
+        buffer[bufferIndex++] = y;
     }
+
+    return {
+        zIndex: options.zIndex,
+        draw: (context: RecordsRenderingContext) => {
+            const { ctx } = context;
+            ctx.beginPath();
+            for (let pointIndex = 0; pointIndex < poisLength; pointIndex++) {
+                const pointPointer = pointIndex * Point_size;
+                const worldX = buffer[pointPointer + Point_x]!;
+                const worldY = buffer[pointPointer + Point_y]!;
+                const { x, y } = worldPointToScreenPoint(
+                    context,
+                    worldX,
+                    worldY,
+                    pointResultCache,
+                );
+                ctx.moveTo(x + radius, y);
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+            }
+            ctx.fillStyle = options.fillColor;
+            ctx.fill();
+
+            ctx.strokeStyle = options.borderColor;
+            ctx.lineWidth = options.borderWidth;
+            ctx.stroke();
+        },
+    };
 }
 
-function drawCell14PoiCircles(
-    context: RecordsRenderingContext,
-    stat14: Cell14Statistics,
-) {
-    const { ctx } = context;
-    for (const [kind, pois] of stat14.kindToPois) {
-        const options = entityKindToCircleOptions(kind);
-        const radius =
-            context.zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
-
-        ctx.beginPath();
-        for (const { lat, lng, data } of pois) {
-            if (!data.isCommunityContributed) continue;
-
-            const { x, y } = latLngToScreenPoint(
-                context,
-                lat,
-                lng,
-                context._point_result_cache,
-            );
-            ctx.moveTo(x + radius, y);
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-        }
-        ctx.fillStyle = options.fillColor;
-        ctx.fill();
-
-        ctx.strokeStyle = options.borderColor;
-        ctx.lineWidth = options.borderWidth;
-        ctx.stroke();
-    }
+function createCell14PoiCircles(port: Viewport, stat14: Cell14Statistics) {
+    return [...stat14.kindToPois].map(([kind, pois]) =>
+        createPoiCircles(port, pois, kind),
+    );
 }
 
 function getPoiImportance({ data }: PoiRecord) {
@@ -464,74 +491,152 @@ function getKind(poi: PoiRecord) {
     return "";
 }
 
-function drawCell14PoiNames(
-    context: RecordsRenderingContext,
+interface PoiLabelView {
+    readonly worldX: number;
+    readonly worldY: number;
+    readonly text: string;
+    readonly textMetrics: TextMetrics;
+    readonly guid: string;
+    readonly options: typeof wayspotLabelOptions;
+}
+function createCell14PoiNames(
+    { zoom }: Viewport,
+    ctx: RenderingContext,
     stat14: Cell14Statistics,
 ) {
-    const { ctx, checker } = context;
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
+    const pointResultCache = createZeroPoint();
+    function createPoiLabelView(
+        ctx: RenderingContext,
+        poi: PoiRecord,
+    ): PoiLabelView {
+        const { lat, lng, guid, name } = poi;
+        const options = entityKindToLabelOptions(getKind(poi));
 
-    const pois = context._pois_cache;
-    try {
-        for (const poi of stat14.pois.values()) pois.push(poi);
-        pois.sort(comparePoiByImportance);
+        applyLabelOptions(ctx, options);
 
-        // 基準となるズームレベル
-        const referenceZoom = 16;
-        // 基準となるズームレベルでの最大POI数
-        const maxPoisAtReferenceZoom = 12;
-        const maxPois = Math.max(
-            1,
-            Math.ceil(
-                maxPoisAtReferenceZoom * 2 ** (context.zoom - referenceZoom),
-            ),
-        );
-        pois.length = Math.min(pois.length, maxPois);
-
-        for (const poi of pois) {
-            const { lat, lng, data, guid, name } = poi;
-            if (!data.isCommunityContributed) continue;
-
-            const options = entityKindToLabelOptions(getKind(poi));
-
-            ctx.font = options.font;
-            ctx.strokeStyle = options.strokeColor;
-            ctx.lineJoin = "round";
-            ctx.lineWidth = options.strokeWeight;
-
-            ctx.shadowColor = options.strokeColor;
-            ctx.shadowBlur = 1;
-            ctx.fillStyle = options.fillColor;
-
-            const { x, y } = latLngToScreenPoint(
-                context,
-                lat,
-                lng,
-                context._point_result_cache,
-            );
-
-            const textX = x;
-            const textY = y + 15;
-
-            let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
-            let truncatedText = name;
-            if (!(truncatedMetrics instanceof TextMetrics)) {
-                truncatedText = truncatedMetrics.bestText;
-                truncatedMetrics = truncatedMetrics.bestMetrics;
-            }
-
-            const box = getTextBox(ctx, truncatedMetrics, textX, textY, guid);
-            if (checker.check(box)) continue;
-            checker.addBox(box);
-
-            ctx.strokeText(truncatedText, textX, textY);
-            ctx.fillText(truncatedText, textX, textY);
+        let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
+        let truncatedText = name;
+        if (!(truncatedMetrics instanceof TextMetrics)) {
+            truncatedText = truncatedMetrics.bestText;
+            truncatedMetrics = truncatedMetrics.bestMetrics;
         }
-    } finally {
-        pois.length = 0;
+        const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+        return {
+            worldX: x,
+            worldY: y,
+            text: truncatedText,
+            textMetrics: truncatedMetrics,
+            guid,
+            options,
+        };
     }
+
+    const pois: PoiRecord[] = [];
+    for (const poi of stat14.pois.values()) {
+        if (poi.data.isCommunityContributed) pois.push(poi);
+    }
+    pois.sort(comparePoiByImportance);
+
+    // 基準となるズームレベル
+    const referenceZoom = 16;
+
+    // 基準となるズームレベルでの最大POI数
+    const maxPoisAtReferenceZoom = 6;
+
+    const maxPois = Math.max(
+        1,
+        Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom)),
+    );
+    // 上位POIのみを残す
+    pois.length = Math.min(pois.length, maxPois);
+
+    const labels = pois.map((poi) => createPoiLabelView(ctx, poi));
+
+    return {
+        zIndex: poiLabelBaseZIndex,
+        draw: (context: RecordsRenderingContext) => {
+            const { ctx, checker } = context;
+            ctx.save();
+            try {
+                ctx.textBaseline = "middle";
+                ctx.textAlign = "center";
+
+                for (const {
+                    options,
+                    worldX,
+                    worldY,
+                    text,
+                    textMetrics,
+                    guid,
+                } of labels) {
+                    applyLabelOptions(ctx, options);
+                    const { x, y } = worldPointToScreenPoint(
+                        context,
+                        worldX,
+                        worldY,
+                        context._point_result_cache,
+                    );
+
+                    const textX = x;
+                    const textY = y + 15;
+
+                    const box = getTextBox(
+                        ctx,
+                        textMetrics,
+                        textX,
+                        textY,
+                        guid,
+                    );
+                    if (checker.check(box)) continue;
+                    checker.addBox(box);
+
+                    ctx.strokeText(text, textX, textY);
+                    ctx.fillText(text, textX, textY);
+                }
+            } finally {
+                ctx.restore();
+            }
+        },
+    };
 }
+function applyLabelOptions(
+    ctx: RenderingContext,
+    options:
+        | {
+              font: string;
+              strokeColor: string;
+              fillColor: string;
+              strokeWeight: number;
+              lineJoin: CanvasLineJoin;
+              shadowBlur: number;
+          }
+        | Readonly<{
+              font: string;
+              strokeColor: "#ffffffd5";
+              fillColor: "#9c1933";
+              strokeWeight: number;
+              lineJoin: CanvasLineJoin;
+              shadowBlur: number;
+          }>
+        | Readonly<{
+              strokeColor: "#e762d3";
+              font: string;
+              fillColor: string;
+              strokeWeight: number;
+              lineJoin: CanvasLineJoin;
+              shadowBlur: number;
+          }>,
+) {
+    ctx.font = options.font;
+    ctx.strokeStyle = options.strokeColor;
+    ctx.lineJoin = options.lineJoin;
+    ctx.lineWidth = options.strokeWeight;
+
+    ctx.shadowColor = options.strokeColor;
+    ctx.shadowBlur = options.shadowBlur;
+    ctx.fillStyle = options.fillColor;
+}
+
 function getTextBox(
     ctx: RenderingContext,
     metrics: TextMetrics,
@@ -562,45 +667,23 @@ function getTextBox(
     return box;
 }
 
-async function drawCell14(
-    context: RecordsRenderingContext,
-    cell14: Cell<14>,
-    signal: AbortSignal,
-) {
-    const { records, zoom } = context;
-
-    const stat14 = await getCell14Stats(records, cell14, signal);
-    if (stat14 == null) return;
-
-    if (14 < zoom) {
-        enterRenderingScope(drawCell17Bounds, context, stat14);
-    }
-    drawCell14Bound(context, stat14);
-    if (14 < zoom && zoom < 18) {
-        enterRenderingScope(drawCell14PoiCircles, context, stat14);
-    }
-    if (14 < zoom) {
-        enterRenderingScope(drawCell14PoiNames, context, stat14);
-    }
-    if (13 < zoom) {
-        enterRenderingScope(drawCell17CountLabel, context, stat14);
-    }
-}
-
 type Cell17Options = typeof cell17EmptyOptions;
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
-type Path = readonly LatLng[];
+type LatLngPath = readonly LatLng[];
+type View = {
+    draw: (this: unknown, context: RecordsRenderingContext) => void;
+    readonly zIndex: number;
+};
 export interface OverlayView {
-    readonly canvas: Canvas;
+    readonly handleAsyncError: (reason: unknown) => void;
+    readonly frontCanvas: Canvas;
+    readonly backCanvas: OffscreenCanvas;
     readonly records: PoiRecords;
+    readonly cells: Map<Cell14Id, View[]>;
 
     readonly _point_result_cache: Point;
-
-    readonly _gyms_cache: Path[];
-    readonly _pokestops_cache: Path[];
-    readonly _empties_cache: Path[];
     readonly _pois_cache: PoiRecord[];
 }
 
@@ -608,77 +691,145 @@ type RenderingContext =
     | CanvasRenderingContext2D
     | OffscreenCanvasRenderingContext2D;
 
-function setSubPath(context: RecordsRenderingContext, path: Path) {
-    const { ctx } = context;
-    const start = path[0];
-    if (start != null) {
-        const { x, y } = latLngToScreenPoint(
-            context,
-            start.lat,
-            start.lng,
-            context._point_result_cache,
-        );
-        ctx.moveTo(x, y);
-
-        for (let i = 1; i < path.length; i++) {
-            const p = path[i]!;
-            const { x, y } = latLngToScreenPoint(
-                context,
-                p.lat,
-                p.lng,
-                context._point_result_cache,
-            );
-            ctx.lineTo(x, y);
-        }
-    }
-    ctx.closePath();
+function createZeroPoint(): Point {
+    return { x: 0, y: 0 };
 }
 
 export async function createRecordsOverlayView(
     canvas: Canvas,
-    _handleAsyncError: (reason: unknown) => void,
+    handleAsyncError: (reason: unknown) => void,
 ): Promise<OverlayView> {
     const records = await openRecords();
     return {
-        canvas,
+        handleAsyncError,
+        frontCanvas: canvas,
+        backCanvas: new OffscreenCanvas(canvas.width, canvas.height),
         records,
+        cells: new Map(),
         _point_result_cache: { x: 0, y: 0 },
-        _empties_cache: [],
-        _gyms_cache: [],
-        _pokestops_cache: [],
         _pois_cache: [],
     };
 }
 
-export async function renderRecordsOverlayView(
-    views: OverlayView,
-    port: Viewport,
-    signal: AbortSignal,
-) {
-    const { zoom, bounds, width, height, devicePixelRatio } = port;
-
-    const ctx = views.canvas.getContext("2d") as RenderingContext | null;
+function drawOverlay(overlay: OverlayView, port: Viewport) {
+    const { backCanvas: canvas } = overlay;
+    const ctx = canvas.getContext("2d");
     if (ctx == null) return;
 
+    const { width, height, devicePixelRatio } = port;
     const checker = createCollisionChecker();
     const context: RecordsRenderingContext = {
-        ...views,
+        ...overlay,
         ...port,
         ctx,
         checker,
     };
-
-    views.canvas.width = width * devicePixelRatio;
-    views.canvas.height = height * devicePixelRatio;
+    canvas.width = width * devicePixelRatio;
+    canvas.height = height * devicePixelRatio;
     ctx.scale(devicePixelRatio, devicePixelRatio);
 
     ctx.clearRect(0, 0, width, height);
-    await waitAnimationFrame(signal);
 
-    if (zoom <= 12) return;
+    const vs: View[] = [];
+    for (const views of overlay.cells.values()) {
+        for (const view of views) vs.push(view);
+    }
+    vs.sort((v1, v2) => v1.zIndex - v2.zIndex);
+    for (const view of vs) view.draw(context);
+}
+
+function copyToFrontCanvas({ backCanvas, frontCanvas }: OverlayView) {
+    const back = backCanvas.getContext("2d");
+    const front = frontCanvas.getContext("2d") as RenderingContext | null;
+    if (back == null || front == null) return;
+
+    const width = (frontCanvas.width = back.canvas.width);
+    const height = (frontCanvas.height = back.canvas.height);
+    front.clearRect(0, 0, width, height);
+    front.drawImage(backCanvas, 0, 0);
+}
+
+async function drawAndWait(
+    overlay: OverlayView,
+    port: Viewport,
+    signal: AbortSignal,
+) {
+    let done = false;
+    signal.addEventListener(
+        "abort",
+        () => (!done ? console.debug("canceled") : 0),
+        {
+            once: true,
+        },
+    );
+    drawOverlay(overlay, port);
+    await waitAnimationFrame(signal);
+    copyToFrontCanvas(overlay);
+    done = true;
+}
+
+function clearOutOfRangeCellViews(
+    { cells }: OverlayView,
+    nearlyCell14s: readonly Cell<14>[],
+) {
+    const cellIds = new Set(nearlyCell14s.map((cell) => cell.toString()));
+    for (const cellId of cells.keys()) {
+        if (!cellIds.has(cellId)) cells.delete(cellId);
+    }
+}
+
+async function updateCell14Views(
+    overlay: OverlayView,
+    port: Viewport,
+    cell14: Cell<14>,
+    ctx: RenderingContext,
+    signal: AbortSignal,
+) {
+    const { records, cells } = overlay;
+    const { zoom } = port;
+
+    const stat14 = await getCell14Stats(records, cell14, signal);
+    if (stat14 == null) return cells.delete(cell14.toString());
+
+    const views: View[] = [];
+    if (14 < zoom) {
+        views.push(...createCell17Bounds(stat14));
+    }
+    views.push(createCell14Bound(stat14));
+    if (14 < zoom && zoom < 18) {
+        views.push(...createCell14PoiCircles(port, stat14));
+    }
+    if (14 < zoom) {
+        views.push(createCell14PoiNames(port, ctx, stat14));
+    }
+    if (13 < zoom) {
+        views.push(createCell17CountLabel(stat14));
+    }
+    cells.set(stat14.id, views);
+}
+
+export async function renderRecordsOverlayView(
+    overlay: OverlayView,
+    port: Viewport,
+    signal: AbortSignal,
+) {
+    const { cells } = overlay;
+    const { zoom, bounds } = port;
+
+    if (zoom <= 12) {
+        cells.clear();
+        return drawAndWait(overlay, port, signal);
+    }
+    const ctx = overlay.frontCanvas.getContext("2d") as RenderingContext | null;
+    if (ctx == null) return;
 
     const cell14s = getNearlyCellsForBounds(bounds, 14);
-    for (const cell14 of cell14s) {
-        await drawCell14(context, cell14, signal);
-    }
+    clearOutOfRangeCellViews(overlay, cell14s);
+
+    await Promise.all(
+        cell14s.map((cell14) =>
+            updateCell14Views(overlay, port, cell14, ctx, signal),
+        ),
+    );
+    return drawAndWait(overlay, port, signal);
 }

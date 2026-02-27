@@ -4,7 +4,7 @@ import {
     renderRecordsOverlayView,
     type Viewport,
 } from "./poi-records-overlay-view";
-import { createAsyncCancelScope } from "./standard-extensions";
+import { createCancellableWorker } from "./standard-extensions";
 
 function handleError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -27,16 +27,17 @@ async function exposeWorkerApi() {
             void mainAPI
                 .reportError(errorToCloneable(reason))
                 .catch(handleError);
-        const scope = createAsyncCancelScope(handleAsyncError);
 
         const canvas = await mainAPI.takeCanvas();
         const views = await createRecordsOverlayView(canvas, handleAsyncError);
+
+        const { task: draw, cancelTask: drawCancel } = createCancellableWorker(
+            (signal, viewport: Viewport) =>
+                renderRecordsOverlayView(views, viewport, signal),
+        );
         const api = {
-            draw(viewport: Viewport) {
-                scope(async (signal) =>
-                    renderRecordsOverlayView(views, viewport, signal),
-                );
-            },
+            draw,
+            drawCancel,
         };
         Comlink.expose(api);
         return api;
