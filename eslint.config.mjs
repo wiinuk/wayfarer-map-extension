@@ -4,13 +4,11 @@ import tsParser from "@typescript-eslint/parser";
 import typescriptEslint from "@typescript-eslint/eslint-plugin";
 import globals from "globals";
 import js from "@eslint/js";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { FlatCompat } from "@eslint/eslintrc";
-
-const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,19 +21,18 @@ const compat = new FlatCompat({
 
 /**
  * @param {string} dirPath
- * @returns {import("@eslint/core").Plugin}
+ * @returns {Promise<import("@eslint/core").Plugin>}
  */
-function loadLocalRulesAsPlugin(dirPath) {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const rulesDir = path.join(__dirname, dirPath);
-
+async function loadLocalRulesAsPlugin(dirPath) {
     /** @type {Record<string, import("@eslint/core").RuleDefinition>} */
     const rules = Object.create(null);
-    for (const file of fs.readdirSync(rulesDir)) {
-        if (!file.endsWith(".js")) continue;
-
-        const ruleName = path.basename(file, ".js");
-        const ruleModule = require(path.join(rulesDir, file));
+    for await (const entry of fs.glob("*.{js,mjs,cjs}", {
+        cwd: path.join(import.meta.dirname, dirPath),
+        withFileTypes: true,
+    })) {
+        const ruleName = path.parse(entry.name).name;
+        const rulePath = path.join(entry.parentPath, entry.name);
+        const ruleModule = await import(pathToFileURL(rulePath).href);
         rules[ruleName] = ruleModule.default || ruleModule;
     }
     return { rules };
@@ -60,7 +57,7 @@ export default defineConfig([
             "@typescript-eslint": /** @type {import("@eslint/core").Plugin} */ (
                 /** @type {unknown} */ (typescriptEslint)
             ),
-            local: loadLocalRulesAsPlugin("./eslint/rules"),
+            local: await loadLocalRulesAsPlugin("./eslint/rules"),
         },
 
         extends: compat.extends(
