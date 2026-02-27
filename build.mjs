@@ -1,3 +1,4 @@
+//spell-checker:words Antlr Userscript
 //@ts-check
 import * as esbuild from "esbuild";
 import * as fs from "fs/promises";
@@ -61,6 +62,23 @@ async function runTsc() {
                 resolve(false);
             } else {
                 console.log("[tsc] TypeScript passed.");
+                resolve(true);
+            }
+        });
+    });
+}
+
+async function runVitest() {
+    console.log("[test] Running vitest...");
+    return new Promise((resolve) => {
+        exec("vitest run", (error, stdout, stderr) => {
+            if (stdout) console.log(stdout);
+            if (stderr) console.error(stderr);
+            if (error) {
+                console.error("[test] vitest found errors!");
+                resolve(false);
+            } else {
+                console.log("[test] vitest passed.");
                 resolve(true);
             }
         });
@@ -180,6 +198,11 @@ async function build() {
         const lintPassed = await runEslint();
         if (!lintPassed) {
             console.error("Build aborted due to linting errors.");
+            process.exit(1);
+        }
+        const testPassed = await runVitest();
+        if (!testPassed) {
+            console.error("Build aborted due to test errors.");
             process.exit(1);
         }
         await esbuild.build(baseOptions);
