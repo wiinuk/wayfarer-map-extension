@@ -33,7 +33,12 @@ async function exposeWorkerApi() {
 
         const { task: draw, cancelTask: drawCancel } = createCancellableWorker(
             (signal, viewport: Viewport) =>
-                renderRecordsOverlayView(views, viewport, signal),
+                renderRecordsOverlayView(
+                    views,
+                    viewport,
+                    signal,
+                    () => void mainAPI.onRenderStart().catch(handleAsyncError),
+                ),
         );
         const api = {
             draw,

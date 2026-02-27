@@ -19,6 +19,7 @@ export interface Viewport {
     readonly zoom: number;
     readonly bounds: LatLngBounds;
     readonly center: LatLng;
+    readonly nwLatLng: LatLng;
     readonly nwWorld: Point;
     readonly width: number;
     readonly height: number;
@@ -127,6 +128,7 @@ function createCellBounds(
         draw: (context: RecordsRenderingContext) => {
             const { ctx } = context;
 
+            ctx.save();
             ctx.beginPath();
             for (let pathIndex = 0; pathIndex < pathCount; pathIndex++) {
                 const pathPointer = pathIndex * cornerCount * Point_size;
@@ -158,6 +160,7 @@ function createCellBounds(
             ctx.strokeStyle = options.strokeColor;
             ctx.lineWidth = options.strokeWeight;
             ctx.stroke();
+            ctx.restore();
         },
     };
 }
@@ -676,6 +679,7 @@ type View = {
     readonly zIndex: number;
 };
 export interface OverlayView {
+    rendering: boolean;
     readonly handleAsyncError: (reason: unknown) => void;
     readonly frontCanvas: Canvas;
     readonly backCanvas: OffscreenCanvas;
@@ -700,6 +704,7 @@ export async function createRecordsOverlayView(
 ): Promise<OverlayView> {
     const records = await openRecords();
     return {
+        rendering: false,
         handleAsyncError,
         frontCanvas: canvas,
         backCanvas: new OffscreenCanvas(canvas.width, canvas.height),
@@ -752,10 +757,15 @@ async function drawAndWait(
     overlay: OverlayView,
     port: Viewport,
     signal: AbortSignal,
+    onRenderStart: () => void,
 ) {
     drawOverlay(overlay, port);
     await waitAnimationFrame(signal);
     copyToFrontCanvas(overlay);
+    if (overlay.rendering === false) {
+        overlay.rendering = true;
+        onRenderStart();
+    }
 }
 
 function clearOutOfRangeCellViews(
@@ -802,13 +812,16 @@ export async function renderRecordsOverlayView(
     overlay: OverlayView,
     port: Viewport,
     signal: AbortSignal,
+    onRenderStart: () => void,
 ) {
+    overlay.rendering = false;
+
     const { cells } = overlay;
     const { zoom, bounds } = port;
 
     if (zoom <= 12) {
         cells.clear();
-        return drawAndWait(overlay, port, signal);
+        return drawAndWait(overlay, port, signal, onRenderStart);
     }
     const ctx = overlay.frontCanvas.getContext("2d") as RenderingContext | null;
     if (ctx == null) return;
@@ -816,10 +829,9 @@ export async function renderRecordsOverlayView(
     const cell14s = getNearlyCellsForBounds(bounds, 14);
     clearOutOfRangeCellViews(overlay, cell14s);
 
-    await Promise.all(
-        cell14s.map((cell14) =>
-            updateCell14Views(overlay, port, cell14, ctx, signal),
-        ),
-    );
-    return drawAndWait(overlay, port, signal);
+    await drawAndWait(overlay, port, signal, onRenderStart);
+    for (const cell14 of cell14s) {
+        await updateCell14Views(overlay, port, cell14, ctx, signal);
+        await drawAndWait(overlay, port, signal, onRenderStart);
+    }
 }
