@@ -50,13 +50,51 @@ export function toExtended(
         },
     };
 }
+export function contains(bounds: LatLngBounds, point: LatLng) {
+    const { lat, lng } = point;
+    const { sw, ne } = bounds;
+
+    const isInLat = lat >= sw.lat && lat <= ne.lat;
+    if (!isInLat) return false;
+
+    if (sw.lng <= ne.lng) {
+        return lng >= sw.lng && lng <= ne.lng;
+    } else {
+        return lng >= sw.lng || lng <= ne.lng;
+    }
+}
+export function containsBounds(outer: LatLngBounds, inner: LatLngBounds) {
+    return contains(outer, inner.sw) && contains(outer, inner.ne);
+}
+
 export function intersects(bounds: LatLngBounds, other: LatLngBounds): boolean {
+    const latIntersects =
+        bounds.sw.lat <= other.ne.lat && other.sw.lat <= bounds.ne.lat;
+    if (!latIntersects) return false;
+    return intersectsLng(bounds, other);
+}
+
+function intersectsLng(b1: LatLngBounds, b2: LatLngBounds): boolean {
+    const cdl1 = b1.sw.lng > b1.ne.lng;
+    const cdl2 = b2.sw.lng > b2.ne.lng;
+
+    if (!cdl1 && !cdl2) {
+        return b1.sw.lng <= b2.ne.lng && b2.sw.lng <= b1.ne.lng;
+    }
     return (
-        bounds.sw.lat <= other.ne.lat &&
-        bounds.ne.lat >= other.sw.lat &&
-        bounds.sw.lng <= other.ne.lng &&
-        bounds.ne.lng >= other.sw.lng
+        containsLng(b1, b2.sw.lng) ||
+        containsLng(b1, b2.ne.lng) ||
+        containsLng(b2, b1.sw.lng) ||
+        containsLng(b2, b1.ne.lng) ||
+        (cdl1 && cdl2)
     );
+}
+
+function containsLng(bounds: LatLngBounds, lng: number): boolean {
+    if (bounds.sw.lng <= bounds.ne.lng) {
+        return lng >= bounds.sw.lng && lng <= bounds.ne.lng;
+    }
+    return lng >= bounds.sw.lng || lng <= bounds.ne.lng;
 }
 export function fromClass(object: google.maps.LatLngBounds): LatLngBounds {
     const sw = object.getSouthWest();
