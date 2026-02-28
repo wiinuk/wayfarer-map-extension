@@ -1,4 +1,5 @@
 // @ts-check
+const { SourceMapGenerator } = require("source-map");
 const { renderFieldName } = require("./js-syntax");
 const SourceFileBuilder = require("./source-file-builder");
 const Globals = require("./globals");
@@ -22,9 +23,17 @@ const writeIfChanged = async (fs, path, contents) => {
 };
 
 /**
+ * @typedef {{
+*   name: string;
+*   start: { line: number; character: number; };
+*   end: { line: number; character: number; };
+* }} ShaderSymbol
+*/
+
+/**
  * @param {string} shaderPath
- * @param {string[]} uniforms
- * @param {string[]} attributes
+ * @param {ShaderSymbol[]} uniforms
+ * @param {ShaderSymbol[]} attributes
  * @param {Globals.Globals} [globals]
  */
 exports.writeDeclaration = async function (
@@ -35,6 +44,22 @@ exports.writeDeclaration = async function (
 ) {
     const { fs } = Globals.fill(globals);
     const declarationPath = shaderPath + ".d.ts";
+    const declarationMapPath = declarationPath + ".map";
+
+    const declarationMap = new SourceMapGenerator({
+        file: declarationPath,
+    });
+    declarationMap.addMapping({
+        generated: {
+            line: 1,
+            column: 0,
+        },
+        source: shaderPath,
+        original: {
+            line: 1,
+            column: 0,
+        },
+    });
 
     const declarationFile = new SourceFileBuilder({
         lineBase: 1,
@@ -44,17 +69,48 @@ exports.writeDeclaration = async function (
     d.writeLine(`export const source: string;`);
 
     /**
-     * @param {string[]} names
+     * @param {ShaderSymbol[]} names
      */
     const writeNamesType = (names) => {
         if (names.length === 0) {
             d.write(` Record<string, never>`);
             return;
         }
-        for (const name of names) {
+        for (const symbol of names) {
             d.write(` & { readonly `);
-            d.write(renderFieldName(name));
+            const startLine = d.line;
+            const startColumn = d.column;
+            d.write(renderFieldName(symbol.name));
+            const endLine = d.line;
+            const endColumn = d.column;
             d.write(`: string; }`);
+
+            const cssStart = symbol.start;
+            const cssEnd = symbol.end;
+            declarationMap.addMapping({
+                generated: {
+                    line: startLine,
+                    column: startColumn,
+                },
+                source: shaderPath,
+                original: {
+                    line: cssStart.line + 1,
+                    column: cssStart.character,
+                },
+                name: symbol.name,
+            });
+            declarationMap.addMapping({
+                generated: {
+                    line: endLine,
+                    column: endColumn,
+                },
+                source: shaderPath,
+                original: {
+                    line: cssEnd.line + 1,
+                    column: cssEnd.character,
+                },
+                name: symbol.name,
+            });
         }
     };
 
@@ -65,6 +121,10 @@ exports.writeDeclaration = async function (
     d.write(`export const attributes:`);
     writeNamesType(attributes);
     d.writeLine(";");
+    d.writeLine(`export default source;`);
 
-    await writeIfChanged(fs, declarationPath, declarationFile.toString());
+    await Promise.all([
+        writeIfChanged(fs, declarationPath, declarationFile.toString()),
+        writeIfChanged(fs, declarationMapPath, declarationMap.toString()),
+    ]);
 };
