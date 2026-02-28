@@ -24,11 +24,11 @@ const writeIfChanged = async (fs, path, contents) => {
 
 /**
  * @typedef {{
-*   name: string;
-*   start: { line: number; character: number; };
-*   end: { line: number; character: number; };
-* }} ShaderSymbol
-*/
+ *   name: string;
+ *   start: { line: number; character: number; };
+ *   end: { line: number; character: number; };
+ * }} ShaderSymbol
+ */
 
 /**
  * @param {string} shaderPath
@@ -121,7 +121,7 @@ exports.writeDeclaration = async function (
     d.write(`export const attributes:`);
     writeNamesType(attributes);
     d.writeLine(";");
-    d.writeLine(`export default source;`);
+    d.writeLine(`export default { source, uniforms, attributes };`);
 
     await Promise.all([
         writeIfChanged(fs, declarationPath, declarationFile.toString()),
