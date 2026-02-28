@@ -85,7 +85,7 @@ export function newAbortError(message = "The operation was aborted.") {
     }
 }
 
-function isAbortError(e: unknown) {
+export function isAbortError(e: unknown) {
     return (
         e != null &&
         typeof e === "object" &&
@@ -233,4 +233,40 @@ export function createCancellableWorker<TArgs extends unknown[], R>(
             }
         },
     };
+}
+
+export type Memo<K, R> = Map<K, { result: Promise<R>; time: number }>;
+export async function getOrCached<T, K, R>(
+    cache: Memo<K, R>,
+    arg: T,
+    getKey: (arg: T) => K,
+    f: (arg: T, key: K) => Promise<R>,
+    expiresMs = 1000 * 60,
+    maxEntry = 2000,
+): Promise<R> {
+    const key = getKey(arg);
+    const entry = cache.get(key);
+    const now = Date.now();
+    if (entry !== undefined) {
+        if (now < entry.time + expiresMs) {
+            try {
+                return await entry.result;
+            } catch (e) {
+                if (!isAbortError(e)) throw e;
+            }
+        }
+        cache.delete(key);
+    }
+    const result = f(arg, key);
+
+    // 最大数を超えないように
+    if (maxEntry <= cache.size) {
+        for (const key of cache.keys()) {
+            cache.delete(key);
+            break;
+        }
+    }
+
+    cache.set(key, { result, time: now });
+    return result;
 }
