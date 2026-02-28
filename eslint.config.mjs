@@ -90,6 +90,7 @@ export default defineConfig([
         "**/node_modules/",
         "**/.*",
         "./esbuild-typed-css-module-plugin",
+        "./esbuild-glsl-plugin",
         "./eslint/rules",
         "./build.mjs",
         "./*.config.mjs",

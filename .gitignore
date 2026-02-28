@@ -19,3 +19,10 @@ lerna-debug.log*
 # parser generator
 .antlr/
 source/sal/.antlr-generated/
+
+
+# typed shader file
+**/*.frag.d.ts
+**/*.frag.d.ts.map
+**/*.vert.d.ts
+**/*.vert.d.ts.map
