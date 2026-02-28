@@ -4,6 +4,8 @@ import {
     createRecordsOverlayView,
     type Viewport,
     renderRecordsOverlayView,
+    type OverlayView,
+    initCanvas,
 } from "./poi-records-overlay-view";
 import PoisOverlayWorker from "./poi-records-overlay.worker.ts?worker";
 import type { PageResource } from "./setup";
@@ -11,15 +13,12 @@ import {
     createAsyncCancelScope,
     createCancelScope,
     ignore,
+    raise,
     sleep,
+    waitAnimationFrame,
     wrapCancellable,
 } from "./standard-extensions";
 import * as Bounds from "./bounds";
-import {
-    createTypedCustomEvent,
-    createTypedEventTarget,
-    type TypedEventTarget,
-} from "./typed-event-target";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -36,39 +35,28 @@ function createDrawerForMainThread(
     handleAsyncError: (reason: unknown) => void,
 ) {
     const scope = createCancelScope();
-    const views = createRecordsOverlayView(canvas, handleAsyncError);
+    const views = createRecordsOverlayView(handleAsyncError, ignore);
     return (viewport: Viewport) =>
         scope(async (signal) =>
-            renderRecordsOverlayView(await views, viewport, signal, ignore),
+            renderRecordsOverlayView(await views, viewport, signal),
         );
 }
 
-type IsolatedDrawerEventMap = { "render-start": undefined };
 export type MainApi = ReturnType<typeof createMainApi>;
 function createMainApi(
-    comlink: typeof import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),
-    canvas: HTMLCanvasElement,
     handleAsyncError: (reason: unknown) => void,
-    eventTarget: TypedEventTarget<IsolatedDrawerEventMap>,
+    onRenderUpdated: OverlayView["onRenderUpdated"],
 ) {
     return {
-        takeCanvas() {
-            const offscreen = canvas.transferControlToOffscreen();
-            return comlink.transfer(offscreen, [offscreen]);
-        },
         reportError(reason: Error | string) {
             handleAsyncError(reason);
         },
-        onRenderStart() {
-            eventTarget.dispatchEvent(
-                createTypedCustomEvent("render-start", undefined),
-            );
-        },
+        notifyRenderCompleted: onRenderUpdated,
     };
 }
 async function createDrawerForWorker(
-    canvas: HTMLCanvasElement,
     handleAsyncError: (reason: unknown) => void,
+    onRenderUpdated: OverlayView["onRenderUpdated"],
 ) {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
@@ -79,23 +67,16 @@ async function createDrawerForWorker(
             overlayWorker,
         );
 
-    const events = createTypedEventTarget<IsolatedDrawerEventMap>();
-    const mainApi = createMainApi(Comlink, canvas, handleAsyncError, events);
+    const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
 
     return {
         draw: wrapCancellable(workerApi.draw, workerApi.drawCancel),
-        events,
     };
 }
 
 interface IsolatedDrawer {
-    draw(
-        this: unknown,
-        signal: AbortSignal,
-        parameters: Viewport,
-    ): Promise<void>;
-    readonly events: TypedEventTarget<IsolatedDrawerEventMap>;
+    draw(this: unknown, signal: AbortSignal, parameters: Viewport): void;
 }
 
 function pointClassToRecord({ x, y }: google.maps.Point) {
@@ -146,34 +127,40 @@ export async function createPoiRecordsCanvasOverlay(
 ) {
     const bufferRatio = 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
-        private canvas: HTMLCanvasElement;
+        private ctx: CanvasRenderingContext2D;
         private drawer!: IsolatedDrawer;
-        private debounceScope = createAsyncCancelScope(handleAsyncError);
+        private drawDebounceScope = createAsyncCancelScope(handleAsyncError);
 
         constructor() {
             super();
-            this.canvas = document.createElement("canvas");
-            this.canvas.style.position = "absolute";
-            this.canvas.style.transition = "none";
-            this.canvas.style.transformOrigin = "0 0";
-            this.canvas.style.left = "0px";
-            this.canvas.style.top = "0px";
-            this.canvas.style.imageRendering = "pixelated";
+            const canvas = document.createElement("canvas");
+            canvas.style.position = "absolute";
+            canvas.style.transition = "none";
+            canvas.style.transformOrigin = "0 0";
+            canvas.style.left = "0px";
+            canvas.style.top = "0px";
+            canvas.style.imageRendering = "crisp-edges";
+            this.ctx = canvas.getContext("2d") ?? raise`context 2d`;
         }
+
         async init(handleAsyncError: (reason: unknown) => void) {
+            const scope = createAsyncCancelScope(handleAsyncError);
             this.drawer = await createDrawerForWorker(
-                this.canvas,
                 handleAsyncError,
+                (image, port) =>
+                    scope(async (signal) =>
+                        this.commitImage(image, port, signal),
+                    ),
             );
         }
 
         override onAdd() {
             const panes = this.getPanes()!;
-            panes.overlayLayer.appendChild(this.canvas);
+            panes.overlayLayer.appendChild(this.ctx.canvas);
         }
 
         override onRemove() {
-            this.canvas.remove();
+            this.ctx.canvas.remove();
         }
 
         private renderedViewport: Viewport | null = null;
@@ -195,7 +182,7 @@ export async function createPoiRecordsCanvasOverlay(
                 const currentPos = projection.fromLatLngToDivPixel(
                     this.renderedViewport.nwLatLng,
                 )!;
-                this.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
             }
 
             let needsRedraw = false;
@@ -216,11 +203,14 @@ export async function createPoiRecordsCanvasOverlay(
                 );
             }
             if (needsRedraw) {
-                this.debounceScope(async (signal) => {
-                    await sleep(100, { signal });
-                    await this.fullDraw(signal);
-                });
+                this.notifyDrawNeeded();
             }
+        }
+        notifyDrawNeeded() {
+            this.drawDebounceScope(async (signal) => {
+                await sleep(100, { signal });
+                await this.fullDraw(signal);
+            });
         }
         async fullDraw(signal: AbortSignal) {
             const map = this.getMap();
@@ -253,8 +243,8 @@ export async function createPoiRecordsCanvasOverlay(
             // 地図のサイズ[px]
             const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
             const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
-            this.canvas.style.width = `${canvasWidth}px`;
-            this.canvas.style.height = `${canvasHeight}px`;
+            this.ctx.canvas.style.width = `${canvasWidth}px`;
+            this.ctx.canvas.style.height = `${canvasHeight}px`;
 
             // 地図の左上[世界座標]
             const nwWorld = pointClassToRecord(
@@ -272,27 +262,36 @@ export async function createPoiRecordsCanvasOverlay(
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
 
-            this.drawer.events.addEventListener(
-                "render-start",
-                () => {
-                    // 最後の描画時の情報を記録（canvasをずらすため必要）
-                    this.renderedViewport = port;
+            this.drawer.draw(signal, port);
+        }
+        async commitImage(
+            image: ImageBitmap,
+            port: Viewport,
+            signal: AbortSignal,
+        ) {
+            try {
+                // 転送された画面を描画
+                await waitAnimationFrame(signal);
+                const { ctx } = this;
+                initCanvas(ctx, port);
+                ctx.drawImage(image, 0, 0);
 
-                    // 現在の地図状態に合わせてキャンパスを調整
-                    const latestProjection = this.getProjection() as
-                        | google.maps.MapCanvasProjection
-                        | undefined;
-                    if (latestProjection) {
-                        const currentPos =
-                            latestProjection.fromLatLngToDivPixel(
-                                port.nwLatLng,
-                            )!;
-                        this.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
-                    }
-                },
-                { once: true },
-            );
-            await this.drawer.draw(signal, port);
+                // 最後の描画時の情報を記録（canvasをずらすため必要）
+                this.renderedViewport = port;
+
+                // 現在の地図状態に合わせてキャンパスを調整
+                const latestProjection = this.getProjection() as
+                    | google.maps.MapCanvasProjection
+                    | undefined;
+                if (latestProjection) {
+                    const currentPos = latestProjection.fromLatLngToDivPixel(
+                        port.nwLatLng,
+                    )!;
+                    this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
+                }
+            } finally {
+                image.close();
+            }
         }
     }
     const overlay = new PoiRecordsCanvasOverlay();
@@ -323,6 +322,8 @@ export async function createPoisOverlay(
 export function setupPoiRecordOverlay(page: PageResource) {
     const { canvasOverlay } = page.overlay;
     canvasOverlay.setMap(page.map);
-    canvasOverlay.draw();
-    page.events.addEventListener("gcs-saved", () => canvasOverlay.draw());
+    canvasOverlay.notifyDrawNeeded();
+    page.events.addEventListener("gcs-saved", () =>
+        canvasOverlay.notifyDrawNeeded(),
+    );
 }

@@ -12,7 +12,13 @@ import {
     type PoiRecord,
 } from "./poi-records";
 import type { LatLng } from "./s2";
-import { ignore, raise, waitAnimationFrame } from "./standard-extensions";
+import {
+    getOrCached,
+    ignore,
+    raise,
+    waitAnimationFrame,
+    type Memo,
+} from "./standard-extensions";
 import type { Cell, Cell14Id } from "./typed-s2cell";
 
 export interface Viewport {
@@ -26,7 +32,6 @@ export interface Viewport {
     readonly devicePixelRatio: number;
 }
 export interface RecordsRenderingContext extends OverlayView, Viewport {
-    readonly ctx: RenderingContext;
     readonly checker: ReturnType<typeof createCollisionChecker>;
 }
 
@@ -102,9 +107,9 @@ function getEllipsisTextWithMetrics(
     return { bestText, bestMetrics };
 }
 
-const Point_size = 2;
 const Point_x = 0;
-const Point_y = 1;
+const Point_y = Point_x + 1;
+const Point_size = Point_y + 1;
 
 function createCellBounds(
     cornerPaths: readonly LatLngPath[],
@@ -359,6 +364,7 @@ function entityKindToCircleOptions(kind: EntityKind | "") {
     }
 }
 
+type WayspotLabelOptions = typeof wayspotLabelOptions;
 const wayspotLabelOptions = {
     font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
     strokeColor: "rgb(0, 0, 0)",
@@ -499,7 +505,7 @@ interface PoiLabelView {
     readonly text: string;
     readonly textMetrics: TextMetrics;
     readonly guid: string;
-    readonly options: typeof wayspotLabelOptions;
+    readonly options: WayspotLabelOptions;
 }
 function createCell14PoiNames(
     { zoom }: Viewport,
@@ -514,6 +520,7 @@ function createCell14PoiNames(
         const { lat, lng, guid, name } = poi;
         const options = entityKindToLabelOptions(getKind(poi));
 
+        ctx.save();
         applyLabelOptions(ctx, options);
 
         let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
@@ -523,6 +530,7 @@ function createCell14PoiNames(
             truncatedMetrics = truncatedMetrics.bestMetrics;
         }
         const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+        ctx.restore();
         return {
             worldX: x,
             worldY: y,
@@ -603,31 +611,7 @@ function createCell14PoiNames(
 }
 function applyLabelOptions(
     ctx: RenderingContext,
-    options:
-        | {
-              font: string;
-              strokeColor: string;
-              fillColor: string;
-              strokeWeight: number;
-              lineJoin: CanvasLineJoin;
-              shadowBlur: number;
-          }
-        | Readonly<{
-              font: string;
-              strokeColor: "#ffffffd5";
-              fillColor: "#9c1933";
-              strokeWeight: number;
-              lineJoin: CanvasLineJoin;
-              shadowBlur: number;
-          }>
-        | Readonly<{
-              strokeColor: "#e762d3";
-              font: string;
-              fillColor: string;
-              strokeWeight: number;
-              lineJoin: CanvasLineJoin;
-              shadowBlur: number;
-          }>,
+    options: WayspotLabelOptions,
 ) {
     ctx.font = options.font;
     ctx.strokeStyle = options.strokeColor;
@@ -671,19 +655,21 @@ function getTextBox(
 
 type Cell17Options = typeof cell17EmptyOptions;
 
-type Canvas = HTMLCanvasElement | OffscreenCanvas;
-
 type LatLngPath = readonly LatLng[];
 type View = {
     draw: (this: unknown, context: RecordsRenderingContext) => void;
     readonly zIndex: number;
 };
 export interface OverlayView {
-    rendering: boolean;
-    readonly handleAsyncError: (reason: unknown) => void;
-    readonly frontCanvas: Canvas;
-    readonly backCanvas: OffscreenCanvas;
+    readonly handleAsyncError: (this: unknown, reason: unknown) => void;
+    readonly onRenderUpdated: (
+        this: unknown,
+        image: ImageBitmap,
+        port: Viewport,
+    ) => void;
+    readonly ctx: OffscreenCanvasRenderingContext2D;
     readonly records: PoiRecords;
+    readonly statCache: Memo<Cell14Id, Cell14Statistics | undefined>;
     readonly cells: Map<Cell14Id, View[]>;
 
     readonly _point_result_cache: Point;
@@ -699,28 +685,40 @@ function createZeroPoint(): Point {
 }
 
 export async function createRecordsOverlayView(
-    canvas: Canvas,
     handleAsyncError: (reason: unknown) => void,
+    onRenderUpdated: OverlayView["onRenderUpdated"],
 ): Promise<OverlayView> {
     const records = await openRecords();
     return {
-        rendering: false,
         handleAsyncError,
-        frontCanvas: canvas,
-        backCanvas: new OffscreenCanvas(canvas.width, canvas.height),
+        onRenderUpdated,
+        ctx: new OffscreenCanvas(0, 0).getContext("2d") ?? raise`context2d`,
         records,
         cells: new Map(),
+        statCache: new Map(),
         _point_result_cache: { x: 0, y: 0 },
         _pois_cache: [],
     };
 }
 
-function drawOverlay(overlay: OverlayView, port: Viewport) {
-    const { backCanvas: canvas } = overlay;
-    const ctx = canvas.getContext("2d");
-    if (ctx == null) return;
-
+export function initCanvas(
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    port: Viewport,
+) {
+    const { canvas } = ctx;
     const { width, height, devicePixelRatio } = port;
+    const canvasWidth = width * devicePixelRatio;
+    const canvasHeight = height * devicePixelRatio;
+    if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+    }
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    ctx.clearRect(0, 0, width, height);
+}
+
+function drawOverlay(overlay: OverlayView, port: Viewport) {
+    const { ctx } = overlay;
     const checker = createCollisionChecker();
     const context: RecordsRenderingContext = {
         ...overlay,
@@ -728,11 +726,7 @@ function drawOverlay(overlay: OverlayView, port: Viewport) {
         ctx,
         checker,
     };
-    canvas.width = width * devicePixelRatio;
-    canvas.height = height * devicePixelRatio;
-    ctx.scale(devicePixelRatio, devicePixelRatio);
-
-    ctx.clearRect(0, 0, width, height);
+    initCanvas(ctx, port);
 
     const vs: View[] = [];
     for (const views of overlay.cells.values()) {
@@ -742,30 +736,15 @@ function drawOverlay(overlay: OverlayView, port: Viewport) {
     for (const view of vs) view.draw(context);
 }
 
-function copyToFrontCanvas({ backCanvas, frontCanvas }: OverlayView) {
-    const back = backCanvas.getContext("2d");
-    const front = frontCanvas.getContext("2d") as RenderingContext | null;
-    if (back == null || front == null) return;
-
-    const width = (frontCanvas.width = back.canvas.width);
-    const height = (frontCanvas.height = back.canvas.height);
-    front.clearRect(0, 0, width, height);
-    front.drawImage(backCanvas, 0, 0);
-}
-
 async function drawAndWait(
     overlay: OverlayView,
     port: Viewport,
     signal: AbortSignal,
-    onRenderStart: () => void,
 ) {
-    drawOverlay(overlay, port);
     await waitAnimationFrame(signal);
-    copyToFrontCanvas(overlay);
-    if (overlay.rendering === false) {
-        overlay.rendering = true;
-        onRenderStart();
-    }
+    drawOverlay(overlay, port);
+    const bitmap = overlay.ctx.canvas.transferToImageBitmap();
+    overlay.onRenderUpdated(bitmap, port);
 }
 
 function clearOutOfRangeCellViews(
@@ -778,17 +757,31 @@ function clearOutOfRangeCellViews(
     }
 }
 
+function getCell14StatsCached(
+    { records, statCache }: OverlayView,
+    cell14: Cell<14>,
+    signal: AbortSignal,
+) {
+    return getOrCached(
+        statCache,
+        cell14,
+        (cell14) => cell14.toString(),
+        (cell14) => {
+            return getCell14Stats(records, cell14, signal);
+        },
+    );
+}
+
 async function updateCell14Views(
     overlay: OverlayView,
     port: Viewport,
     cell14: Cell<14>,
-    ctx: RenderingContext,
     signal: AbortSignal,
 ) {
-    const { records, cells } = overlay;
+    const { cells } = overlay;
     const { zoom } = port;
 
-    const stat14 = await getCell14Stats(records, cell14, signal);
+    const stat14 = await getCell14StatsCached(overlay, cell14, signal);
     if (stat14 == null) return cells.delete(cell14.toString());
 
     const views: View[] = [];
@@ -800,7 +793,7 @@ async function updateCell14Views(
         views.push(...createCell14PoiCircles(port, stat14));
     }
     if (14 < zoom) {
-        views.push(createCell14PoiNames(port, ctx, stat14));
+        views.push(createCell14PoiNames(port, overlay.ctx, stat14));
     }
     if (13 < zoom) {
         views.push(createCell17CountLabel(stat14));
@@ -812,26 +805,21 @@ export async function renderRecordsOverlayView(
     overlay: OverlayView,
     port: Viewport,
     signal: AbortSignal,
-    onRenderStart: () => void,
 ) {
-    overlay.rendering = false;
-
     const { cells } = overlay;
     const { zoom, bounds } = port;
 
     if (zoom <= 12) {
         cells.clear();
-        return drawAndWait(overlay, port, signal, onRenderStart);
+        return drawAndWait(overlay, port, signal);
     }
-    const ctx = overlay.frontCanvas.getContext("2d") as RenderingContext | null;
-    if (ctx == null) return;
 
     const cell14s = getNearlyCellsForBounds(bounds, 14);
     clearOutOfRangeCellViews(overlay, cell14s);
 
-    await drawAndWait(overlay, port, signal, onRenderStart);
+    await drawAndWait(overlay, port, signal);
     for (const cell14 of cell14s) {
-        await updateCell14Views(overlay, port, cell14, ctx, signal);
-        await drawAndWait(overlay, port, signal, onRenderStart);
+        await updateCell14Views(overlay, port, cell14, signal);
+        await drawAndWait(overlay, port, signal);
     }
 }

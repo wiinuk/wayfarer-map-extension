@@ -28,17 +28,21 @@ async function exposeWorkerApi() {
                 .reportError(errorToCloneable(reason))
                 .catch(handleError);
 
-        const canvas = await mainAPI.takeCanvas();
-        const views = await createRecordsOverlayView(canvas, handleAsyncError);
+        const views = await createRecordsOverlayView(
+            handleAsyncError,
+            (image, port) => {
+                mainAPI
+                    .notifyRenderCompleted(
+                        Comlink.transfer(image, [image]),
+                        port,
+                    )
+                    .catch(handleAsyncError);
+            },
+        );
 
         const { task: draw, cancelTask: drawCancel } = createCancellableWorker(
             (signal, viewport: Viewport) =>
-                renderRecordsOverlayView(
-                    views,
-                    viewport,
-                    signal,
-                    () => void mainAPI.onRenderStart().catch(handleAsyncError),
-                ),
+                renderRecordsOverlayView(views, viewport, signal),
         );
         const api = {
             draw,
