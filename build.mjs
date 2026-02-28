@@ -6,6 +6,7 @@ import { exec } from "child_process";
 import path from "path";
 import workerPlugin from "esbuild-plugin-inline-worker";
 import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
+import glslPlugin from "./esbuild-glsl-plugin/index.js";
 import chokidar from "chokidar";
 
 const mainFile = "./wayfarer-map-extension.user.ts";
@@ -162,7 +163,7 @@ async function build() {
         banner: { js: banner },
         footer: watchMode ? { js: clientSnippet } : undefined,
         sourcemap: watchMode ? "inline" : false,
-        plugins: [TypedCssModulePlugin(), workerPlugin(), cleanupPlugin],
+        plugins: [glslPlugin(), TypedCssModulePlugin(), workerPlugin(), cleanupPlugin],
         alias: {
             assert: "./shims/assert.js",
             util: "./shims/util.js",
