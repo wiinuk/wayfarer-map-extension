@@ -10,11 +10,11 @@ const glslPlugin = (options = {}) => ({
     const logger = build.onLog ? build.onLog : console;
     build.onLoad({ filter: /\.(vert|frag)$/ }, async (args) => {
       const sourceText = await readFile(args.path, 'utf8');
-      const { uniforms: uniforms_owner, attributes: attributes_owner } = parseShader(sourceText);
+      const { uniforms, attributes } = parseShader(sourceText);
       const esbuildFs = fs; // Directly use node:fs/promises
 
-      const uniforms = Object.fromEntries(uniforms_owner.map(x=>[x,x]));
-      const attributes = Object.fromEntries(attributes_owner.map(x=>[x,x]));
+      const uniformsObj = Object.fromEntries(uniforms.map(x=>[x.name,x.name]));
+      const attributesObj = Object.fromEntries(attributes.map(x=>[x.name,x.name]));
       const globals = {
           console: logger,
           fs: {
@@ -32,12 +32,13 @@ const glslPlugin = (options = {}) => ({
       };
 
       // 型定義ファイルを非同期で書き出す
-      await writeDeclaration(args.path, Object.keys(uniforms), Object.keys(attributes), globals);
+      await writeDeclaration(args.path, uniforms, attributes, globals);
 
       const contents = `
         export const source = ${JSON.stringify(sourceText)};
-        export const uniforms = ${JSON.stringify(uniforms)};
-        export const attributes = ${JSON.stringify(attributes)};
+        export const uniforms = ${JSON.stringify(uniformsObj)};
+        export const attributes = ${JSON.stringify(attributesObj)};
+        export default source;
       `;
 
       return {
