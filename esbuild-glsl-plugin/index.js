@@ -13,8 +13,8 @@ const glslPlugin = (options = {}) => ({
       const { uniforms, attributes } = parseShader(sourceText);
       const esbuildFs = fs; // Directly use node:fs/promises
 
-      const uniformsObj = Object.fromEntries(uniforms.map(x=>[x.name,x.name]));
-      const attributesObj = Object.fromEntries(attributes.map(x=>[x.name,x.name]));
+      const uniformsObj = Object.fromEntries(uniforms.map(x=>[x.name,x.type]));
+      const attributesObj = Object.fromEntries(attributes.map(x=>[x.name,x.type]));
       const globals = {
           console: logger,
           fs: {

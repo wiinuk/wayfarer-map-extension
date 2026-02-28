@@ -7,16 +7,19 @@ export function parseShader(source) {
   const lineStarts = computeLineStarts(source);
 
   // This regex matches "uniform <type> <name1>, <name2>, ...;"
-  // group 1: list of names
-  const uniformRegex = /uniform\s+\w+\s+((?:[\w\d_]+)(?:\s*,\s*[\w\d_]+)*)\s*;/g;
+  // group 1: type
+  // group 2: list of names
+  const uniformRegex = /uniform\s+(\w+)\s+((?:[\w\d_]+)(?:\s*,\s*[\w\d_]+)*)\s*;/g;
 
   // This regex matches "attribute|in <type> <name1>, <name2>, ...;"
-  // group 1: list of names
-  const attributeRegex = /(?:attribute|in)\s+\w+\s+((?:[\w\d_]+)(?:\s*,\s*[\w\d_]+)*)\s*;/g;
+  // group 1: type
+  // group 2: list of names
+  const attributeRegex = /(?:attribute|in)\s+(\w+)\s+((?:[\w\d_]+)(?:\s*,\s*[\w\d_]+)*)\s*;/g;
   
   let match;
   while ((match = uniformRegex.exec(source)) !== null) {
-    const namesListStr = match[1];
+    const type = match[1];
+    const namesListStr = match[2];
     const listStartOffset = match.index + match[0].indexOf(namesListStr);
     const nameRegex = /[\w\d_]+/g;
     let nameMatch;
@@ -26,6 +29,7 @@ export function parseShader(source) {
         const endOffset = nameStartOffset + name.length;
         uniforms.push({
             name,
+            type,
             start: computeLineAndCharacterOfPosition(lineStarts, nameStartOffset),
             end: computeLineAndCharacterOfPosition(lineStarts, endOffset),
         });
@@ -33,7 +37,8 @@ export function parseShader(source) {
   }
 
   while ((match = attributeRegex.exec(source)) !== null) {
-    const namesListStr = match[1];
+    const type = match[1];
+    const namesListStr = match[2];
     const listStartOffset = match.index + match[0].indexOf(namesListStr);
     const nameRegex = /[\w\d_]+/g;
     let nameMatch;
@@ -43,6 +48,7 @@ export function parseShader(source) {
         const endOffset = nameStartOffset + name.length;
         attributes.push({
             name,
+            type,
             start: computeLineAndCharacterOfPosition(lineStarts, nameStartOffset),
             end: computeLineAndCharacterOfPosition(lineStarts, endOffset),
         });

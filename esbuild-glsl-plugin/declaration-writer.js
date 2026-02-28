@@ -25,6 +25,7 @@ const writeIfChanged = async (fs, path, contents) => {
 /**
  * @typedef {{
  *   name: string;
+ *   type: string;
  *   start: { line: number; character: number; };
  *   end: { line: number; character: number; };
  * }} ShaderSymbol
@@ -83,7 +84,7 @@ exports.writeDeclaration = async function (
             d.write(renderFieldName(symbol.name));
             const endLine = d.line;
             const endColumn = d.column;
-            d.write(`: string; }`);
+            d.write(`: ${JSON.stringify(symbol.type)}; }`);
 
             const cssStart = symbol.start;
             const cssEnd = symbol.end;
