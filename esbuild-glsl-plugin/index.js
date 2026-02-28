@@ -1,8 +1,8 @@
 // esbuild-glsl-plugin/index.js
-import { readFile } from 'fs/promises';
-import { parseShader } from './parser.js';
-import fs from "node:fs/promises"; // for esbuild's fs
-import { writeDeclaration } from './declaration-writer.js';
+const { readFile } = require('fs/promises');
+const { parseShader } = require('./parser.js');
+const fs = require("node:fs/promises"); // for esbuild's fs
+const { writeDeclaration } = require('./declaration-writer.js');
 
 const glslPlugin = (options = {}) => ({
   name: 'glsl',
@@ -38,7 +38,7 @@ const glslPlugin = (options = {}) => ({
         export const source = ${JSON.stringify(sourceText)};
         export const uniforms = ${JSON.stringify(uniformsObj)};
         export const attributes = ${JSON.stringify(attributesObj)};
-        export default source;
+        export default { source, uniforms, attributes };
       `;
 
       return {
@@ -49,4 +49,4 @@ const glslPlugin = (options = {}) => ({
   },
 });
 
-export default glslPlugin;
+module.exports = glslPlugin;
