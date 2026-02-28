@@ -94,7 +94,7 @@ describe("createCancelScope", () => {
 describe("getOrCached", () => {
     let cache: Cache<string, string>;
     const getKey = (arg: string) => arg;
-    const mockFetch = vi.fn((arg: string) => `result-${arg}`);
+    const mockFetch = vi.fn(async (arg: string) => `result-${arg}`);
 
     beforeEach(() => {
         cache = new Map();
@@ -107,7 +107,7 @@ describe("getOrCached", () => {
     });
 
     it("初回呼び出し時は関数を実行して値をキャッシュする", async () => {
-        const result = getOrCached(cache, "a", getKey, mockFetch);
+        const result = await getOrCached(cache, "a", getKey, mockFetch);
 
         expect(result).toBe("result-a");
         expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -115,24 +115,24 @@ describe("getOrCached", () => {
     });
 
     it("有効期限内であればキャッシュされた値を返し、関数は再実行されない", async () => {
-        getOrCached(cache, "a", getKey, mockFetch);
+        await getOrCached(cache, "a", getKey, mockFetch);
 
         // 30秒進める（デフォルト期限 60秒以内）
         vi.advanceTimersByTime(30 * 1000);
 
-        const result = getOrCached(cache, "a", getKey, mockFetch);
+        const result = await getOrCached(cache, "a", getKey, mockFetch);
 
         expect(result).toBe("result-a");
         expect(mockFetch).toHaveBeenCalledTimes(1); // 追加で呼ばれていない
     });
 
     it("有効期限が切れた場合は関数を再実行する", async () => {
-        getOrCached(cache, "a", getKey, mockFetch);
+        await getOrCached(cache, "a", getKey, mockFetch);
 
         // 61秒進める（期限切れ）
         vi.advanceTimersByTime(61 * 1000);
 
-        const result = getOrCached(cache, "a", getKey, mockFetch);
+        const result = await getOrCached(cache, "a", getKey, mockFetch);
 
         expect(result).toBe("result-a");
         expect(mockFetch).toHaveBeenCalledTimes(2); // 再実行された
@@ -141,11 +141,11 @@ describe("getOrCached", () => {
     it("最大エントリ数を超えた場合、最も古いエントリを削除する (LRU)", async () => {
         const max = 2;
         // 'a', 'b' を追加
-        getOrCached(cache, "a", getKey, mockFetch, 60000, max);
-        getOrCached(cache, "b", getKey, mockFetch, 60000, max);
+        await getOrCached(cache, "a", getKey, mockFetch, 60000, max);
+        await getOrCached(cache, "b", getKey, mockFetch, 60000, max);
 
         // 'c' を追加（'a' が消えるはず）
-        getOrCached(cache, "c", getKey, mockFetch, 60000, max);
+        await getOrCached(cache, "c", getKey, mockFetch, 60000, max);
 
         expect(cache.has("a")).toBe(false);
         expect(cache.has("b")).toBe(true);
