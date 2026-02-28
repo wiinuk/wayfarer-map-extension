@@ -25,6 +25,7 @@ import jaDictionary from "./locales/ja.json";
 import { createRemote, type Remote } from "./remote";
 import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 import { createScheduler } from "./dom-extensions";
+import * as poiGl from "./poi-gl/poi-gl";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
