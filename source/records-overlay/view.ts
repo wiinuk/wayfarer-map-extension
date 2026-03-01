@@ -24,7 +24,6 @@ import {
 } from "./options";
 import type { LatLng } from "../s2";
 import {
-    getOrCached,
     ignore,
     raise,
     waitAnimationFrame,
@@ -663,31 +662,16 @@ function clearOutOfRangeCellViews(
     }
 }
 
-function getCell14StatsCached(
-    { records, statCache }: OverlayView,
-    cell14: Cell<14>,
-    signal: AbortSignal,
-) {
-    return getOrCached(
-        statCache,
-        cell14,
-        (cell14) => cell14.toString(),
-        (cell14) => {
-            return getCell14Stats(records, cell14, signal);
-        },
-    );
-}
-
 async function updateCell14Views(
     overlay: OverlayView,
     port: Viewport,
     cell14: Cell<14>,
     signal: AbortSignal,
 ) {
-    const { cells, options } = overlay;
+    const { cells, options, records } = overlay;
     const { zoom } = port;
 
-    const stat14 = await getCell14StatsCached(overlay, cell14, signal);
+    const stat14 = await getCell14Stats(records, cell14, signal);
     if (stat14 == null) return cells.delete(cell14.toString());
 
     const views: View[] = [];
