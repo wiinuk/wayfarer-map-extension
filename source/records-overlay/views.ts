@@ -17,7 +17,7 @@ import type {
     OverlayOptions,
     WayspotLabelOptions,
 } from "./options";
-import type { CanvasRenderer, Viewport } from "./canvas-renderer";
+import type { CanvasRenderer, CellViews, Viewport } from "./canvas-renderer";
 
 type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
@@ -54,12 +54,13 @@ const Point_x = 0;
 const Point_y = Point_x + 1;
 const Point_size = Point_y + 1;
 
-function createCellBounds(
-    { PIXI, _point_result_cache }: CanvasRenderer,
+function renderCellBounds(
+    renderer: CanvasRenderer,
+    { graphics: p, center: { x: cellX, y: cellY } }: CellViews,
     cornerPaths: readonly LatLngPath[],
     options: Cell17Options,
 ) {
-    const p = new PIXI.Graphics();
+    const { _point_result_cache } = renderer;
     p.setFillStyle(options.fillColor);
     p.setStrokeStyle({
         pixelLine: true,
@@ -69,13 +70,22 @@ function createCellBounds(
         p.beginPath();
         for (let i = 0; i < cornerPath.length; i++) {
             const { lat, lng } = cornerPath[i]!;
-            const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
+            const { x: worldX, y: worldY } = latLngToWorldPoint(
+                lat,
+                lng,
+                _point_result_cache,
+            );
+            // 小さな数値であるセル中心からの相対世界座標に変換して誤差を減らす
+            const relativeX = worldX - cellX;
+            const relativeY = worldY - cellY;
             if (i === 0) {
-                p.moveTo(x, y);
+                p.moveTo(relativeX, relativeY);
             } else {
-                p.lineTo(x, y);
+                p.lineTo(relativeX, relativeY);
             }
         }
+        // セル中心に移動
+        p.position.set(cellX, cellY);
         p.closePath();
         p.fill();
         p.stroke();
@@ -159,15 +169,16 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 
-export function createCell14Bound(
+export function renderCell14Bound(
     renderer: CanvasRenderer,
+    cellViews: CellViews,
     cell14: Cell14Statistics,
 ) {
     const { options: store } = renderer;
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(store, entityCount, coverRate);
-    return createCellBounds(renderer, [cell14.corner], options);
+    return renderCellBounds(renderer, cellViews, [cell14.corner], options);
 }
 
 const noDraw = {
@@ -188,11 +199,12 @@ function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
-export function createCell17Bounds(
+export function renderCell17Bounds(
     renderer: CanvasRenderer,
-    options: OverlayOptions,
+    cellViews: CellViews,
     stat14: Cell14Statistics,
 ) {
+    const { options } = renderer;
     const gyms = [];
     const stops = [];
     const empties = [];
@@ -208,9 +220,19 @@ export function createCell17Bounds(
         }
     }
     return [
-        createCellBounds(renderer, empties, options.cell17EmptyOptions),
-        createCellBounds(renderer, stops, options.cell17PokestopOptions),
-        createCellBounds(renderer, gyms, options.cell17GymOptions),
+        renderCellBounds(
+            renderer,
+            cellViews,
+            empties,
+            options.cell17EmptyOptions,
+        ),
+        renderCellBounds(
+            renderer,
+            cellViews,
+            stops,
+            options.cell17PokestopOptions,
+        ),
+        renderCellBounds(renderer, cellViews, gyms, options.cell17GymOptions),
     ];
 }
 
