@@ -84,6 +84,32 @@ export default defineConfig([
             "no-duplicate-imports": "warn",
 
             "local/no-unused-spell-checker-directive": "warn",
+
+            "@typescript-eslint/no-restricted-imports": [
+                "error",
+                {
+                    paths: [
+                        {
+                            name: "pixi.js",
+                            message:
+                                "型定義か動的インポートを利用してください。",
+                            allowTypeImports: true,
+                        },
+                        {
+                            name: "Comlink",
+                            message:
+                                "型定義か動的インポートを利用してください。",
+                            allowTypeImports: true,
+                        },
+                        {
+                            name: "zod",
+                            message:
+                                "型定義か動的インポートを利用してください。",
+                            allowTypeImports: true,
+                        },
+                    ],
+                },
+            ],
         },
     },
     globalIgnores([
