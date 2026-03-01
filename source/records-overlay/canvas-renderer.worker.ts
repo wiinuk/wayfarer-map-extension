@@ -1,9 +1,9 @@
 // spell-checker: ignore comlink
 import {
-    createRecordsOverlayView,
-    renderRecordsOverlayView,
+    createRecordsCanvasRenderer,
+    updateRecordsCanvasRenderer,
     type Viewport,
-} from "./view";
+} from "./canvas-renderer";
 import { createCancellableWorker } from "../standard-extensions";
 
 function handleError(reason: unknown) {
@@ -18,7 +18,7 @@ async function exposeWorkerApi() {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
 
-    const mainAPI = Comlink.wrap<import("./overlay").MainApi>(
+    const mainAPI = Comlink.wrap<import("./overlay-view").MainApi>(
         self as import("comlink").Endpoint,
     );
 
@@ -28,7 +28,7 @@ async function exposeWorkerApi() {
                 .reportError(errorToCloneable(reason))
                 .catch(handleError);
 
-        const views = await createRecordsOverlayView(
+        const views = await createRecordsCanvasRenderer(
             handleAsyncError,
             (image, port) => {
                 mainAPI
@@ -42,7 +42,7 @@ async function exposeWorkerApi() {
 
         const { task: draw, cancelTask: drawCancel } = createCancellableWorker(
             (signal, viewport: Viewport) =>
-                renderRecordsOverlayView(views, viewport, signal),
+                updateRecordsCanvasRenderer(views, viewport, signal),
         );
         const api = {
             draw,

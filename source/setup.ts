@@ -4,7 +4,7 @@ import {
     createPoisOverlay,
     setupPoiRecordOverlay,
     type PoisOverlay,
-} from "./poi-records-overlay";
+} from "./records-overlay/overlay-view";
 import { awaitElement } from "./standard-extensions";
 import {
     createTypedCustomEvent,

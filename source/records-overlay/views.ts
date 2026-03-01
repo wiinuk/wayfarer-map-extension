@@ -1,49 +1,25 @@
-//spell-checker:words Lngs POKESTOP Pois Hiragino Kaku Meiryo Neue POWERSPOT wayspot
-import type { LatLngBounds } from "../bounds";
-import { createCollisionChecker } from "../collision-checker";
+// spell: words Hiragino Kaku Lngs Meiryo Neue POKESTOP POWERSPOT Pois Wayspot
 import type { EntityKind } from "../gcs-schema";
 import {
+    createZeroPoint,
     latLngToWorldPoint,
     worldPointToScreenPoint,
-    type Point,
 } from "../geometry";
-import {
-    type Cell14Statistics,
-    type CellStatistic,
-    getCell14Stats,
-    type PoiRecords,
-    openRecords,
-    getNearlyCellsForBounds,
-    type PoiRecord,
+import type {
+    Cell14Statistics,
+    CellStatistic,
+    PoiRecord,
 } from "../poi-records";
-import {
-    createOverlayViewOptions,
-    type Cell17Options,
-    type OverlayOptions,
-    type WayspotLabelOptions,
-} from "./options";
 import type { LatLng } from "../s2";
-import {
-    ignore,
-    raise,
-    waitAnimationFrame,
-    type Memo,
-} from "../standard-extensions";
-import type { Cell, Cell14Id } from "../typed-s2cell";
+import { raise, ignore } from "../standard-extensions";
+import type {
+    Cell17Options,
+    OverlayOptions,
+    WayspotLabelOptions,
+} from "./options";
+import type { Viewport, ViewsRenderingContext } from "./canvas-renderer";
 
-export interface Viewport {
-    readonly zoom: number;
-    readonly bounds: LatLngBounds;
-    readonly center: LatLng;
-    readonly nwLatLng: LatLng;
-    readonly nwWorld: Point;
-    readonly width: number;
-    readonly height: number;
-    readonly devicePixelRatio: number;
-}
-export interface RecordsRenderingContext extends OverlayView, Viewport {
-    readonly checker: ReturnType<typeof createCollisionChecker>;
-}
+type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
     ctx: RenderingContext,
     text: string,
@@ -97,7 +73,7 @@ function createCellBounds(
     }
     return {
         zIndex: options.zIndex,
-        draw: (context: RecordsRenderingContext) => {
+        draw: (context: ViewsRenderingContext) => {
             const { ctx } = context;
 
             ctx.save();
@@ -152,7 +128,7 @@ function createCell14Label(
 
     return {
         zIndex: options.statLabelBaseZIndex,
-        draw: (context: RecordsRenderingContext) => {
+        draw: (context: ViewsRenderingContext) => {
             const { ctx } = context;
             const { x, y } = worldPointToScreenPoint(
                 context.nwWorld,
@@ -214,7 +190,10 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 
-function createCell14Bound(store: OverlayOptions, cell14: Cell14Statistics) {
+export function createCell14Bound(
+    store: OverlayOptions,
+    cell14: Cell14Statistics,
+) {
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(store, entityCount, coverRate);
@@ -225,7 +204,7 @@ const noDraw = {
     zIndex: 0,
     draw: ignore,
 };
-function createCell17CountLabel(
+export function createCell17CountLabel(
     options: OverlayOptions,
     cell14: Cell14Statistics,
 ) {
@@ -239,7 +218,10 @@ function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
-function createCell17Bounds(options: OverlayOptions, stat14: Cell14Statistics) {
+export function createCell17Bounds(
+    options: OverlayOptions,
+    stat14: Cell14Statistics,
+) {
     const gyms = [];
     const stops = [];
     const empties = [];
@@ -316,7 +298,7 @@ function createPoiCircles(
 
     return {
         zIndex: options.zIndex,
-        draw: (context: RecordsRenderingContext) => {
+        draw: (context: ViewsRenderingContext) => {
             const { ctx } = context;
             ctx.beginPath();
             for (let pointIndex = 0; pointIndex < poisLength; pointIndex++) {
@@ -343,7 +325,7 @@ function createPoiCircles(
     };
 }
 
-function createCell14PoiCircles(
+export function createCell14PoiCircles(
     store: OverlayOptions,
     port: Viewport,
     stat14: Cell14Statistics,
@@ -410,7 +392,7 @@ interface PoiLabelView {
     readonly guid: string;
     readonly options: WayspotLabelOptions;
 }
-function createCell14PoiNames(
+export function createCell14PoiNames(
     store: OverlayOptions,
     { zoom }: Viewport,
     ctx: RenderingContext,
@@ -468,7 +450,7 @@ function createCell14PoiNames(
 
     return {
         zIndex: store.poiLabelBaseZIndex,
-        draw: (context: RecordsRenderingContext) => {
+        draw: (context: ViewsRenderingContext) => {
             const { ctx, checker } = context;
             ctx.save();
             try {
@@ -559,157 +541,3 @@ function getTextBox(
 }
 
 type LatLngPath = readonly LatLng[];
-type View = {
-    draw: (this: unknown, context: RecordsRenderingContext) => void;
-    readonly zIndex: number;
-};
-export interface OverlayView {
-    readonly handleAsyncError: (this: unknown, reason: unknown) => void;
-    readonly onRenderUpdated: (
-        this: unknown,
-        image: ImageBitmap,
-        port: Viewport,
-    ) => void;
-    readonly ctx: OffscreenCanvasRenderingContext2D;
-    readonly records: PoiRecords;
-    readonly statCache: Memo<Cell14Id, Cell14Statistics | undefined>;
-    readonly options: OverlayOptions;
-    readonly cells: Map<Cell14Id, View[]>;
-
-    readonly _point_result_cache: Point;
-    readonly _pois_cache: PoiRecord[];
-}
-
-type RenderingContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D;
-
-function createZeroPoint(): Point {
-    return { x: 0, y: 0 };
-}
-
-export async function createRecordsOverlayView(
-    handleAsyncError: (reason: unknown) => void,
-    onRenderUpdated: OverlayView["onRenderUpdated"],
-): Promise<OverlayView> {
-    const records = await openRecords();
-    return {
-        handleAsyncError,
-        onRenderUpdated,
-        options: createOverlayViewOptions(),
-        ctx: new OffscreenCanvas(0, 0).getContext("2d") ?? raise`context2d`,
-        records,
-        cells: new Map(),
-        statCache: new Map(),
-        _point_result_cache: { x: 0, y: 0 },
-        _pois_cache: [],
-    };
-}
-
-export function initCanvas(
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    port: Viewport,
-) {
-    const { canvas } = ctx;
-    const { width, height, devicePixelRatio } = port;
-    const canvasWidth = width * devicePixelRatio;
-    const canvasHeight = height * devicePixelRatio;
-    if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-    }
-    ctx.scale(devicePixelRatio, devicePixelRatio);
-    ctx.clearRect(0, 0, width, height);
-}
-
-function drawOverlay(overlay: OverlayView, port: Viewport) {
-    const { ctx } = overlay;
-    const checker = createCollisionChecker();
-    const context: RecordsRenderingContext = {
-        ...overlay,
-        ...port,
-        ctx,
-        checker,
-    };
-    initCanvas(ctx, port);
-
-    const vs: View[] = [];
-    for (const views of overlay.cells.values()) {
-        for (const view of views) vs.push(view);
-    }
-    vs.sort((v1, v2) => v1.zIndex - v2.zIndex);
-    for (const view of vs) view.draw(context);
-}
-
-async function drawAndWait(
-    overlay: OverlayView,
-    port: Viewport,
-    signal: AbortSignal,
-) {
-    await waitAnimationFrame(signal);
-    drawOverlay(overlay, port);
-    const bitmap = overlay.ctx.canvas.transferToImageBitmap();
-    overlay.onRenderUpdated(bitmap, port);
-}
-
-function clearOutOfRangeCellViews(
-    { cells }: OverlayView,
-    nearlyCell14s: readonly Cell<14>[],
-) {
-    const cellIds = new Set(nearlyCell14s.map((cell) => cell.toString()));
-    for (const cellId of cells.keys()) {
-        if (!cellIds.has(cellId)) cells.delete(cellId);
-    }
-}
-
-async function updateCell14Views(
-    overlay: OverlayView,
-    port: Viewport,
-    cell14: Cell<14>,
-    signal: AbortSignal,
-) {
-    const { cells, options, records } = overlay;
-    const { zoom } = port;
-
-    const stat14 = await getCell14Stats(records, cell14, signal);
-    if (stat14 == null) return cells.delete(cell14.toString());
-
-    const views: View[] = [];
-    if (14 < zoom) {
-        views.push(...createCell17Bounds(options, stat14));
-    }
-    views.push(createCell14Bound(options, stat14));
-    if (14 < zoom && zoom < 18) {
-        views.push(...createCell14PoiCircles(options, port, stat14));
-    }
-    if (14 < zoom) {
-        views.push(createCell14PoiNames(options, port, overlay.ctx, stat14));
-    }
-    if (13 < zoom) {
-        views.push(createCell17CountLabel(options, stat14));
-    }
-    cells.set(stat14.id, views);
-}
-
-export async function renderRecordsOverlayView(
-    overlay: OverlayView,
-    port: Viewport,
-    signal: AbortSignal,
-) {
-    const { cells } = overlay;
-    const { zoom, bounds } = port;
-
-    if (zoom <= 12) {
-        cells.clear();
-        return drawAndWait(overlay, port, signal);
-    }
-
-    const cell14s = getNearlyCellsForBounds(bounds, 14);
-    clearOutOfRangeCellViews(overlay, cell14s);
-
-    await drawAndWait(overlay, port, signal);
-    for (const cell14 of cell14s) {
-        await updateCell14Views(overlay, port, cell14, signal);
-        await drawAndWait(overlay, port, signal);
-    }
-}

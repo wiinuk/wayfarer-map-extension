@@ -87,6 +87,9 @@ export interface Point {
     x: number;
     y: number;
 }
+export function createZeroPoint(): Point {
+    return { x: 0, y: 0 };
+}
 
 export function worldPointToScreenPoint(
     nwWorld: Point,

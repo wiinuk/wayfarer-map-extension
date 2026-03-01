@@ -1,12 +1,12 @@
 // spell-checker: ignore Pois Comlink
 import { toLatLngLiteral } from "../geometry";
 import {
-    createRecordsOverlayView,
+    createRecordsCanvasRenderer,
     type Viewport,
-    renderRecordsOverlayView,
-    type OverlayView,
-} from "./view";
-import PoisOverlayWorker from "./overlay.worker.ts?worker";
+    updateRecordsCanvasRenderer,
+    type CanvasRenderer,
+} from "./canvas-renderer";
+import PoisOverlayWorker from "./canvas-renderer.worker.ts?worker";
 import type { PageResource } from "../setup";
 import {
     createAsyncCancelScope,
@@ -31,15 +31,18 @@ async function createDrawerForMainThread(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: (image: ImageBitmap, port: Viewport) => void,
 ): Promise<IsolatedDrawer> {
-    const views = createRecordsOverlayView(handleAsyncError, onRenderUpdated);
+    const views = createRecordsCanvasRenderer(
+        handleAsyncError,
+        onRenderUpdated,
+    );
     return async (signal, viewport: Viewport) =>
-        renderRecordsOverlayView(await views, viewport, signal);
+        updateRecordsCanvasRenderer(await views, viewport, signal);
 }
 
 export type MainApi = ReturnType<typeof createMainApi>;
 function createMainApi(
     handleAsyncError: (reason: unknown) => void,
-    onRenderUpdated: OverlayView["onRenderUpdated"],
+    onRenderUpdated: CanvasRenderer["onRenderUpdated"],
 ) {
     return {
         reportError(reason: Error | string) {
@@ -50,14 +53,16 @@ function createMainApi(
 }
 async function createDrawerForWorker(
     handleAsyncError: (reason: unknown) => void,
-    onRenderUpdated: OverlayView["onRenderUpdated"],
+    onRenderUpdated: CanvasRenderer["onRenderUpdated"],
 ) {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
     const overlayWorker = new PoisOverlayWorker();
 
     const workerApi =
-        Comlink.wrap<import("./overlay.worker").WorkerApi>(overlayWorker);
+        Comlink.wrap<import("./canvas-renderer.worker").WorkerApi>(
+            overlayWorker,
+        );
 
     const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
