@@ -1,4 +1,4 @@
-//spell-checker:words Antlr Userscript
+//spell-checker:words Antlr Userscript glsl
 //@ts-check
 import * as esbuild from "esbuild";
 import * as fs from "fs/promises";
@@ -11,6 +11,7 @@ import chokidar from "chokidar";
 
 const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
+const esbuildOnly = args.includes("--esbuild-only");
 const watchMode = args.includes("--watch");
 const wsHost = process.env.WS_HOST || "127.0.0.1";
 const wsPort = Number(process.env.WS_PORT || 35729);
@@ -155,6 +156,7 @@ async function build() {
         },
     };
 
+    const plugins = [glslPlugin(), TypedCssModulePlugin()];
     /** @type {esbuild.BuildOptions} */
     const baseOptions = {
         entryPoints: [mainFile],
@@ -163,7 +165,13 @@ async function build() {
         banner: { js: banner },
         footer: watchMode ? { js: clientSnippet } : undefined,
         sourcemap: watchMode ? "inline" : false,
-        plugins: [glslPlugin(), TypedCssModulePlugin(), workerPlugin(), cleanupPlugin],
+        plugins: [
+            ...plugins,
+            workerPlugin({
+                plugins,
+            }),
+            cleanupPlugin,
+        ],
         alias: {
             assert: "./shims/assert.js",
             util: "./shims/util.js",
@@ -185,6 +193,8 @@ async function build() {
             console.log(`[watcher] File ${path} has been changed.`);
             await runAntlr();
         });
+    } else if (esbuildOnly) {
+        await esbuild.build(baseOptions);
     } else {
         const antlrPassed = await runAntlr();
         if (!antlrPassed) {
