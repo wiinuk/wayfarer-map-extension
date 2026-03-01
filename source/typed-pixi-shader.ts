@@ -167,9 +167,6 @@ export interface TypedShader<
     };
 }
 
-type F = typeof import("./poi-cell.frag");
-type x = TypedUniformData<F["uniforms"]["uBorderColors"]>;
-
 export function createTypedShaderFrom<
     V extends ShaderModuleKind,
     F extends ShaderModuleKind,
