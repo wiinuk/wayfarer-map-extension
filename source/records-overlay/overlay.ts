@@ -6,7 +6,7 @@ import {
     renderRecordsOverlayView,
     type OverlayView,
 } from "./view";
-import PoisOverlayWorker from "./poi-records-overlay.worker.ts?worker";
+import PoisOverlayWorker from "./overlay.worker.ts?worker";
 import type { PageResource } from "../setup";
 import {
     createAsyncCancelScope,
