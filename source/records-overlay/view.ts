@@ -1,12 +1,12 @@
 //spell-checker:words Lngs POKESTOP Pois Hiragino Kaku Meiryo Neue POWERSPOT wayspot
-import type { LatLngBounds } from "./bounds";
-import { createCollisionChecker } from "./collision-checker";
-import type { EntityKind } from "./gcs-schema";
+import type { LatLngBounds } from "../bounds";
+import { createCollisionChecker } from "../collision-checker";
+import type { EntityKind } from "../gcs-schema";
 import {
     latLngToWorldPoint,
     worldPointToScreenPoint,
     type Point,
-} from "./geometry";
+} from "../geometry";
 import {
     type Cell14Statistics,
     type CellStatistic,
@@ -15,22 +15,22 @@ import {
     openRecords,
     getNearlyCellsForBounds,
     type PoiRecord,
-} from "./poi-records";
+} from "../poi-records";
 import {
     createOverlayViewOptions,
     type Cell17Options,
     type OverlayOptions,
     type WayspotLabelOptions,
-} from "./poi-records-overlay-options";
-import type { LatLng } from "./s2";
+} from "./options";
+import type { LatLng } from "../s2";
 import {
     getOrCached,
     ignore,
     raise,
     waitAnimationFrame,
     type Memo,
-} from "./standard-extensions";
-import type { Cell, Cell14Id } from "./typed-s2cell";
+} from "../standard-extensions";
+import type { Cell, Cell14Id } from "../typed-s2cell";
 
 export interface Viewport {
     readonly zoom: number;

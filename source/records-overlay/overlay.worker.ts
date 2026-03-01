@@ -3,8 +3,8 @@ import {
     createRecordsOverlayView,
     renderRecordsOverlayView,
     type Viewport,
-} from "./poi-records-overlay-view";
-import { createCancellableWorker } from "./standard-extensions";
+} from "./view";
+import { createCancellableWorker } from "../standard-extensions";
 
 function handleError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -18,7 +18,7 @@ async function exposeWorkerApi() {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
 
-    const mainAPI = Comlink.wrap<import("./poi-records-overlay").MainApi>(
+    const mainAPI = Comlink.wrap<import("./overlay").MainApi>(
         self as import("comlink").Endpoint,
     );
 

@@ -1,21 +1,21 @@
 // spell-checker: ignore Pois Comlink
-import { toLatLngLiteral } from "./geometry";
+import { toLatLngLiteral } from "../geometry";
 import {
     createRecordsOverlayView,
     type Viewport,
     renderRecordsOverlayView,
     type OverlayView,
-} from "./poi-records-overlay-view";
+} from "./view";
 import PoisOverlayWorker from "./poi-records-overlay.worker.ts?worker";
-import type { PageResource } from "./setup";
+import type { PageResource } from "../setup";
 import {
     createAsyncCancelScope,
     raise,
     sleep,
     waitAnimationFrame,
     wrapCancellable,
-} from "./standard-extensions";
-import * as Bounds from "./bounds";
+} from "../standard-extensions";
+import * as Bounds from "../bounds";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -57,9 +57,7 @@ async function createDrawerForWorker(
     const overlayWorker = new PoisOverlayWorker();
 
     const workerApi =
-        Comlink.wrap<import("./poi-records-overlay.worker").WorkerApi>(
-            overlayWorker,
-        );
+        Comlink.wrap<import("./overlay.worker").WorkerApi>(overlayWorker);
 
     const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
