@@ -26,6 +26,7 @@ const writeIfChanged = async (fs, path, contents) => {
  * @typedef {{
  *   name: string;
  *   type: string;
+ *   length?: number;
  *   start: { line: number; character: number; };
  *   end: { line: number; character: number; };
  * }} ShaderSymbol
@@ -74,7 +75,7 @@ exports.writeDeclaration = async function (
      */
     const writeNamesType = (names) => {
         if (names.length === 0) {
-            d.write(` Record<string, never>`);
+            d.write(` { [k in never]: never }`);
             return;
         }
         for (const symbol of names) {
@@ -84,8 +85,11 @@ exports.writeDeclaration = async function (
             d.write(renderFieldName(symbol.name));
             const endLine = d.line;
             const endColumn = d.column;
-            d.write(`: ${JSON.stringify(symbol.type)}; }`);
-
+            const typeName =
+                symbol.length === undefined
+                    ? symbol.type
+                    : `${symbol.type}[${symbol.length}]`;
+            d.write(`: ${JSON.stringify(typeName)}; }`);
             const cssStart = symbol.start;
             const cssEnd = symbol.end;
             declarationMap.addMapping({

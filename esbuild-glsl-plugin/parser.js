@@ -11,6 +11,12 @@ export function parseShader(source) {
   // group 2: list of names
   const uniformRegex = /uniform\s+(\w+)\s+((?:[\w\d_]+)(?:\s*,\s*[\w\d_]+)*)\s*;/g;
 
+  // This regex matches "uniform <type> <name>[<length>];"
+  // group 1: type
+  // group 2: name
+  // group 3: length
+  const uniformArrayRegex = /uniform\s+(\w+)\s+([\w\d_]+)\[(\d+)\]\s*;/g;
+
   // This regex matches "attribute|in <type> <name1>, <name2>, ...;"
   // group 1: type
   // group 2: list of names
@@ -34,6 +40,21 @@ export function parseShader(source) {
             end: computeLineAndCharacterOfPosition(lineStarts, endOffset),
         });
     }
+  }
+
+  while ((match = uniformArrayRegex.exec(source)) !== null) {
+    const type = match[1];
+    const name = match[2];
+    const length = parseInt(match[3], 10);
+    const nameStartOffset = match.index + match[0].indexOf(name);
+    const endOffset = nameStartOffset + name.length;
+    uniforms.push({
+        name,
+        type,
+        length,
+        start: computeLineAndCharacterOfPosition(lineStarts, nameStartOffset),
+        end: computeLineAndCharacterOfPosition(lineStarts, endOffset),
+    });
   }
 
   while ((match = attributeRegex.exec(source)) !== null) {
