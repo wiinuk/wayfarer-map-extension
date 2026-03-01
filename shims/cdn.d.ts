@@ -8,6 +8,9 @@ declare module "https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm" {
     export default z;
 }
 
+declare module "https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm" {
+    export * from "pixi.js";
+}
 declare module "https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs" {
     export * from "pixi.js";
 }
