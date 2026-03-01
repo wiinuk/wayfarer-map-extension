@@ -3,6 +3,11 @@ import type { LatLngBounds } from "./bounds";
 import { createCollisionChecker } from "./collision-checker";
 import type { EntityKind } from "./gcs-schema";
 import {
+    latLngToWorldPoint,
+    worldPointToScreenPoint,
+    type Point,
+} from "./geometry";
+import {
     type Cell14Statistics,
     type CellStatistic,
     getCell14Stats,
@@ -11,6 +16,12 @@ import {
     getNearlyCellsForBounds,
     type PoiRecord,
 } from "./poi-records";
+import {
+    createOverlayViewOptions,
+    type Cell17Options,
+    type OverlayOptions,
+    type WayspotLabelOptions,
+} from "./poi-records-overlay-options";
 import type { LatLng } from "./s2";
 import {
     getOrCached,
@@ -34,49 +45,6 @@ export interface Viewport {
 export interface RecordsRenderingContext extends OverlayView, Viewport {
     readonly checker: ReturnType<typeof createCollisionChecker>;
 }
-
-const TILE_SIZE = 256;
-const PI = Math.PI;
-const RAD_PER_DEG = PI / 180;
-const X_FACTOR = TILE_SIZE / 360;
-const Y_FACTOR = TILE_SIZE / (2 * PI);
-const OFFSET = TILE_SIZE / 2;
-
-function latLngToWorldPoint(lat: number, lng: number, result: Point) {
-    // 経度
-    const x = (lng + 180) * X_FACTOR;
-
-    // 緯度
-    const sinY = Math.sin(lat * RAD_PER_DEG);
-    const clampedSinY =
-        sinY > 0.9999 ? 0.9999 : sinY < -0.9999 ? -0.9999 : sinY;
-    const y = OFFSET - Math.atanh(clampedSinY) * Y_FACTOR;
-
-    result.x = x;
-    result.y = y;
-    return result;
-}
-
-interface Point {
-    x: number;
-    y: number;
-}
-
-function worldPointToScreenPoint(
-    { nwWorld, zoom }: Readonly<Viewport>,
-    worldX: number,
-    worldY: number,
-    result: Point,
-) {
-    const scale = 2 ** zoom;
-    const x = (worldX - nwWorld.x) * scale;
-    const y = (worldY - nwWorld.y) * scale;
-
-    result.x = x | 0;
-    result.y = y | 0;
-    return result;
-}
-
 function getEllipsisTextWithMetrics(
     ctx: RenderingContext,
     text: string,
@@ -146,7 +114,8 @@ function createCellBounds(
                     const worldX = buffer[pointPointer + Point_x]!;
                     const worldY = buffer[pointPointer + Point_y]!;
                     const { x, y } = worldPointToScreenPoint(
-                        context,
+                        context.nwWorld,
+                        context.zoom,
                         worldX,
                         worldY,
                         pointResultCache,
@@ -170,7 +139,11 @@ function createCellBounds(
     };
 }
 
-function createCell14Label(text: string, { lat, lng }: LatLng) {
+function createCell14Label(
+    options: OverlayOptions,
+    text: string,
+    { lat, lng }: LatLng,
+) {
     const pointResultCache = createZeroPoint();
     const { x: worldX, y: worldY } = latLngToWorldPoint(
         lat,
@@ -179,11 +152,12 @@ function createCell14Label(text: string, { lat, lng }: LatLng) {
     );
 
     return {
-        zIndex: statLabelBaseZIndex,
+        zIndex: options.statLabelBaseZIndex,
         draw: (context: RecordsRenderingContext) => {
             const { ctx } = context;
             const { x, y } = worldPointToScreenPoint(
-                context,
+                context.nwWorld,
+                context.zoom,
                 worldX,
                 worldY,
                 pointResultCache,
@@ -203,69 +177,26 @@ function createCell14Label(text: string, { lat, lng }: LatLng) {
     };
 }
 
-const cellBaseZIndex = 3100;
-const poiBaseZIndex = cellBaseZIndex + 100;
-const poiLabelBaseZIndex = poiBaseZIndex + 100;
-const statLabelBaseZIndex = poiLabelBaseZIndex + 100;
-
-const cell17EmptyOptions = Object.freeze({
-    strokeColor: "rgba(253, 255, 114, 0.4)",
-    strokeWeight: 1,
-    fillColor: "#0000002d",
-    clickable: false,
-    zIndex: cellBaseZIndex + 1,
-} satisfies google.maps.PolygonOptions);
-
-const cell17PokestopOptions = Object.freeze({
-    ...cell17EmptyOptions,
-
-    fillColor: "rgba(0, 191, 255, 0.4)",
-    strokeColor: "rgba(0, 191, 255, 0.6)",
-    zIndex: cellBaseZIndex,
-} satisfies google.maps.PolygonOptions);
-
-const cell17GymOptions = Object.freeze({
-    ...cell17PokestopOptions,
-
-    fillColor: "rgba(255, 0, 13, 0.4)",
-    strokeColor: "rgba(255, 0, 13, 0.6)",
-} satisfies google.maps.PolygonOptions);
-
-const cell14Options = Object.freeze({
-    strokeColor: "#c54545b7",
-    strokeWeight: 2,
-    fillColor: "transparent",
-    clickable: false,
-    zIndex: cellBaseZIndex + 2,
-} satisfies google.maps.PolygonOptions);
-
-const cell14OptionsEmpty = cell14Options;
-const cell14Options1 = Object.freeze({
-    ...cell14Options,
-    fillColor: "#dd767625",
-} satisfies google.maps.PolygonOptions);
-
-const cell14Options2 = Object.freeze({
-    ...cell14Options,
-    fillColor: "#d3b71738",
-} satisfies google.maps.PolygonOptions);
-
-function countToCell14Options(count: number) {
+function countToCell14Options(options: OverlayOptions, count: number) {
     switch (count) {
         case 0:
-            return cell14OptionsEmpty;
+            return options.cell14OptionsEmpty;
         case 1:
         case 5:
         case 19:
-            return cell14Options1;
+            return options.cell14Options1;
         case 4:
         case 18:
-            return cell14Options2;
+            return options.cell14Options2;
     }
-    return cell14Options;
+    return options.cell14Options;
 }
-function getCell14Options(entityCount: number, coverRate: number) {
-    const options = countToCell14Options(entityCount);
+function getCell14Options(
+    store: OverlayOptions,
+    entityCount: number,
+    coverRate: number,
+) {
+    const options = countToCell14Options(store, entityCount);
     if (coverRate === 1) return options;
     return {
         ...options,
@@ -284,10 +215,10 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
     );
 }
 
-function createCell14Bound(cell14: Cell14Statistics) {
+function createCell14Bound(store: OverlayOptions, cell14: Cell14Statistics) {
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
-    const options = getCell14Options(entityCount, coverRate);
+    const options = getCell14Options(store, entityCount, coverRate);
     return createCellBounds([cell14.corner], options);
 }
 
@@ -295,18 +226,21 @@ const noDraw = {
     zIndex: 0,
     draw: ignore,
 };
-function createCell17CountLabel(cell14: Cell14Statistics) {
+function createCell17CountLabel(
+    options: OverlayOptions,
+    cell14: Cell14Statistics,
+) {
     const count = sumGymAndPokestopCount(cell14);
     if (count <= 0) return noDraw;
 
-    return createCell14Label(`${count}`, cell14.center);
+    return createCell14Label(options, `${count}`, cell14.center);
 }
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
-function createCell17Bounds(stat14: Cell14Statistics) {
+function createCell17Bounds(options: OverlayOptions, stat14: Cell14Statistics) {
     const gyms = [];
     const stops = [];
     const empties = [];
@@ -322,87 +256,52 @@ function createCell17Bounds(stat14: Cell14Statistics) {
         }
     }
     return [
-        createCellBounds(empties, cell17EmptyOptions),
-        createCellBounds(stops, cell17PokestopOptions),
-        createCellBounds(gyms, cell17GymOptions),
+        createCellBounds(empties, options.cell17EmptyOptions),
+        createCellBounds(stops, options.cell17PokestopOptions),
+        createCellBounds(gyms, options.cell17GymOptions),
     ];
 }
 
-const wayspotOptions = Object.freeze({
-    markerSize: 8,
-    borderColor: "#ff6600",
-    borderWidth: 2,
-    fillColor: "#ff660080",
-    zIndex: poiBaseZIndex,
-});
-const gymOptions = Object.freeze({
-    ...wayspotOptions,
-    borderColor: "#ffffff",
-    fillColor: "#ff2450",
-});
-const pokestopOptions = Object.freeze({
-    ...wayspotOptions,
-    borderColor: "#0000cd",
-    fillColor: "#00bfff",
-});
-const powerspotOptions = Object.freeze({
-    ...wayspotOptions,
-    borderColor: "#e762d3",
-    fillColor: "#f195eb",
-});
-
-function entityKindToCircleOptions(kind: EntityKind | "") {
+function entityKindToCircleOptions(
+    options: OverlayOptions,
+    kind: EntityKind | "",
+) {
     switch (kind) {
         case "GYM":
-            return gymOptions;
+            return options.gymOptions;
         case "POKESTOP":
-            return pokestopOptions;
+            return options.pokestopOptions;
         case "POWERSPOT":
-            return powerspotOptions;
+            return options.powerspotOptions;
         default:
-            return wayspotOptions;
+            return options.wayspotOptions;
     }
 }
 
-type WayspotLabelOptions = typeof wayspotLabelOptions;
-const wayspotLabelOptions = {
-    font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
-    strokeColor: "rgb(0, 0, 0)",
-    fillColor: "#FFFFBB",
-    strokeWeight: 2,
-    lineJoin: "round" as CanvasLineJoin,
-    shadowBlur: 1,
-};
-const gymLabelOptions = Object.freeze({
-    ...wayspotLabelOptions,
-    font: `bold ` + wayspotLabelOptions.font,
-    strokeColor: "#ffffffd5",
-    fillColor: "#9c1933",
-});
-const powerspotLabelOptions = Object.freeze({
-    ...wayspotLabelOptions,
-    strokeColor: "#e762d3",
-});
-function entityKindToLabelOptions(kind: EntityKind | "") {
+function entityKindToLabelOptions(
+    options: OverlayOptions,
+    kind: EntityKind | "",
+) {
     switch (kind) {
         case "GYM":
-            return gymLabelOptions;
+            return options.gymLabelOptions;
         case "POKESTOP":
-            return wayspotLabelOptions;
+            return options.wayspotLabelOptions;
         case "POWERSPOT":
-            return powerspotLabelOptions;
+            return options.powerspotLabelOptions;
         default:
-            return wayspotLabelOptions;
+            return options.wayspotLabelOptions;
     }
 }
 
 function createPoiCircles(
+    store: OverlayOptions,
     { zoom }: Viewport,
     pois: readonly PoiRecord[],
     kind: EntityKind | "",
 ) {
     const poisLength = pois.length;
-    const options = entityKindToCircleOptions(kind);
+    const options = entityKindToCircleOptions(store, kind);
     const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
 
     const pointResultCache = createZeroPoint();
@@ -426,7 +325,8 @@ function createPoiCircles(
                 const worldX = buffer[pointPointer + Point_x]!;
                 const worldY = buffer[pointPointer + Point_y]!;
                 const { x, y } = worldPointToScreenPoint(
-                    context,
+                    context.nwWorld,
+                    context.zoom,
                     worldX,
                     worldY,
                     pointResultCache,
@@ -444,9 +344,13 @@ function createPoiCircles(
     };
 }
 
-function createCell14PoiCircles(port: Viewport, stat14: Cell14Statistics) {
+function createCell14PoiCircles(
+    store: OverlayOptions,
+    port: Viewport,
+    stat14: Cell14Statistics,
+) {
     return [...stat14.kindToPois].map(([kind, pois]) =>
-        createPoiCircles(port, pois, kind),
+        createPoiCircles(store, port, pois, kind),
     );
 }
 
@@ -508,6 +412,7 @@ interface PoiLabelView {
     readonly options: WayspotLabelOptions;
 }
 function createCell14PoiNames(
+    store: OverlayOptions,
     { zoom }: Viewport,
     ctx: RenderingContext,
     stat14: Cell14Statistics,
@@ -518,7 +423,7 @@ function createCell14PoiNames(
         poi: PoiRecord,
     ): PoiLabelView {
         const { lat, lng, guid, name } = poi;
-        const options = entityKindToLabelOptions(getKind(poi));
+        const options = entityKindToLabelOptions(store, getKind(poi));
 
         ctx.save();
         applyLabelOptions(ctx, options);
@@ -563,7 +468,7 @@ function createCell14PoiNames(
     const labels = pois.map((poi) => createPoiLabelView(ctx, poi));
 
     return {
-        zIndex: poiLabelBaseZIndex,
+        zIndex: store.poiLabelBaseZIndex,
         draw: (context: RecordsRenderingContext) => {
             const { ctx, checker } = context;
             ctx.save();
@@ -581,7 +486,8 @@ function createCell14PoiNames(
                 } of labels) {
                     applyLabelOptions(ctx, options);
                     const { x, y } = worldPointToScreenPoint(
-                        context,
+                        context.nwWorld,
+                        context.zoom,
                         worldX,
                         worldY,
                         context._point_result_cache,
@@ -653,8 +559,6 @@ function getTextBox(
     return box;
 }
 
-type Cell17Options = typeof cell17EmptyOptions;
-
 type LatLngPath = readonly LatLng[];
 type View = {
     draw: (this: unknown, context: RecordsRenderingContext) => void;
@@ -670,6 +574,7 @@ export interface OverlayView {
     readonly ctx: OffscreenCanvasRenderingContext2D;
     readonly records: PoiRecords;
     readonly statCache: Memo<Cell14Id, Cell14Statistics | undefined>;
+    readonly options: OverlayOptions;
     readonly cells: Map<Cell14Id, View[]>;
 
     readonly _point_result_cache: Point;
@@ -692,6 +597,7 @@ export async function createRecordsOverlayView(
     return {
         handleAsyncError,
         onRenderUpdated,
+        options: createOverlayViewOptions(),
         ctx: new OffscreenCanvas(0, 0).getContext("2d") ?? raise`context2d`,
         records,
         cells: new Map(),
@@ -778,7 +684,7 @@ async function updateCell14Views(
     cell14: Cell<14>,
     signal: AbortSignal,
 ) {
-    const { cells } = overlay;
+    const { cells, options } = overlay;
     const { zoom } = port;
 
     const stat14 = await getCell14StatsCached(overlay, cell14, signal);
@@ -786,17 +692,17 @@ async function updateCell14Views(
 
     const views: View[] = [];
     if (14 < zoom) {
-        views.push(...createCell17Bounds(stat14));
+        views.push(...createCell17Bounds(options, stat14));
     }
-    views.push(createCell14Bound(stat14));
+    views.push(createCell14Bound(options, stat14));
     if (14 < zoom && zoom < 18) {
-        views.push(...createCell14PoiCircles(port, stat14));
+        views.push(...createCell14PoiCircles(options, port, stat14));
     }
     if (14 < zoom) {
-        views.push(createCell14PoiNames(port, overlay.ctx, stat14));
+        views.push(createCell14PoiNames(options, port, overlay.ctx, stat14));
     }
     if (13 < zoom) {
-        views.push(createCell17CountLabel(stat14));
+        views.push(createCell17CountLabel(options, stat14));
     }
     cells.set(stat14.id, views);
 }

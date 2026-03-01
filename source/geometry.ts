@@ -61,3 +61,45 @@ export function parseCoordinates(coordinatesText: string) {
 export function coordinatesToString(coords: readonly LatLng[]): string {
     return coords.map((ll) => `${ll.lat},${ll.lng}`).join(",");
 }
+
+const TILE_SIZE = 256;
+const PI = Math.PI;
+const RAD_PER_DEG = PI / 180;
+const X_FACTOR = TILE_SIZE / 360;
+const Y_FACTOR = TILE_SIZE / (2 * PI);
+const OFFSET = TILE_SIZE / 2;
+export function latLngToWorldPoint(lat: number, lng: number, result: Point) {
+    // 経度
+    const x = (lng + 180) * X_FACTOR;
+
+    // 緯度
+    const sinY = Math.sin(lat * RAD_PER_DEG);
+    const clampedSinY =
+        sinY > 0.9999 ? 0.9999 : sinY < -0.9999 ? -0.9999 : sinY;
+    const y = OFFSET - Math.atanh(clampedSinY) * Y_FACTOR;
+
+    result.x = x;
+    result.y = y;
+    return result;
+}
+
+export interface Point {
+    x: number;
+    y: number;
+}
+
+export function worldPointToScreenPoint(
+    nwWorld: Point,
+    zoom: number,
+    worldX: number,
+    worldY: number,
+    result: Point,
+) {
+    const scale = 2 ** zoom;
+    const x = (worldX - nwWorld.x) * scale;
+    const y = (worldY - nwWorld.y) * scale;
+
+    result.x = x | 0;
+    result.y = y | 0;
+    return result;
+}
