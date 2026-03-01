@@ -5,14 +5,11 @@ import {
     type Viewport,
     renderRecordsOverlayView,
     type OverlayView,
-    initCanvas,
 } from "./poi-records-overlay-view";
 import PoisOverlayWorker from "./poi-records-overlay.worker.ts?worker";
 import type { PageResource } from "./setup";
 import {
     createAsyncCancelScope,
-    createCancelScope,
-    ignore,
     raise,
     sleep,
     waitAnimationFrame,
@@ -30,16 +27,13 @@ export interface PoisOverlay {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function createDrawerForMainThread(
-    canvas: HTMLCanvasElement,
+async function createDrawerForMainThread(
     handleAsyncError: (reason: unknown) => void,
-) {
-    const scope = createCancelScope();
-    const views = createRecordsOverlayView(handleAsyncError, ignore);
-    return (viewport: Viewport) =>
-        scope(async (signal) =>
-            renderRecordsOverlayView(await views, viewport, signal),
-        );
+    onRenderUpdated: (image: ImageBitmap, port: Viewport) => void,
+): Promise<IsolatedDrawer> {
+    const views = createRecordsOverlayView(handleAsyncError, onRenderUpdated);
+    return async (signal, viewport: Viewport) =>
+        renderRecordsOverlayView(await views, viewport, signal);
 }
 
 export type MainApi = ReturnType<typeof createMainApi>;
@@ -70,14 +64,13 @@ async function createDrawerForWorker(
     const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
 
-    return {
-        draw: wrapCancellable(workerApi.draw, workerApi.drawCancel),
-    };
+    return wrapCancellable(workerApi.draw, workerApi.drawCancel);
 }
 
-interface IsolatedDrawer {
-    draw(this: unknown, signal: AbortSignal, parameters: Viewport): void;
-}
+type IsolatedDrawer = (
+    signal: AbortSignal,
+    parameters: Viewport,
+) => Promise<void>;
 
 function pointClassToRecord({ x, y }: google.maps.Point) {
     return { x, y };
@@ -117,6 +110,22 @@ function padBoundsRelative(
     const paddedBounds = new google.maps.LatLngBounds(paddedSw, paddedNe);
     const nwLatLng = new google.maps.LatLng(paddedNe.lat(), paddedSw.lng());
     return { paddedBounds, nwLatLng };
+}
+
+function initCanvas(
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    port: Viewport,
+) {
+    const { canvas } = ctx;
+    const { width, height, devicePixelRatio } = port;
+    const canvasWidth = width * devicePixelRatio;
+    const canvasHeight = height * devicePixelRatio;
+    if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+    }
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    ctx.clearRect(0, 0, width, height);
 }
 
 export type PoiRecordsCanvasOverlay = Awaited<
@@ -262,7 +271,7 @@ export async function createPoiRecordsCanvasOverlay(
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
 
-            this.drawer.draw(signal, port);
+            await this.drawer(signal, port);
         }
         async commitImage(
             image: ImageBitmap,
