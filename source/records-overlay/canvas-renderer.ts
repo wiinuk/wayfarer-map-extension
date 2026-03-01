@@ -48,7 +48,6 @@ export interface CanvasRenderer {
     ) => void;
     readonly ctx: OffscreenCanvasRenderingContext2D;
     readonly records: PoiRecords;
-    readonly statCache: Memo<Cell14Id, Cell14Statistics | undefined>;
     readonly options: OverlayOptions;
     readonly cells: Map<Cell14Id, View[]>;
 
@@ -68,7 +67,6 @@ export async function createRecordsCanvasRenderer(
         ctx: new OffscreenCanvas(0, 0).getContext("2d") ?? raise`context2d`,
         records,
         cells: new Map(),
-        statCache: new Map(),
         _point_result_cache: { x: 0, y: 0 },
         _pois_cache: [],
     };
