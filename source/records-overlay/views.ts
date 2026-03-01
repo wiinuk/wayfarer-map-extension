@@ -17,7 +17,7 @@ import type {
     OverlayOptions,
     WayspotLabelOptions,
 } from "./options";
-import type { Viewport, ViewsRenderingContext } from "./canvas-renderer";
+import type { CanvasRenderer, Viewport } from "./canvas-renderer";
 
 type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
@@ -55,102 +55,71 @@ const Point_y = Point_x + 1;
 const Point_size = Point_y + 1;
 
 function createCellBounds(
+    { PIXI, _point_result_cache }: CanvasRenderer,
     cornerPaths: readonly LatLngPath[],
     options: Cell17Options,
 ) {
-    const pathCount = cornerPaths.length;
-    const cornerCount = 4;
-    const buffer = new Float64Array(pathCount * cornerCount * Point_size);
-    let bufferIndex = 0;
-    const pointResultCache = createZeroPoint();
+    const p = new PIXI.Graphics();
+    p.setFillStyle(options.fillColor);
+    p.setStrokeStyle({
+        pixelLine: true,
+        color: options.strokeColor,
+    });
     for (const cornerPath of cornerPaths) {
-        if (cornerPath.length !== cornerCount) return raise`internal error`;
-        for (const { lat, lng } of cornerPath) {
-            const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
-            buffer[bufferIndex++] = x;
-            buffer[bufferIndex++] = y;
-        }
-    }
-    return {
-        zIndex: options.zIndex,
-        draw: (context: ViewsRenderingContext) => {
-            const { ctx } = context;
-
-            ctx.save();
-            ctx.beginPath();
-            for (let pathIndex = 0; pathIndex < pathCount; pathIndex++) {
-                const pathPointer = pathIndex * cornerCount * Point_size;
-                for (
-                    let cornerIndex = 0;
-                    cornerIndex < cornerCount;
-                    cornerIndex++
-                ) {
-                    const pointPointer = pathPointer + cornerIndex * Point_size;
-                    const worldX = buffer[pointPointer + Point_x]!;
-                    const worldY = buffer[pointPointer + Point_y]!;
-                    const { x, y } = worldPointToScreenPoint(
-                        context.nwWorld,
-                        context.zoom,
-                        worldX,
-                        worldY,
-                        pointResultCache,
-                    );
-                    if (cornerIndex === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-                ctx.closePath();
+        p.beginPath();
+        for (let i = 0; i < cornerPath.length; i++) {
+            const { lat, lng } = cornerPath[i]!;
+            const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
+            if (i === 0) {
+                p.moveTo(x, y);
+            } else {
+                p.lineTo(x, y);
             }
-            ctx.fillStyle = options.fillColor;
-            ctx.fill();
-
-            ctx.strokeStyle = options.strokeColor;
-            ctx.lineWidth = options.strokeWeight;
-            ctx.stroke();
-            ctx.restore();
-        },
-    };
+        }
+        p.closePath();
+        p.fill();
+        p.stroke();
+    }
+    return p;
 }
 
-function createCell14Label(
-    options: OverlayOptions,
-    text: string,
-    { lat, lng }: LatLng,
-) {
-    const pointResultCache = createZeroPoint();
-    const { x: worldX, y: worldY } = latLngToWorldPoint(
-        lat,
-        lng,
-        pointResultCache,
-    );
+// function createCell14Label(
+//     options: OverlayOptions,
+//     text: string,
+//     { lat, lng }: LatLng,
+// ) {
+//     const pointResultCache = createZeroPoint();
+//     const { x: worldX, y: worldY } = latLngToWorldPoint(
+//         lat,
+//         lng,
+//         pointResultCache,
+//     );
 
-    return {
-        zIndex: options.statLabelBaseZIndex,
-        draw: (context: ViewsRenderingContext) => {
-            const { ctx } = context;
-            const { x, y } = worldPointToScreenPoint(
-                context.nwWorld,
-                context.zoom,
-                worldX,
-                worldY,
-                pointResultCache,
-            );
-            ctx.textBaseline = "middle";
-            ctx.textAlign = "center";
-            ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
+//     return {
+//         zIndex: options.statLabelBaseZIndex,
+//         draw: (context: ViewsRenderingContext) => {
+//             const { ctx } = context;
+//             const { x, y } = worldPointToScreenPoint(
+//                 context.nwWorld,
+//                 context.zoom,
+//                 worldX,
+//                 worldY,
+//                 pointResultCache,
+//             );
+//             ctx.textBaseline = "middle";
+//             ctx.textAlign = "center";
+//             ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
 
-            ctx.lineWidth = 4;
-            ctx.lineJoin = "round";
-            ctx.strokeStyle = "#c54545";
-            ctx.strokeText(text, x, y);
+//             ctx.lineWidth = 4;
+//             ctx.lineJoin = "round";
+//             ctx.strokeStyle = "#c54545";
+//             ctx.strokeText(text, x, y);
 
-            ctx.fillStyle = "rgb(255, 255, 255)";
-            ctx.fillText(text, x, y);
-        },
-    };
-}
+//             ctx.fillStyle = "rgb(255, 255, 255)";
+//             ctx.fillText(text, x, y);
+//         },
+//     };
+// }
 
 function countToCell14Options(options: OverlayOptions, count: number) {
     switch (count) {
@@ -191,34 +160,36 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
 }
 
 export function createCell14Bound(
-    store: OverlayOptions,
+    renderer: CanvasRenderer,
     cell14: Cell14Statistics,
 ) {
+    const { options: store } = renderer;
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(store, entityCount, coverRate);
-    return createCellBounds([cell14.corner], options);
+    return createCellBounds(renderer, [cell14.corner], options);
 }
 
 const noDraw = {
     zIndex: 0,
     draw: ignore,
 };
-export function createCell17CountLabel(
-    options: OverlayOptions,
-    cell14: Cell14Statistics,
-) {
-    const count = sumGymAndPokestopCount(cell14);
-    if (count <= 0) return noDraw;
+// export function createCell17CountLabel(
+//     options: OverlayOptions,
+//     cell14: Cell14Statistics,
+// ) {
+//     const count = sumGymAndPokestopCount(cell14);
+//     if (count <= 0) return noDraw;
 
-    return createCell14Label(options, `${count}`, cell14.center);
-}
+//     return createCell14Label(options, `${count}`, cell14.center);
+// }
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
 export function createCell17Bounds(
+    renderer: CanvasRenderer,
     options: OverlayOptions,
     stat14: Cell14Statistics,
 ) {
@@ -237,9 +208,9 @@ export function createCell17Bounds(
         }
     }
     return [
-        createCellBounds(empties, options.cell17EmptyOptions),
-        createCellBounds(stops, options.cell17PokestopOptions),
-        createCellBounds(gyms, options.cell17GymOptions),
+        createCellBounds(renderer, empties, options.cell17EmptyOptions),
+        createCellBounds(renderer, stops, options.cell17PokestopOptions),
+        createCellBounds(renderer, gyms, options.cell17GymOptions),
     ];
 }
 
@@ -281,48 +252,44 @@ function createPoiCircles(
     pois: readonly PoiRecord[],
     kind: EntityKind | "",
 ) {
-    const poisLength = pois.length;
-    const options = entityKindToCircleOptions(store, kind);
-    const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
-
-    const pointResultCache = createZeroPoint();
-    const buffer = new Float64Array(poisLength * Point_size);
-    let bufferIndex = 0;
-    for (const { lat, lng, data } of pois) {
-        if (!data.isCommunityContributed) continue;
-
-        const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
-        buffer[bufferIndex++] = x;
-        buffer[bufferIndex++] = y;
-    }
-
-    return {
-        zIndex: options.zIndex,
-        draw: (context: ViewsRenderingContext) => {
-            const { ctx } = context;
-            ctx.beginPath();
-            for (let pointIndex = 0; pointIndex < poisLength; pointIndex++) {
-                const pointPointer = pointIndex * Point_size;
-                const worldX = buffer[pointPointer + Point_x]!;
-                const worldY = buffer[pointPointer + Point_y]!;
-                const { x, y } = worldPointToScreenPoint(
-                    context.nwWorld,
-                    context.zoom,
-                    worldX,
-                    worldY,
-                    pointResultCache,
-                );
-                ctx.moveTo(x + radius, y);
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-            }
-            ctx.fillStyle = options.fillColor;
-            ctx.fill();
-
-            ctx.strokeStyle = options.borderColor;
-            ctx.lineWidth = options.borderWidth;
-            ctx.stroke();
-        },
-    };
+    // const poisLength = pois.length;
+    // const options = entityKindToCircleOptions(store, kind);
+    // const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
+    // const pointResultCache = createZeroPoint();
+    // const buffer = new Float64Array(poisLength * Point_size);
+    // let bufferIndex = 0;
+    // for (const { lat, lng, data } of pois) {
+    //     if (!data.isCommunityContributed) continue;
+    //     const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+    //     buffer[bufferIndex++] = x;
+    //     buffer[bufferIndex++] = y;
+    // }
+    // return {
+    //     zIndex: options.zIndex,
+    //     draw: (context: ViewsRenderingContext) => {
+    //         const { ctx } = context;
+    //         ctx.beginPath();
+    //         for (let pointIndex = 0; pointIndex < poisLength; pointIndex++) {
+    //             const pointPointer = pointIndex * Point_size;
+    //             const worldX = buffer[pointPointer + Point_x]!;
+    //             const worldY = buffer[pointPointer + Point_y]!;
+    //             const { x, y } = worldPointToScreenPoint(
+    //                 context.nwWorld,
+    //                 context.zoom,
+    //                 worldX,
+    //                 worldY,
+    //                 pointResultCache,
+    //             );
+    //             ctx.moveTo(x + radius, y);
+    //             ctx.arc(x, y, radius, 0, Math.PI * 2);
+    //         }
+    //         ctx.fillStyle = options.fillColor;
+    //         ctx.fill();
+    //         ctx.strokeStyle = options.borderColor;
+    //         ctx.lineWidth = options.borderWidth;
+    //         ctx.stroke();
+    //     },
+    // };
 }
 
 export function createCell14PoiCircles(
@@ -398,103 +365,91 @@ export function createCell14PoiNames(
     ctx: RenderingContext,
     stat14: Cell14Statistics,
 ) {
-    const pointResultCache = createZeroPoint();
-    function createPoiLabelView(
-        ctx: RenderingContext,
-        poi: PoiRecord,
-    ): PoiLabelView {
-        const { lat, lng, guid, name } = poi;
-        const options = entityKindToLabelOptions(store, getKind(poi));
-
-        ctx.save();
-        applyLabelOptions(ctx, options);
-
-        let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
-        let truncatedText = name;
-        if (!(truncatedMetrics instanceof TextMetrics)) {
-            truncatedText = truncatedMetrics.bestText;
-            truncatedMetrics = truncatedMetrics.bestMetrics;
-        }
-        const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
-        ctx.restore();
-        return {
-            worldX: x,
-            worldY: y,
-            text: truncatedText,
-            textMetrics: truncatedMetrics,
-            guid,
-            options,
-        };
-    }
-
-    const pois: PoiRecord[] = [];
-    for (const poi of stat14.pois.values()) {
-        if (poi.data.isCommunityContributed) pois.push(poi);
-    }
-    pois.sort(comparePoiByImportance);
-
-    // 基準となるズームレベル
-    const referenceZoom = 16;
-
-    // 基準となるズームレベルでの最大POI数
-    const maxPoisAtReferenceZoom = 6;
-
-    const maxPois = Math.max(
-        1,
-        Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom)),
-    );
-    // 上位POIのみを残す
-    pois.length = Math.min(pois.length, maxPois);
-
-    const labels = pois.map((poi) => createPoiLabelView(ctx, poi));
-
-    return {
-        zIndex: store.poiLabelBaseZIndex,
-        draw: (context: ViewsRenderingContext) => {
-            const { ctx, checker } = context;
-            ctx.save();
-            try {
-                ctx.textBaseline = "middle";
-                ctx.textAlign = "center";
-
-                for (const {
-                    options,
-                    worldX,
-                    worldY,
-                    text,
-                    textMetrics,
-                    guid,
-                } of labels) {
-                    applyLabelOptions(ctx, options);
-                    const { x, y } = worldPointToScreenPoint(
-                        context.nwWorld,
-                        context.zoom,
-                        worldX,
-                        worldY,
-                        context._point_result_cache,
-                    );
-
-                    const textX = x;
-                    const textY = y + 15;
-
-                    const box = getTextBox(
-                        ctx,
-                        textMetrics,
-                        textX,
-                        textY,
-                        guid,
-                    );
-                    if (checker.check(box)) continue;
-                    checker.addBox(box);
-
-                    ctx.strokeText(text, textX, textY);
-                    ctx.fillText(text, textX, textY);
-                }
-            } finally {
-                ctx.restore();
-            }
-        },
-    };
+    // const pointResultCache = createZeroPoint();
+    // function createPoiLabelView(
+    //     ctx: RenderingContext,
+    //     poi: PoiRecord,
+    // ): PoiLabelView {
+    //     const { lat, lng, guid, name } = poi;
+    //     const options = entityKindToLabelOptions(store, getKind(poi));
+    //     ctx.save();
+    //     applyLabelOptions(ctx, options);
+    //     let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
+    //     let truncatedText = name;
+    //     if (!(truncatedMetrics instanceof TextMetrics)) {
+    //         truncatedText = truncatedMetrics.bestText;
+    //         truncatedMetrics = truncatedMetrics.bestMetrics;
+    //     }
+    //     const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
+    //     ctx.restore();
+    //     return {
+    //         worldX: x,
+    //         worldY: y,
+    //         text: truncatedText,
+    //         textMetrics: truncatedMetrics,
+    //         guid,
+    //         options,
+    //     };
+    // }
+    // const pois: PoiRecord[] = [];
+    // for (const poi of stat14.pois.values()) {
+    //     if (poi.data.isCommunityContributed) pois.push(poi);
+    // }
+    // pois.sort(comparePoiByImportance);
+    // // 基準となるズームレベル
+    // const referenceZoom = 16;
+    // // 基準となるズームレベルでの最大POI数
+    // const maxPoisAtReferenceZoom = 6;
+    // const maxPois = Math.max(
+    //     1,
+    //     Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom)),
+    // );
+    // // 上位POIのみを残す
+    // pois.length = Math.min(pois.length, maxPois);
+    // const labels = pois.map((poi) => createPoiLabelView(ctx, poi));
+    // return {
+    //     zIndex: store.poiLabelBaseZIndex,
+    //     draw: (context: ViewsRenderingContext) => {
+    //         const { ctx, checker } = context;
+    //         ctx.save();
+    //         try {
+    //             ctx.textBaseline = "middle";
+    //             ctx.textAlign = "center";
+    //             for (const {
+    //                 options,
+    //                 worldX,
+    //                 worldY,
+    //                 text,
+    //                 textMetrics,
+    //                 guid,
+    //             } of labels) {
+    //                 applyLabelOptions(ctx, options);
+    //                 const { x, y } = worldPointToScreenPoint(
+    //                     context.nwWorld,
+    //                     context.zoom,
+    //                     worldX,
+    //                     worldY,
+    //                     context._point_result_cache,
+    //                 );
+    //                 const textX = x;
+    //                 const textY = y + 15;
+    //                 const box = getTextBox(
+    //                     ctx,
+    //                     textMetrics,
+    //                     textX,
+    //                     textY,
+    //                     guid,
+    //                 );
+    //                 if (checker.check(box)) continue;
+    //                 checker.addBox(box);
+    //                 ctx.strokeText(text, textX, textY);
+    //                 ctx.fillText(text, textX, textY);
+    //             }
+    //         } finally {
+    //             ctx.restore();
+    //         }
+    //     },
+    // };
 }
 function applyLabelOptions(
     ctx: RenderingContext,
