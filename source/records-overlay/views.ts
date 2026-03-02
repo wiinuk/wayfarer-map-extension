@@ -56,41 +56,47 @@ const Point_size = Point_y + 1;
 
 function renderCellBounds(
     renderer: CanvasRenderer,
-    { graphics: p, center: { x: cellX, y: cellY } }: CellViews,
+    { center: { x: cellX, y: cellY }, container }: CellViews,
     cornerPaths: readonly LatLngPath[],
     options: Cell17Options,
 ) {
-    const { _point_result_cache } = renderer;
-    p.setFillStyle(options.fillColor);
-    p.setStrokeStyle({
-        pixelLine: true,
-        color: options.strokeColor,
-    });
+    const { PIXI, _point_result_cache, shader } = renderer;
+
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    let vOffset = 0;
+
+    const cornerCount = 4;
     for (const cornerPath of cornerPaths) {
-        p.beginPath();
-        for (let i = 0; i < cornerPath.length; i++) {
+        if (cornerPath.length !== cornerCount) return raise`internal error`;
+
+        for (let i = 0; i < cornerCount; i++) {
             const { lat, lng } = cornerPath[i]!;
-            const { x: worldX, y: worldY } = latLngToWorldPoint(
-                lat,
-                lng,
-                _point_result_cache,
-            );
-            // 小さな数値であるセル中心からの相対世界座標に変換して誤差を減らす
-            const relativeX = worldX - cellX;
-            const relativeY = worldY - cellY;
-            if (i === 0) {
-                p.moveTo(relativeX, relativeY);
-            } else {
-                p.lineTo(relativeX, relativeY);
-            }
+            const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
+            vertices.push(x - cellX, y - cellY);
         }
-        // セル中心に移動
-        p.position.set(cellX, cellY);
-        p.closePath();
-        p.fill();
-        p.stroke();
+        uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+        indices.push(
+            vOffset + 0,
+            vOffset + 1,
+            vOffset + 2,
+            vOffset + 0,
+            vOffset + 2,
+            vOffset + 3,
+        );
+        vOffset += cornerCount;
     }
-    return p;
+
+    const geometry = new PIXI.MeshGeometry({
+        positions: new Float32Array(vertices),
+        uvs: new Float32Array(uvs),
+        indices: new Uint32Array(indices),
+    });
+
+    const mesh = new PIXI.Mesh({ geometry, shader });
+    mesh.position.set(cellX, cellY);
+    container.addChild(mesh);
 }
 
 // function createCell14Label(
@@ -159,7 +165,7 @@ function getCell14Options(
             options.strokeWeight * 10 * (1 - coverRate),
         strokeOpacity: 0.3 + 0.4 * coverRate,
 
-        fillColor: "transparent",
+        fillColor: "#00000000",
     };
 }
 function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
@@ -168,7 +174,37 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
         (kindToPois.get("POKESTOP")?.length ?? 0)
     );
 }
+function normalizeColor(
+    cssColor: string,
+): [r: number, g: number, b: number, a: number] {
+    cssColor = cssColor.trim().toLowerCase();
 
+    // #RRGGBBAA
+    if (cssColor.startsWith("#")) {
+        const hex = cssColor.slice(1);
+        const r = parseInt(hex.substring(0, 2), 16) / 255;
+        const g = parseInt(hex.substring(2, 4), 16) / 255;
+        const b = parseInt(hex.substring(4, 6), 16) / 255;
+        const a =
+            hex.length === 8 ? parseInt(hex.substring(6, 8), 16) / 255 : 1;
+        return [r, g, b, a];
+    }
+
+    // rgba(r, g, b, a)
+    if (cssColor.startsWith("rgb")) {
+        const values = cssColor.match(/[\d.]+/g)?.map(Number);
+        if (values?.length === 4) {
+            return [
+                values[0]! / 255,
+                values[1]! / 255,
+                values[2]! / 255,
+                values[3]!,
+            ];
+        }
+    }
+
+    throw new Error("Unsupported format");
+}
 export function renderCell14Bound(
     renderer: CanvasRenderer,
     cellViews: CellViews,

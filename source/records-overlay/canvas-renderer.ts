@@ -51,7 +51,6 @@ function createCellViews(
 }
 
 export interface CanvasRenderer {
-    lastViewport: Viewport | undefined;
     readonly handleAsyncError: (this: unknown, reason: unknown) => void;
     readonly onRenderUpdated: (
         this: unknown,
@@ -60,6 +59,7 @@ export interface CanvasRenderer {
     ) => void;
     readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
+    readonly shader: PIXI.Shader;
     readonly app: PIXI.Application;
     readonly topContainer: PIXI.Container;
     readonly records: PoiRecords;
@@ -94,6 +94,24 @@ async function initPIXI(canvas: OffscreenCanvas) {
     };
 }
 
+import CellVertex from "./cell.vert";
+import CellFragment from "./cell.frag";
+function createCellBoundsShader(PIXI: PIXI) {
+    return PIXI.Shader.from({
+        gl: {
+            vertex: CellVertex.source,
+            fragment: CellFragment.source,
+        },
+        // resources: {
+        //     uUniforms: {
+        //         uFillColor: { value: fillColor, type: "vec4<f32>" },
+        //         uStrokeColor: { value: strokeColor, type: "vec4<f32>" },
+        //         uLineWidth: { value: lineWidth, type: "f32" },
+        //     },
+        // },
+    });
+}
+
 export async function createRecordsCanvasRenderer(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
@@ -103,9 +121,9 @@ export async function createRecordsCanvasRenderer(
     const { PIXI, app } = await initPIXI(canvas);
     const topContainer = app.stage.addChild(new PIXI.Container());
     return {
-        lastViewport: undefined,
         canvas,
         PIXI,
+        shader: createCellBoundsShader(PIXI),
         app,
         topContainer,
         handleAsyncError,
@@ -136,7 +154,6 @@ async function draw(
     const checker = createCollisionChecker();
     app.renderer.resize(width, height, devicePixelRatio);
     applyViewport(topContainer, port);
-    renderer.lastViewport = port;
     app.render();
     const bitmap = renderer.canvas.transferToImageBitmap();
     renderer.onRenderUpdated(bitmap, port);
@@ -184,9 +201,9 @@ async function updateCell14Views(
     const views = createCellViews(renderer, cell14);
     cells.set(cellId, views);
 
-    if (14 < zoom) {
-        renderCell17Bounds(renderer, views, stat14);
-    }
+    // if (14 < zoom) {
+    //     renderCell17Bounds(renderer, views, stat14);
+    // }
     renderCell14Bound(renderer, views, stat14);
     // if (14 < zoom && zoom < 18) {
     //     views.push(...createCell14PoiCircles(options, port, stat14));

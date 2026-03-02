@@ -35,7 +35,7 @@ export function createOverlayViewOptions() {
     const cell14Options = Object.freeze({
         strokeColor: "#c54545b7",
         strokeWeight: 2,
-        fillColor: "transparent",
+        fillColor: "#00000000",
         clickable: false,
         zIndex: cellBaseZIndex + 2,
     } satisfies google.maps.PolygonOptions);
