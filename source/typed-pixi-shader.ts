@@ -147,13 +147,17 @@ type ToPixiUniformType<T extends ShaderType> =
           ? ToPixiUniformType<e>[]
           : never;
 
+type GlobalUniformNames =
+    PIXI.GlobalUniformGroup extends PIXI.UniformGroup<infer t>
+        ? keyof t | "uTransformMatrix" // FIX
+        : never;
 type ToPixiUniformTypes<D extends VariableDefinitions> = {
     -readonly [k in keyof D]: TypedUniformData<D[k]>;
 };
-type ToUniformStructure<
+type ToCustomUniformStructure<
     V extends ShaderModuleKind,
     F extends ShaderModuleKind,
-> = ToPixiUniformTypes<V["uniforms"] & F["uniforms"]>;
+> = ToPixiUniformTypes<Omit<V["uniforms"] & F["uniforms"], GlobalUniformNames>>;
 
 const privateTypedShaderSymbol = Symbol("privateTypedShaderSymbol");
 export interface TypedShader<
@@ -163,7 +167,7 @@ export interface TypedShader<
     extends PIXI.Shader {
     [privateTypedShaderSymbol]: [V, F];
     resources: {
-        typedUniforms: PIXI.UniformGroup<ToUniformStructure<V, F>>;
+        typedUniforms: PIXI.UniformGroup<ToCustomUniformStructure<V, F>>;
     };
 }
 
@@ -174,7 +178,7 @@ export function createTypedShaderFrom<
     pixi: PixiModule,
     vertexShaderModule: V,
     fragmentShaderModule: F,
-    uniforms: PIXI.UniformGroup<ToUniformStructure<V, F>>,
+    uniforms: PIXI.UniformGroup<ToCustomUniformStructure<V, F>>,
 ) {
     return pixi.Shader.from({
         gl: {
