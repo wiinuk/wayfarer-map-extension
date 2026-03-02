@@ -18,7 +18,6 @@ import type {
     WayspotLabelOptions,
 } from "./options";
 import type { CanvasRenderer, CellViews, Viewport } from "./canvas-renderer";
-import { asUntypedGeometry, newGeometry } from "../typed-pixi-shader";
 
 type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
@@ -54,85 +53,6 @@ function getEllipsisTextWithMetrics(
 const Point_x = 0;
 const Point_y = Point_x + 1;
 const Point_size = Point_y + 1;
-
-function renderCellBounds(
-    renderer: CanvasRenderer,
-    { center: { x: cellX, y: cellY }, container }: CellViews,
-    cornerPaths: readonly LatLngPath[],
-    options: Cell17Options,
-) {
-    const { PIXI, _point_result_cache, shader } = renderer;
-
-    const fillColor = normalizeColor(options.fillColor);
-    const strokeColor = normalizeColor(options.strokeColor);
-    const lineWidth = options.strokeWeight;
-
-    const vertices: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-    const fillColors = [];
-    const strokeColors = [];
-    const lineWidths = [];
-    let vOffset = 0;
-
-    const cornerCount = 4;
-    for (const cornerPath of cornerPaths) {
-        if (cornerPath.length !== cornerCount) return raise`internal error`;
-
-        for (let i = 0; i < cornerCount; i++) {
-            const { lat, lng } = cornerPath[i]!;
-            const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
-            vertices.push(x - cellX, y - cellY);
-            fillColors.push(...fillColor);
-            strokeColors.push(...strokeColor);
-            lineWidths.push(lineWidth);
-        }
-        uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
-        indices.push(
-            vOffset + 0,
-            vOffset + 1,
-            vOffset + 2,
-            vOffset + 0,
-            vOffset + 2,
-            vOffset + 3,
-        );
-        vOffset += cornerCount;
-    }
-
-    const geometry = newGeometry<
-        typeof import("./cell.vert"),
-        typeof import("./cell.frag")
-    >(PIXI);
-    geometry.addAttribute("aPosition", {
-        buffer: new Float32Array(vertices),
-        format: "float32x2",
-    });
-    geometry.addAttribute("aUV", {
-        buffer: new Float32Array(uvs),
-        format: "float32x2",
-    });
-    geometry.addIndex(indices);
-
-    geometry.addAttribute("aFillColor", {
-        buffer: new Float32Array(fillColors),
-        format: "float32x4",
-    });
-    geometry.addAttribute("aStrokeColor", {
-        buffer: new Float32Array(strokeColors),
-        format: "float32x4",
-    });
-    geometry.addAttribute("aLineWidth", {
-        buffer: new Float32Array(lineWidths),
-        format: "float32",
-    });
-
-    const mesh = new PIXI.Mesh({
-        geometry: asUntypedGeometry(geometry),
-        shader,
-    });
-    mesh.position.set(cellX, cellY);
-    container.addChild(mesh);
-}
 
 // function createCell14Label(
 //     options: OverlayOptions,
@@ -209,37 +129,6 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
         (kindToPois.get("POKESTOP")?.length ?? 0)
     );
 }
-function normalizeColor(
-    cssColor: string,
-): [r: number, g: number, b: number, a: number] {
-    cssColor = cssColor.trim().toLowerCase();
-
-    // #RRGGBBAA
-    if (cssColor.startsWith("#")) {
-        const hex = cssColor.slice(1);
-        const r = parseInt(hex.substring(0, 2), 16) / 255;
-        const g = parseInt(hex.substring(2, 4), 16) / 255;
-        const b = parseInt(hex.substring(4, 6), 16) / 255;
-        const a =
-            hex.length === 8 ? parseInt(hex.substring(6, 8), 16) / 255 : 1;
-        return [r, g, b, a];
-    }
-
-    // rgba(r, g, b, a)
-    if (cssColor.startsWith("rgb")) {
-        const values = cssColor.match(/[\d.]+/g)?.map(Number);
-        if (values?.length === 4) {
-            return [
-                values[0]! / 255,
-                values[1]! / 255,
-                values[2]! / 255,
-                values[3]!,
-            ];
-        }
-    }
-
-    throw new Error("Unsupported format");
-}
 export function renderCell14Bound(
     renderer: CanvasRenderer,
     cellViews: CellViews,
@@ -249,7 +138,7 @@ export function renderCell14Bound(
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(store, entityCount, coverRate);
-    return renderCellBounds(renderer, cellViews, [cell14.corner], options);
+    return cellViews.cellMeshBuilder.add(cell14.corner, options);
 }
 
 const noDraw = {
@@ -270,29 +159,24 @@ function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;
 }
 
-export function renderCell17Bounds(
+export function addCell17Bounds(
     renderer: CanvasRenderer,
-    cellViews: CellViews,
+    { cellMeshBuilder: builder }: CellViews,
     stat14: Cell14Statistics,
 ) {
-    const { options } = renderer;
-    const gyms = [];
-    const stops = [];
-    const empties = [];
+    const { options: store } = renderer;
     for (const cell17 of stat14.cell17s.values()) {
-        const path = cell17.cell.getCornerLatLngs();
-
+        let options;
         if (has("GYM", cell17)) {
-            gyms.push(path);
+            options = store.cell17GymOptions;
         } else if (has("POKESTOP", cell17)) {
-            stops.push(path);
+            options = store.cell17PokestopOptions;
         } else {
-            empties.push(path);
+            options = store.cell17EmptyOptions;
         }
+        const path = cell17.cell.getCornerLatLngs();
+        builder.add(path, options);
     }
-    renderCellBounds(renderer, cellViews, empties, options.cell17EmptyOptions);
-    renderCellBounds(renderer, cellViews, stops, options.cell17PokestopOptions);
-    renderCellBounds(renderer, cellViews, gyms, options.cell17GymOptions);
 }
 
 function entityKindToCircleOptions(

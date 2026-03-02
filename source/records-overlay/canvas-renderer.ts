@@ -13,12 +13,13 @@ import { createOverlayViewOptions, type OverlayOptions } from "./options";
 import type { LatLng } from "../s2";
 import { waitAnimationFrame } from "../standard-extensions";
 import type { Cell, Cell14Id } from "../typed-s2cell";
-import { renderCell17Bounds, renderCell14Bound } from "./views";
+import { addCell17Bounds, renderCell14Bound } from "./views";
 import type PIXI from "pixi.js";
 import { isWebWorker } from "../environments";
 import CellVertex from "./cell.vert";
 import CellFragment from "./cell.frag";
 import { createTypedShaderFrom } from "../typed-pixi-shader";
+import { newCellMeshBuilder, type CellMeshBuilder } from "./cell-mesh-builder";
 type PIXI = typeof PIXI;
 
 export interface Viewport {
@@ -40,17 +41,20 @@ export interface CellViews {
     readonly graphics: PIXI.Graphics;
     /** セル中心[世界座標] */
     readonly center: Point;
+    readonly cellMeshBuilder: CellMeshBuilder;
 }
 
 function createCellViews(
-    { topContainer, PIXI }: CanvasRenderer,
+    renderer: CanvasRenderer,
     cell14: Cell<14>,
 ): CellViews {
+    const { topContainer, PIXI } = renderer;
     const container = topContainer.addChild(new PIXI.Container());
     const graphics = container.addChild(new PIXI.Graphics());
     const { lat, lng } = cell14.getLatLng();
     const center = latLngToWorldPoint(lat, lng, createZeroPoint());
-    return { graphics, container, center };
+    const cellMeshBuilder = newCellMeshBuilder(renderer, cell14);
+    return { graphics, container, center, cellMeshBuilder };
 }
 
 export interface CanvasRenderer {
@@ -183,7 +187,7 @@ async function updateCell14Views(
     cell14: Cell<14>,
     signal: AbortSignal,
 ) {
-    const { cells, records, PIXI, topContainer } = renderer;
+    const { cells, records } = renderer;
     const { zoom } = port;
 
     const cellId = cell14.toString();
@@ -196,7 +200,7 @@ async function updateCell14Views(
     cells.set(cellId, views);
 
     if (14 < zoom) {
-        renderCell17Bounds(renderer, views, stat14);
+        addCell17Bounds(renderer, views, stat14);
     }
     renderCell14Bound(renderer, views, stat14);
     // if (14 < zoom && zoom < 18) {
@@ -208,6 +212,7 @@ async function updateCell14Views(
     // if (13 < zoom) {
     //     views.push(createCell17CountLabel(options, stat14));
     // }
+    views.container.addChild(views.cellMeshBuilder.bake());
 }
 
 export async function updateRecordsCanvasRenderer(
