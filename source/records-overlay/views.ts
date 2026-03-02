@@ -1,5 +1,6 @@
-// spell: words Hiragino Kaku Lngs Meiryo Neue POKESTOP POWERSPOT Pois Wayspot
+// spell: words Lngs POKESTOP POWERSPOT Pois Wayspot
 import type { EntityKind } from "../gcs-schema";
+import type PIXI from "pixi.js";
 import {
     createZeroPoint,
     latLngToWorldPoint,
@@ -56,43 +57,29 @@ const Point_x = 0;
 const Point_y = Point_x + 1;
 const Point_size = Point_y + 1;
 
-// function createCell14Label(
-//     options: OverlayOptions,
-//     text: string,
-//     { lat, lng }: LatLng,
-// ) {
-//     const pointResultCache = createZeroPoint();
-//     const { x: worldX, y: worldY } = latLngToWorldPoint(
-//         lat,
-//         lng,
-//         pointResultCache,
-//     );
+function createCell14Label(
+    { PIXI, cell14LabelTextStyle, updateFixedScale }: CanvasRenderer,
+    text: string,
+    { lat, lng }: LatLng,
+) {
+    const pointResultCache = createZeroPoint();
+    const { x: worldX, y: worldY } = latLngToWorldPoint(
+        lat,
+        lng,
+        pointResultCache,
+    );
 
-//     return {
-//         zIndex: options.statLabelBaseZIndex,
-//         draw: (context: ViewsRenderingContext) => {
-//             const { ctx } = context;
-//             const { x, y } = worldPointToScreenPoint(
-//                 context.nwWorld,
-//                 context.zoom,
-//                 worldX,
-//                 worldY,
-//                 pointResultCache,
-//             );
-//             ctx.textBaseline = "middle";
-//             ctx.textAlign = "center";
-//             ctx.font = `bold 20px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`;
-
-//             ctx.lineWidth = 4;
-//             ctx.lineJoin = "round";
-//             ctx.strokeStyle = "#c54545";
-//             ctx.strokeText(text, x, y);
-
-//             ctx.fillStyle = "rgb(255, 255, 255)";
-//             ctx.fillText(text, x, y);
-//         },
-//     };
-// }
+    const label = new PIXI.Text({ text, style: cell14LabelTextStyle });
+    label.anchor.set(0.5);
+    label.x = worldX;
+    label.y = worldY;
+    label.onRender = function () {
+        updateFixedScale.apply(this);
+        const { x, y, width, height } = this.getBounds();
+        console.debug(x, y, width, height);
+    };
+    return label;
+}
 
 function countToCell14Options(options: OverlayOptions, count: number) {
     switch (count) {
@@ -143,19 +130,15 @@ export function addCell14Bound(
     return cellViews.cellMeshBuilder.add(cell14.corner, options);
 }
 
-const noDraw = {
-    zIndex: 0,
-    draw: ignore,
-};
-// export function createCell17CountLabel(
-//     options: OverlayOptions,
-//     cell14: Cell14Statistics,
-// ) {
-//     const count = sumGymAndPokestopCount(cell14);
-//     if (count <= 0) return noDraw;
+export function createCell17CountLabel(
+    renderer: CanvasRenderer,
+    cell14: Cell14Statistics,
+) {
+    const count = sumGymAndPokestopCount(cell14);
+    if (count <= 0) return;
 
-//     return createCell14Label(options, `${count}`, cell14.center);
-// }
+    return createCell14Label(renderer, `${count}`, cell14.center);
+}
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
     return (cell17.kindToCount.get(kind) ?? 0) !== 0;

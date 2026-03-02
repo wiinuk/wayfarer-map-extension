@@ -13,7 +13,12 @@ import { createOverlayViewOptions, type OverlayOptions } from "./options";
 import type { LatLng } from "../s2";
 import { waitAnimationFrame } from "../standard-extensions";
 import type { Cell, Cell14Id } from "../typed-s2cell";
-import { addCell17Bounds, addCell14Bound, addCell14PoiCircles } from "./views";
+import {
+    addCell17Bounds,
+    addCell14Bound,
+    addCell14PoiCircles,
+    createCell17CountLabel,
+} from "./views";
 import type PIXI from "pixi.js";
 import { isWebWorker } from "../environments";
 import CellVertex from "./cell.vert";
@@ -43,7 +48,7 @@ export interface ViewsRenderingContext extends CanvasRenderer, Viewport {
 }
 
 export interface CellViews {
-    readonly meshes: PIXI.Mesh<PIXI.Geometry, PIXI.Shader>[];
+    readonly views: PIXI.Container[];
     /** セル中心[世界座標] */
     readonly center: Point;
     readonly cellMeshBuilder: CellMeshBuilder;
@@ -58,14 +63,10 @@ function createCellViews(
     const center = latLngToWorldPoint(lat, lng, createZeroPoint());
     const cellMeshBuilder = newCellMeshBuilder(renderer, center);
     const circlesBuilder = newCirclesMeshBuilder(renderer, center);
-    return { meshes: [], center, cellMeshBuilder, circlesBuilder };
+    return { views: [], center, cellMeshBuilder, circlesBuilder };
 }
 
 export interface CanvasRenderer {
-    readonly layers: {
-        cellLayer: PIXI.Container;
-        circleLayer: PIXI.Container;
-    };
     readonly handleAsyncError: (this: unknown, reason: unknown) => void;
     readonly onRenderUpdated: (
         this: unknown,
@@ -74,14 +75,26 @@ export interface CanvasRenderer {
     ) => void;
     readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
+
     readonly shader: ReturnType<typeof createCellBoundsShader>;
     readonly circleShader: ReturnType<typeof createCirclesShader>;
+
     readonly app: PIXI.Application;
     readonly worldContainer: PIXI.Container;
+    readonly layers: {
+        cellLayer: PIXI.Container;
+        circleLayer: PIXI.Container;
+        labelLayer: PIXI.Container;
+        cell14TextLayer: PIXI.Container;
+    };
+
+    readonly cell14LabelTextStyle: PIXI.TextStyle;
+
     readonly records: PoiRecords;
     readonly options: OverlayOptions;
     readonly cells: Map<Cell14Id, CellViews>;
 
+    readonly updateFixedScale: (this: PIXI.Container) => void;
     readonly _point_result_cache: Point;
     readonly _pois_cache: PoiRecord[];
 }
@@ -137,15 +150,38 @@ export async function createRecordsCanvasRenderer(
     const { PIXI, app } = await initPIXI(canvas);
     const worldContainer = app.stage.addChild(new PIXI.Container());
 
+    const cell14LabelTextStyle = new PIXI.TextStyle({
+        align: "center",
+        fontWeight: "bold",
+        fontSize: "20px",
+        fontFamily: `"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
+        fill: "rgb(255, 255, 255)",
+        stroke: {
+            width: 4,
+            join: "round",
+            color: "#c54545",
+        },
+    });
+    const tempTransform = new PIXI.Transform();
+    function updateFixedScale(this: PIXI.Container) {
+        if (this.parent == null) return;
+
+        const { scale } = this.parent.worldTransform.decompose(tempTransform);
+        this.scale.x = 1 / scale.x;
+        this.scale.y = 1 / scale.y;
+    }
     return {
         canvas,
         layers: {
             cellLayer: worldContainer.addChild(new PIXI.Container()),
             circleLayer: worldContainer.addChild(new PIXI.Container()),
+            labelLayer: worldContainer.addChild(new PIXI.Container()),
+            cell14TextLayer: worldContainer.addChild(new PIXI.Container()),
         },
         PIXI,
         shader: createCellBoundsShader(PIXI),
         circleShader: createCirclesShader(PIXI),
+        cell14LabelTextStyle,
         app,
         worldContainer,
         handleAsyncError,
@@ -153,6 +189,8 @@ export async function createRecordsCanvasRenderer(
         options: createOverlayViewOptions(),
         records,
         cells: new Map(),
+
+        updateFixedScale,
         _point_result_cache: { x: 0, y: 0 },
         _pois_cache: [],
     };
@@ -187,7 +225,7 @@ function deleteAndDestroyCellView(
 ) {
     const views = cells.get(cellId);
     if (views) {
-        for (const m of views.meshes) m.destroy();
+        for (const m of views.views) m.destroy();
         cells.delete(cellId);
     }
 }
@@ -232,16 +270,18 @@ async function updateCell14Views(
     // if (14 < zoom) {
     //     views.push(createCell14PoiNames(options, port, overlay.ctx, stat14));
     // }
-    // if (13 < zoom) {
-    //     views.push(createCell17CountLabel(options, stat14));
-    // }
-    const cellMesh = renderer.layers.cellLayer.addChild(
-        views.cellMeshBuilder.bake(),
+    if (13 < zoom) {
+        const label = createCell17CountLabel(renderer, stat14);
+        if (label) {
+            views.views.push(renderer.layers.cell14TextLayer.addChild(label));
+        }
+    }
+    views.views.push(
+        renderer.layers.cellLayer.addChild(views.cellMeshBuilder.bake()),
     );
-    const circlesMesh = renderer.layers.circleLayer.addChild(
-        views.circlesBuilder.bake(),
+    views.views.push(
+        renderer.layers.circleLayer.addChild(views.circlesBuilder.bake()),
     );
-    views.meshes.push(cellMesh, circlesMesh);
 }
 
 export async function updateRecordsCanvasRenderer(
