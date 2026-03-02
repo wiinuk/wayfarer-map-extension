@@ -16,6 +16,9 @@ import type { Cell, Cell14Id } from "../typed-s2cell";
 import { renderCell17Bounds, renderCell14Bound } from "./views";
 import type PIXI from "pixi.js";
 import { isWebWorker } from "../environments";
+import CellVertex from "./cell.vert";
+import CellFragment from "./cell.frag";
+import { createTypedShaderFrom } from "../typed-pixi-shader";
 type PIXI = typeof PIXI;
 
 export interface Viewport {
@@ -59,7 +62,7 @@ export interface CanvasRenderer {
     ) => void;
     readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
-    readonly shader: PIXI.Shader;
+    readonly shader: ReturnType<typeof createCellBoundsShader>;
     readonly app: PIXI.Application;
     readonly topContainer: PIXI.Container;
     readonly records: PoiRecords;
@@ -94,22 +97,17 @@ async function initPIXI(canvas: OffscreenCanvas) {
     };
 }
 
-import CellVertex from "./cell.vert";
-import CellFragment from "./cell.frag";
 function createCellBoundsShader(PIXI: PIXI) {
-    return PIXI.Shader.from({
-        gl: {
-            vertex: CellVertex.source,
-            fragment: CellFragment.source,
-        },
-        // resources: {
-        //     uUniforms: {
-        //         uFillColor: { value: fillColor, type: "vec4<f32>" },
-        //         uStrokeColor: { value: strokeColor, type: "vec4<f32>" },
-        //         uLineWidth: { value: lineWidth, type: "f32" },
-        //     },
-        // },
-    });
+    return createTypedShaderFrom(
+        PIXI,
+        CellVertex,
+        CellFragment,
+        new PIXI.UniformGroup({
+            uFillColor: { value: [0, 0, 1, 0.5], type: "vec4<f32>" },
+            uStrokeColor: { value: [1, 0, 0, 1], type: "vec4<f32>" },
+            uLineWidth: { value: 5, type: "f32" },
+        }),
+    );
 }
 
 export async function createRecordsCanvasRenderer(
