@@ -26,12 +26,10 @@ export interface TypedGeometry<V extends ShaderModuleKind, F> extends Omit<
         attributeOption: TypedAttributeOption<V["attributes"][TName]>,
     ): void;
 }
-export function createTypedGeometry<V extends ShaderModuleKind, F>(
-    PIXI: PixiModule,
-) {
+export function newGeometry<V extends ShaderModuleKind, F>(PIXI: PixiModule) {
     return new PIXI.Geometry() as unknown as TypedGeometry<V, F>;
 }
-export function toUntypedGeometry<V extends ShaderModuleKind, K>(
+export function asUntypedGeometry<V extends ShaderModuleKind, K>(
     geometry: TypedGeometry<V, K>,
 ) {
     return geometry as unknown as PIXI.Geometry;

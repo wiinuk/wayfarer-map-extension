@@ -102,11 +102,7 @@ function createCellBoundsShader(PIXI: PIXI) {
         PIXI,
         CellVertex,
         CellFragment,
-        new PIXI.UniformGroup({
-            uFillColor: { value: [0, 0, 1, 0.5], type: "vec4<f32>" },
-            uStrokeColor: { value: [1, 0, 0, 1], type: "vec4<f32>" },
-            uLineWidth: { value: 5, type: "f32" },
-        }),
+        new PIXI.UniformGroup({}),
     );
 }
 
@@ -199,9 +195,9 @@ async function updateCell14Views(
     const views = createCellViews(renderer, cell14);
     cells.set(cellId, views);
 
-    // if (14 < zoom) {
-    //     renderCell17Bounds(renderer, views, stat14);
-    // }
+    if (14 < zoom) {
+        renderCell17Bounds(renderer, views, stat14);
+    }
     renderCell14Bound(renderer, views, stat14);
     // if (14 < zoom && zoom < 18) {
     //     views.push(...createCell14PoiCircles(options, port, stat14));

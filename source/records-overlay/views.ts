@@ -18,6 +18,7 @@ import type {
     WayspotLabelOptions,
 } from "./options";
 import type { CanvasRenderer, CellViews, Viewport } from "./canvas-renderer";
+import { asUntypedGeometry, newGeometry } from "../typed-pixi-shader";
 
 type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
@@ -62,9 +63,16 @@ function renderCellBounds(
 ) {
     const { PIXI, _point_result_cache, shader } = renderer;
 
+    const fillColor = normalizeColor(options.fillColor);
+    const strokeColor = normalizeColor(options.strokeColor);
+    const lineWidth = options.strokeWeight;
+
     const vertices: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
+    const fillColors = [];
+    const strokeColors = [];
+    const lineWidths = [];
     let vOffset = 0;
 
     const cornerCount = 4;
@@ -75,6 +83,9 @@ function renderCellBounds(
             const { lat, lng } = cornerPath[i]!;
             const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
             vertices.push(x - cellX, y - cellY);
+            fillColors.push(...fillColor);
+            strokeColors.push(...strokeColor);
+            lineWidths.push(lineWidth);
         }
         uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
         indices.push(
@@ -88,13 +99,37 @@ function renderCellBounds(
         vOffset += cornerCount;
     }
 
-    const geometry = new PIXI.MeshGeometry({
-        positions: new Float32Array(vertices),
-        uvs: new Float32Array(uvs),
-        indices: new Uint32Array(indices),
+    const geometry = newGeometry<
+        typeof import("./cell.vert"),
+        typeof import("./cell.frag")
+    >(PIXI);
+    geometry.addAttribute("aPosition", {
+        buffer: new Float32Array(vertices),
+        format: "float32x2",
+    });
+    geometry.addAttribute("aUV", {
+        buffer: new Float32Array(uvs),
+        format: "float32x2",
+    });
+    geometry.addIndex(indices);
+
+    geometry.addAttribute("aFillColor", {
+        buffer: new Float32Array(fillColors),
+        format: "float32x4",
+    });
+    geometry.addAttribute("aStrokeColor", {
+        buffer: new Float32Array(strokeColors),
+        format: "float32x4",
+    });
+    geometry.addAttribute("aLineWidth", {
+        buffer: new Float32Array(lineWidths),
+        format: "float32",
     });
 
-    const mesh = new PIXI.Mesh({ geometry, shader });
+    const mesh = new PIXI.Mesh({
+        geometry: asUntypedGeometry(geometry),
+        shader,
+    });
     mesh.position.set(cellX, cellY);
     container.addChild(mesh);
 }
@@ -255,21 +290,9 @@ export function renderCell17Bounds(
             empties.push(path);
         }
     }
-    return [
-        renderCellBounds(
-            renderer,
-            cellViews,
-            empties,
-            options.cell17EmptyOptions,
-        ),
-        renderCellBounds(
-            renderer,
-            cellViews,
-            stops,
-            options.cell17PokestopOptions,
-        ),
-        renderCellBounds(renderer, cellViews, gyms, options.cell17GymOptions),
-    ];
+    renderCellBounds(renderer, cellViews, empties, options.cell17EmptyOptions);
+    renderCellBounds(renderer, cellViews, stops, options.cell17PokestopOptions);
+    renderCellBounds(renderer, cellViews, gyms, options.cell17GymOptions);
 }
 
 function entityKindToCircleOptions(
