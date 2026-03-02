@@ -18,6 +18,8 @@ import type {
     WayspotLabelOptions,
 } from "./options";
 import type { CanvasRenderer, CellViews, Viewport } from "./canvas-renderer";
+import type { CirclesMeshBuilder } from "./circles-mesh-builder";
+import type { CellMeshBuilder } from "./cell-mesh-builder";
 
 type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
@@ -129,7 +131,7 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
         (kindToPois.get("POKESTOP")?.length ?? 0)
     );
 }
-export function renderCell14Bound(
+export function addCell14Bound(
     renderer: CanvasRenderer,
     cellViews: CellViews,
     cell14: Cell14Statistics,
@@ -161,8 +163,8 @@ function has(kind: EntityKind, cell17: CellStatistic<17>) {
 
 export function addCell17Bounds(
     renderer: CanvasRenderer,
-    { cellMeshBuilder: builder }: CellViews,
     stat14: Cell14Statistics,
+    builder: CellMeshBuilder,
 ) {
     const { options: store } = renderer;
     for (const cell17 of stat14.cell17s.values()) {
@@ -211,60 +213,21 @@ function entityKindToLabelOptions(
     }
 }
 
-function createPoiCircles(
-    store: OverlayOptions,
+export function addCell14PoiCircles(
+    { options: store }: CanvasRenderer,
     { zoom }: Viewport,
-    pois: readonly PoiRecord[],
-    kind: EntityKind | "",
-) {
-    // const poisLength = pois.length;
-    // const options = entityKindToCircleOptions(store, kind);
-    // const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
-    // const pointResultCache = createZeroPoint();
-    // const buffer = new Float64Array(poisLength * Point_size);
-    // let bufferIndex = 0;
-    // for (const { lat, lng, data } of pois) {
-    //     if (!data.isCommunityContributed) continue;
-    //     const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
-    //     buffer[bufferIndex++] = x;
-    //     buffer[bufferIndex++] = y;
-    // }
-    // return {
-    //     zIndex: options.zIndex,
-    //     draw: (context: ViewsRenderingContext) => {
-    //         const { ctx } = context;
-    //         ctx.beginPath();
-    //         for (let pointIndex = 0; pointIndex < poisLength; pointIndex++) {
-    //             const pointPointer = pointIndex * Point_size;
-    //             const worldX = buffer[pointPointer + Point_x]!;
-    //             const worldY = buffer[pointPointer + Point_y]!;
-    //             const { x, y } = worldPointToScreenPoint(
-    //                 context.nwWorld,
-    //                 context.zoom,
-    //                 worldX,
-    //                 worldY,
-    //                 pointResultCache,
-    //             );
-    //             ctx.moveTo(x + radius, y);
-    //             ctx.arc(x, y, radius, 0, Math.PI * 2);
-    //         }
-    //         ctx.fillStyle = options.fillColor;
-    //         ctx.fill();
-    //         ctx.strokeStyle = options.borderColor;
-    //         ctx.lineWidth = options.borderWidth;
-    //         ctx.stroke();
-    //     },
-    // };
-}
-
-export function createCell14PoiCircles(
-    store: OverlayOptions,
-    port: Viewport,
     stat14: Cell14Statistics,
+    builder: CirclesMeshBuilder,
 ) {
-    return [...stat14.kindToPois].map(([kind, pois]) =>
-        createPoiCircles(store, port, pois, kind),
-    );
+    for (const [kind, pois] of stat14.kindToPois) {
+        const options = entityKindToCircleOptions(store, kind);
+        const radius =
+            zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
+        for (const poi of pois) {
+            if (!poi.data.isCommunityContributed) continue;
+            builder.add(poi, radius, options);
+        }
+    }
 }
 
 function getPoiImportance({ data }: PoiRecord) {

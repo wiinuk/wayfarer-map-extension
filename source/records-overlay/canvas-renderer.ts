@@ -13,13 +13,19 @@ import { createOverlayViewOptions, type OverlayOptions } from "./options";
 import type { LatLng } from "../s2";
 import { waitAnimationFrame } from "../standard-extensions";
 import type { Cell, Cell14Id } from "../typed-s2cell";
-import { addCell17Bounds, renderCell14Bound } from "./views";
+import { addCell17Bounds, addCell14Bound, addCell14PoiCircles } from "./views";
 import type PIXI from "pixi.js";
 import { isWebWorker } from "../environments";
 import CellVertex from "./cell.vert";
 import CellFragment from "./cell.frag";
+import CircleVertex from "./circle.vert";
+import CircleFragment from "./circle.frag";
 import { createTypedShaderFrom } from "../typed-pixi-shader";
 import { newCellMeshBuilder, type CellMeshBuilder } from "./cell-mesh-builder";
+import {
+    newCirclesMeshBuilder,
+    type CirclesMeshBuilder,
+} from "./circles-mesh-builder";
 type PIXI = typeof PIXI;
 
 export interface Viewport {
@@ -37,27 +43,29 @@ export interface ViewsRenderingContext extends CanvasRenderer, Viewport {
 }
 
 export interface CellViews {
-    readonly container: PIXI.Container;
-    readonly graphics: PIXI.Graphics;
+    readonly meshes: PIXI.Mesh<PIXI.Geometry, PIXI.Shader>[];
     /** セル中心[世界座標] */
     readonly center: Point;
     readonly cellMeshBuilder: CellMeshBuilder;
+    readonly circlesBuilder: CirclesMeshBuilder;
 }
 
 function createCellViews(
     renderer: CanvasRenderer,
     cell14: Cell<14>,
 ): CellViews {
-    const { topContainer, PIXI } = renderer;
-    const container = topContainer.addChild(new PIXI.Container());
-    const graphics = container.addChild(new PIXI.Graphics());
     const { lat, lng } = cell14.getLatLng();
     const center = latLngToWorldPoint(lat, lng, createZeroPoint());
-    const cellMeshBuilder = newCellMeshBuilder(renderer, cell14);
-    return { graphics, container, center, cellMeshBuilder };
+    const cellMeshBuilder = newCellMeshBuilder(renderer, center);
+    const circlesBuilder = newCirclesMeshBuilder(renderer, center);
+    return { meshes: [], center, cellMeshBuilder, circlesBuilder };
 }
 
 export interface CanvasRenderer {
+    readonly layers: {
+        cellLayer: PIXI.Container;
+        circleLayer: PIXI.Container;
+    };
     readonly handleAsyncError: (this: unknown, reason: unknown) => void;
     readonly onRenderUpdated: (
         this: unknown,
@@ -67,8 +75,9 @@ export interface CanvasRenderer {
     readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
     readonly shader: ReturnType<typeof createCellBoundsShader>;
+    readonly circleShader: ReturnType<typeof createCirclesShader>;
     readonly app: PIXI.Application;
-    readonly topContainer: PIXI.Container;
+    readonly worldContainer: PIXI.Container;
     readonly records: PoiRecords;
     readonly options: OverlayOptions;
     readonly cells: Map<Cell14Id, CellViews>;
@@ -110,6 +119,15 @@ function createCellBoundsShader(PIXI: PIXI) {
     );
 }
 
+function createCirclesShader(PIXI: PIXI) {
+    return createTypedShaderFrom(
+        PIXI,
+        CircleVertex,
+        CircleFragment,
+        new PIXI.UniformGroup({}),
+    );
+}
+
 export async function createRecordsCanvasRenderer(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
@@ -117,13 +135,19 @@ export async function createRecordsCanvasRenderer(
     const records = await openRecords();
     const canvas = new OffscreenCanvas(0, 0);
     const { PIXI, app } = await initPIXI(canvas);
-    const topContainer = app.stage.addChild(new PIXI.Container());
+    const worldContainer = app.stage.addChild(new PIXI.Container());
+
     return {
         canvas,
+        layers: {
+            cellLayer: worldContainer.addChild(new PIXI.Container()),
+            circleLayer: worldContainer.addChild(new PIXI.Container()),
+        },
         PIXI,
         shader: createCellBoundsShader(PIXI),
+        circleShader: createCirclesShader(PIXI),
         app,
-        topContainer,
+        worldContainer,
         handleAsyncError,
         onRenderUpdated,
         options: createOverlayViewOptions(),
@@ -146,7 +170,7 @@ async function draw(
     signal: AbortSignal,
 ) {
     await waitAnimationFrame(signal);
-    const { app, topContainer } = renderer;
+    const { app, worldContainer: topContainer } = renderer;
     const { width, height, devicePixelRatio } = port;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const checker = createCollisionChecker();
@@ -163,8 +187,7 @@ function deleteAndDestroyCellView(
 ) {
     const views = cells.get(cellId);
     if (views) {
-        const { container } = views;
-        container.destroy({ children: true });
+        for (const m of views.meshes) m.destroy();
         cells.delete(cellId);
     }
 }
@@ -200,19 +223,25 @@ async function updateCell14Views(
     cells.set(cellId, views);
 
     if (14 < zoom) {
-        addCell17Bounds(renderer, views, stat14);
+        addCell17Bounds(renderer, stat14, views.cellMeshBuilder);
     }
-    renderCell14Bound(renderer, views, stat14);
-    // if (14 < zoom && zoom < 18) {
-    //     views.push(...createCell14PoiCircles(options, port, stat14));
-    // }
+    addCell14Bound(renderer, views, stat14);
+    if (14 < zoom && zoom < 18) {
+        addCell14PoiCircles(renderer, port, stat14, views.circlesBuilder);
+    }
     // if (14 < zoom) {
     //     views.push(createCell14PoiNames(options, port, overlay.ctx, stat14));
     // }
     // if (13 < zoom) {
     //     views.push(createCell17CountLabel(options, stat14));
     // }
-    views.container.addChild(views.cellMeshBuilder.bake());
+    const cellMesh = renderer.layers.cellLayer.addChild(
+        views.cellMeshBuilder.bake(),
+    );
+    const circlesMesh = renderer.layers.circleLayer.addChild(
+        views.circlesBuilder.bake(),
+    );
+    views.meshes.push(cellMesh, circlesMesh);
 }
 
 export async function updateRecordsCanvasRenderer(

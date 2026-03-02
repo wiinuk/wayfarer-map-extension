@@ -1,6 +1,7 @@
 //spell:words Hiragino Kaku Meiryo Neue Pokestop powerspot wayspot
 
 export type OverlayOptions = ReturnType<typeof createOverlayViewOptions>;
+export type WayspotOptions = OverlayOptions["wayspotOptions"];
 export type WayspotLabelOptions = OverlayOptions["wayspotLabelOptions"];
 export type Cell17Options = OverlayOptions["cell17EmptyOptions"];
 export function createOverlayViewOptions() {
@@ -32,13 +33,14 @@ export function createOverlayViewOptions() {
         strokeColor: "rgba(255, 0, 13, 0.6)",
     } satisfies google.maps.PolygonOptions);
 
-    const cell14Options = Object.freeze({
+    const baseCell14Options = {
         strokeColor: "#c54545b7",
         strokeWeight: 2,
         fillColor: "#00000000",
         clickable: false,
         zIndex: cellBaseZIndex + 2,
-    } satisfies google.maps.PolygonOptions);
+    } satisfies google.maps.PolygonOptions;
+    const cell14Options = Object.freeze(baseCell14Options);
 
     const cell14OptionsEmpty = cell14Options;
     const cell14Options1 = Object.freeze({
@@ -51,13 +53,14 @@ export function createOverlayViewOptions() {
         fillColor: "#d3b71738",
     } satisfies google.maps.PolygonOptions);
 
-    const wayspotOptions = Object.freeze({
+    const baseWayspotOptions = {
         markerSize: 8,
         borderColor: "#ff6600",
         borderWidth: 2,
         fillColor: "#ff660080",
         zIndex: poiBaseZIndex,
-    });
+    };
+    const wayspotOptions = Object.freeze(baseWayspotOptions);
     const gymOptions = Object.freeze({
         ...wayspotOptions,
         borderColor: "#ffffff",
@@ -74,7 +77,7 @@ export function createOverlayViewOptions() {
         fillColor: "#f195eb",
     });
 
-    const wayspotLabelOptions = {
+    const baseWayspotLabelOptions = {
         font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
         strokeColor: "rgb(0, 0, 0)",
         fillColor: "#FFFFBB",
@@ -82,6 +85,7 @@ export function createOverlayViewOptions() {
         lineJoin: "round" as CanvasLineJoin,
         shadowBlur: 1,
     };
+    const wayspotLabelOptions = Object.freeze(baseWayspotLabelOptions);
     const gymLabelOptions = Object.freeze({
         ...wayspotLabelOptions,
         font: `bold ` + wayspotLabelOptions.font,
