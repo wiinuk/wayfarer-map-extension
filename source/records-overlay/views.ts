@@ -173,7 +173,7 @@ function entityKindToLabelOptions(
         case "GYM":
             return options.gymLabelOptions;
         case "POKESTOP":
-            return options.wayspotLabelOptions;
+            return options.pokestopLabelOptions;
         case "POWERSPOT":
             return options.powerspotLabelOptions;
         default:

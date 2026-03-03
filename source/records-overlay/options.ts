@@ -89,6 +89,11 @@ export function createOverlayViewOptions() {
         shadowBlur: 1,
     };
     const wayspotLabelOptions = Object.freeze(baseWayspotLabelOptions);
+    const pokestopLabelOptions = Object.freeze({
+        ...wayspotLabelOptions,
+        strokeColor: "#000030",
+        fillColor: "#f0ffff",
+    });
     const gymLabelOptions = Object.freeze({
         ...wayspotLabelOptions,
         fontWeight: `bold`,
@@ -112,6 +117,7 @@ export function createOverlayViewOptions() {
         pokestopOptions,
         powerspotOptions,
         wayspotLabelOptions,
+        pokestopLabelOptions,
         gymLabelOptions,
         powerspotLabelOptions,
         cellBaseZIndex,
