@@ -10,8 +10,8 @@ describe("createCollisionChecker", () => {
 
     it("初期状態では衝突しないこと", () => {
         const box = {
-            centerX: 100,
-            centerY: 100,
+            x: 100,
+            y: 100,
             width: 50,
             height: 50,
             key: 1,
@@ -29,8 +29,8 @@ describe("createCollisionChecker", () => {
         });
 
         const newBox = {
-            centerX: 100,
-            centerY: 100,
+            x: 100,
+            y: 100,
             width: 50,
             height: 50,
             key: 2,
@@ -50,8 +50,8 @@ describe("createCollisionChecker", () => {
 
         // 中心(70,70) 幅50 => 範囲は x:45~95, y:45~95 (重なっている)
         const newBox = {
-            centerX: 70,
-            centerY: 70,
+            x: 70,
+            y: 70,
             width: 50,
             height: 50,
             key: 2,
@@ -61,8 +61,8 @@ describe("createCollisionChecker", () => {
 
     it("key が同じ場合は自分自身とみなし、衝突から除外すること", () => {
         const box = {
-            centerX: 50,
-            centerY: 50,
+            x: 50,
+            y: 50,
             width: 50,
             height: 50,
             key: "same-key",
@@ -85,8 +85,8 @@ describe("createCollisionChecker", () => {
 
         // x: 50~100 (50の地点で接している)
         const newBox = {
-            centerX: 75,
-            centerY: 25,
+            x: 75,
+            y: 25,
             width: 50,
             height: 50,
             key: 2,
@@ -111,8 +111,8 @@ describe("createCollisionChecker", () => {
         });
 
         const newBox = {
-            centerX: 105,
-            centerY: 105,
+            x: 105,
+            y: 105,
             width: 10,
             height: 10,
             key: 3,
