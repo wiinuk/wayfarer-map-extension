@@ -14,19 +14,15 @@ void main() {
     float fw = fwidth(d);
 
     float outerEdge = vRadius + vStrokeWidth;
+    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);
+    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);
 
-    float outerAlpha = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);
-    float fillAlpha = 1.0f - smoothstep(vRadius - fw, vRadius, d);
-    float strokeAlpha = outerAlpha - fillAlpha;
-
-    if(outerAlpha <= 0.0f)
+    if(outerMask <= 0.0f)
         discard;
 
-    vec4 fill = vFillColor;
-    vec4 stroke = vStrokeColor;
+    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);
+    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);
 
-    vec4 col = fill * fillAlpha + stroke * strokeAlpha;
-    float a = col.a;
-
-    fragColor = vec4(col.rgb * a, a);
+    vec4 finalColor = mix(s, f, fillMask);
+    fragColor = finalColor * outerMask;
 }
