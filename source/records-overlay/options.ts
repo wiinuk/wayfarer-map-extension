@@ -1,4 +1,5 @@
 //spell:words Hiragino Kaku Meiryo Neue Pokestop powerspot wayspot
+import type PIXI from "pixi.js";
 
 export type OverlayOptions = ReturnType<typeof createOverlayViewOptions>;
 export type WayspotOptions = OverlayOptions["wayspotOptions"];
@@ -78,7 +79,9 @@ export function createOverlayViewOptions() {
     });
 
     const baseWayspotLabelOptions = {
-        font: `11px "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
+        fontWeight: "normal" as PIXI.TextStyleFontWeight,
+        fontSize: `11px`,
+        fontFamily: `"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
         strokeColor: "rgb(0, 0, 0)",
         fillColor: "#FFFFBB",
         strokeWeight: 2,
@@ -88,7 +91,7 @@ export function createOverlayViewOptions() {
     const wayspotLabelOptions = Object.freeze(baseWayspotLabelOptions);
     const gymLabelOptions = Object.freeze({
         ...wayspotLabelOptions,
-        font: `bold ` + wayspotLabelOptions.font,
+        fontWeight: `bold`,
         strokeColor: "#ffffffd5",
         fillColor: "#9c1933",
     });
