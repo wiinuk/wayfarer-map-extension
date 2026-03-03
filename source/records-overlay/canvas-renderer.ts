@@ -265,10 +265,10 @@ async function draw(
     signal: AbortSignal,
 ) {
     await waitAnimationFrame(signal);
-    const { app, worldContainer: topContainer } = renderer;
+    const { app, worldContainer } = renderer;
     const { width, height, devicePixelRatio } = port;
     app.renderer.resize(width, height, devicePixelRatio);
-    applyViewport(topContainer, port);
+    applyViewport(worldContainer, port);
     updateContainers(renderer);
     app.render();
     const bitmap = renderer.canvas.transferToImageBitmap();
