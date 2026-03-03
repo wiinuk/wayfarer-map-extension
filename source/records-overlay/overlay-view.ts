@@ -160,9 +160,13 @@ export async function createPoiRecordsCanvasOverlay(
             this.drawer = await createDrawerForWorker(
                 handleAsyncError,
                 (image, port) =>
-                    scope(async (signal) =>
-                        this.commitImage(image, port, signal),
-                    ),
+                    scope(async (signal) => {
+                        try {
+                            await this.commitImage(image, port, signal);
+                        } finally {
+                            image.close();
+                        }
+                    }),
             );
         }
 
@@ -281,28 +285,24 @@ export async function createPoiRecordsCanvasOverlay(
             port: Viewport,
             signal: AbortSignal,
         ) {
-            try {
-                // 転送された画面を描画
-                await waitAnimationFrame(signal);
-                const { ctx } = this;
-                initCanvas(ctx, port);
-                ctx.drawImage(image, 0, 0);
+            // 転送された画面を描画
+            await waitAnimationFrame(signal);
+            const { ctx } = this;
+            initCanvas(ctx, port);
+            ctx.drawImage(image, 0, 0);
 
-                // 最後の描画時の情報を記録（canvasをずらすため必要）
-                this.renderedViewport = port;
+            // 最後の描画時の情報を記録（canvasをずらすため必要）
+            this.renderedViewport = port;
 
-                // 現在の地図状態に合わせてキャンパスを調整
-                const latestProjection = this.getProjection() as
-                    | google.maps.MapCanvasProjection
-                    | undefined;
-                if (latestProjection) {
-                    const currentPos = latestProjection.fromLatLngToDivPixel(
-                        port.nwLatLng,
-                    )!;
-                    this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
-                }
-            } finally {
-                image.close();
+            // 現在の地図状態に合わせてキャンパスを調整
+            const latestProjection = this.getProjection() as
+                | google.maps.MapCanvasProjection
+                | undefined;
+            if (latestProjection) {
+                const currentPos = latestProjection.fromLatLngToDivPixel(
+                    port.nwLatLng,
+                )!;
+                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
             }
         }
     }
