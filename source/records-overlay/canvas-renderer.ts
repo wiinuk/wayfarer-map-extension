@@ -1,6 +1,9 @@
-//spell-checker:words Pois
+//spell-checker:words Pois Hiragino Kaku Meiryo Neue
 import type { LatLngBounds } from "../bounds";
-import { createCollisionChecker } from "../collision-checker";
+import {
+    createCollisionChecker,
+    type CollisionChecker,
+} from "../collision-checker";
 import { createZeroPoint, latLngToWorldPoint, type Point } from "../geometry";
 import {
     getCell14Stats,
@@ -18,6 +21,7 @@ import {
     addCell14Bound,
     addCell14PoiCircles,
     createCell17CountLabel,
+    createCell14PoiNames,
 } from "./views";
 import type PIXI from "pixi.js";
 import { isWebWorker } from "../environments";
@@ -66,6 +70,16 @@ function createCellViews(
     return { views: [], center, cellMeshBuilder, circlesBuilder };
 }
 
+type BoxBounds = ReturnType<typeof createBoxBoundsClass>;
+function createBoxBoundsClass(PIXI: PIXI) {
+    return class BoxBounds extends PIXI.Bounds {
+        constructor(public key: unknown) {
+            super();
+        }
+    };
+}
+
+type Mesh = PIXI.Mesh<PIXI.Geometry, PIXI.Shader>;
 export interface CanvasRenderer {
     readonly handleAsyncError: (this: unknown, reason: unknown) => void;
     readonly onRenderUpdated: (
@@ -75,6 +89,7 @@ export interface CanvasRenderer {
     ) => void;
     readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
+    readonly BoxBounds: BoxBounds;
 
     readonly shader: ReturnType<typeof createCellBoundsShader>;
     readonly circleShader: ReturnType<typeof createCirclesShader>;
@@ -82,10 +97,10 @@ export interface CanvasRenderer {
     readonly app: PIXI.Application;
     readonly worldContainer: PIXI.Container;
     readonly layers: {
-        cellLayer: PIXI.Container;
-        circleLayer: PIXI.Container;
-        labelLayer: PIXI.Container;
-        cell14TextLayer: PIXI.Container;
+        readonly cellLayer: PIXI.Container<Mesh>;
+        readonly circleLayer: PIXI.Container<Mesh>;
+        readonly labelLayer: PIXI.Container<PIXI.Text>;
+        readonly cell14TextLayer: PIXI.Container<PIXI.Text>;
     };
 
     readonly cell14LabelTextStyle: PIXI.TextStyle;
@@ -94,7 +109,7 @@ export interface CanvasRenderer {
     readonly options: OverlayOptions;
     readonly cells: Map<Cell14Id, CellViews>;
 
-    readonly updateFixedScale: (this: PIXI.Container) => void;
+    readonly _tempTransform: PIXI.TransformableObject;
     readonly _point_result_cache: Point;
     readonly _pois_cache: PoiRecord[];
 }
@@ -116,6 +131,7 @@ async function initPIXI(canvas: OffscreenCanvas) {
         autoStart: false,
         backgroundAlpha: 0,
         antialias: true,
+        roundPixels: true,
     });
     return {
         PIXI,
@@ -141,6 +157,15 @@ function createCirclesShader(PIXI: PIXI) {
     );
 }
 
+function updateFixedScale(renderer: CanvasRenderer, container: PIXI.Container) {
+    if (container.parent == null) return;
+
+    const { scale } = container.parent.worldTransform.decompose(
+        renderer._tempTransform,
+    );
+    container.scale.x = 1 / scale.x;
+    container.scale.y = 1 / scale.y;
+}
 export async function createRecordsCanvasRenderer(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
@@ -162,23 +187,22 @@ export async function createRecordsCanvasRenderer(
             color: "#c54545",
         },
     });
-    const tempTransform = new PIXI.Transform();
-    function updateFixedScale(this: PIXI.Container) {
-        if (this.parent == null) return;
-
-        const { scale } = this.parent.worldTransform.decompose(tempTransform);
-        this.scale.x = 1 / scale.x;
-        this.scale.y = 1 / scale.y;
-    }
     return {
         canvas,
         layers: {
-            cellLayer: worldContainer.addChild(new PIXI.Container()),
-            circleLayer: worldContainer.addChild(new PIXI.Container()),
-            labelLayer: worldContainer.addChild(new PIXI.Container()),
-            cell14TextLayer: worldContainer.addChild(new PIXI.Container()),
+            cellLayer: worldContainer.addChild(new PIXI.Container<PIXI.Mesh>()),
+            circleLayer: worldContainer.addChild(
+                new PIXI.Container<PIXI.Mesh>(),
+            ),
+            labelLayer: worldContainer.addChild(
+                new PIXI.Container<PIXI.Text>(),
+            ),
+            cell14TextLayer: worldContainer.addChild(
+                new PIXI.Container<PIXI.Text>(),
+            ),
         },
         PIXI,
+        BoxBounds: createBoxBoundsClass(PIXI),
         shader: createCellBoundsShader(PIXI),
         circleShader: createCirclesShader(PIXI),
         cell14LabelTextStyle,
@@ -190,9 +214,9 @@ export async function createRecordsCanvasRenderer(
         records,
         cells: new Map(),
 
-        updateFixedScale,
         _point_result_cache: { x: 0, y: 0 },
         _pois_cache: [],
+        _tempTransform: new PIXI.Transform(),
     };
 }
 function applyViewport(layer: PIXI.Container, viewport: Viewport) {
@@ -200,6 +224,39 @@ function applyViewport(layer: PIXI.Container, viewport: Viewport) {
     layer.scale.set(scale);
     layer.x = -viewport.nwWorld.x * scale;
     layer.y = -viewport.nwWorld.y * scale;
+}
+
+function updateVisibility(
+    { BoxBounds }: CanvasRenderer,
+    checker: CollisionChecker,
+    label: PIXI.Text,
+) {
+    const box = new BoxBounds(label.uid);
+
+    // bounds を測定するため一旦表示する
+    label.visible = true;
+    label.getBounds(false, box);
+
+    if (checker.check(box)) {
+        label.visible = false;
+        return;
+    }
+    checker.addBox(box);
+    label.visible = true;
+}
+function updateContainers(renderer: CanvasRenderer) {
+    for (const label14 of renderer.layers.cell14TextLayer.children) {
+        updateFixedScale(renderer, label14);
+    }
+
+    for (const label of renderer.layers.labelLayer.children) {
+        updateFixedScale(renderer, label);
+    }
+
+    const checker = createCollisionChecker();
+    for (const label of renderer.layers.labelLayer.children) {
+        updateVisibility(renderer, checker, label);
+    }
 }
 
 async function draw(
@@ -210,10 +267,9 @@ async function draw(
     await waitAnimationFrame(signal);
     const { app, worldContainer: topContainer } = renderer;
     const { width, height, devicePixelRatio } = port;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const checker = createCollisionChecker();
     app.renderer.resize(width, height, devicePixelRatio);
     applyViewport(topContainer, port);
+    updateContainers(renderer);
     app.render();
     const bitmap = renderer.canvas.transferToImageBitmap();
     renderer.onRenderUpdated(bitmap, port);
@@ -267,9 +323,11 @@ async function updateCell14Views(
     if (14 < zoom && zoom < 18) {
         addCell14PoiCircles(renderer, port, stat14, views.circlesBuilder);
     }
-    // if (14 < zoom) {
-    //     views.push(createCell14PoiNames(options, port, overlay.ctx, stat14));
-    // }
+    if (14 < zoom) {
+        for (const label of createCell14PoiNames(renderer, port, stat14)) {
+            views.views.push(renderer.layers.labelLayer.addChild(label));
+        }
+    }
     if (13 < zoom) {
         const label = createCell17CountLabel(renderer, stat14);
         if (label) {

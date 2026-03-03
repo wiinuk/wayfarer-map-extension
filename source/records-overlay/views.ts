@@ -1,45 +1,37 @@
 // spell: words Lngs POKESTOP POWERSPOT Pois Wayspot
 import type { EntityKind } from "../gcs-schema";
 import type PIXI from "pixi.js";
-import {
-    createZeroPoint,
-    latLngToWorldPoint,
-    worldPointToScreenPoint,
-} from "../geometry";
+import { createZeroPoint, latLngToWorldPoint } from "../geometry";
 import type {
     Cell14Statistics,
     CellStatistic,
     PoiRecord,
 } from "../poi-records";
 import type { LatLng } from "../s2";
-import { raise, ignore } from "../standard-extensions";
-import type {
-    Cell17Options,
-    OverlayOptions,
-    WayspotLabelOptions,
-} from "./options";
+import type { OverlayOptions } from "./options";
 import type { CanvasRenderer, CellViews, Viewport } from "./canvas-renderer";
 import type { CirclesMeshBuilder } from "./circles-mesh-builder";
 import type { CellMeshBuilder } from "./cell-mesh-builder";
+type PIXI = typeof PIXI;
 
-type RenderingContext = OffscreenCanvasRenderingContext2D;
 function getEllipsisTextWithMetrics(
-    ctx: RenderingContext,
+    { CanvasTextMetrics }: PIXI,
+    style: PIXI.TextStyle,
     text: string,
     maxWidth: number,
     ellipsis = "…",
 ) {
-    const fullMetrics = ctx.measureText(text);
+    const fullMetrics = CanvasTextMetrics.measureText(text, style);
     if (fullMetrics.width <= maxWidth) return fullMetrics;
 
     let low = 0;
     let high = text.length;
     let bestText = ellipsis;
-    let bestMetrics = ctx.measureText(ellipsis);
+    let bestMetrics = CanvasTextMetrics.measureText(ellipsis, style);
     while (low <= high) {
         const mid = Math.floor((low + high) / 2);
         const testString = text.substring(0, mid) + ellipsis;
-        const testMetrics = ctx.measureText(testString);
+        const testMetrics = CanvasTextMetrics.measureText(testString, style);
 
         if (testMetrics.width <= maxWidth) {
             bestText = testString;
@@ -53,12 +45,8 @@ function getEllipsisTextWithMetrics(
     return { bestText, bestMetrics };
 }
 
-const Point_x = 0;
-const Point_y = Point_x + 1;
-const Point_size = Point_y + 1;
-
 function createCell14Label(
-    { PIXI, cell14LabelTextStyle, updateFixedScale }: CanvasRenderer,
+    { PIXI, cell14LabelTextStyle }: CanvasRenderer,
     text: string,
     { lat, lng }: LatLng,
 ) {
@@ -69,15 +57,12 @@ function createCell14Label(
         pointResultCache,
     );
 
-    const label = new PIXI.Text({ text, style: cell14LabelTextStyle });
+    const label = new PIXI.Text();
+    label.text = text;
+    label.style = cell14LabelTextStyle;
     label.anchor.set(0.5);
     label.x = worldX;
     label.y = worldY;
-    label.onRender = function () {
-        updateFixedScale.apply(this);
-        const { x, y, width, height } = this.getBounds();
-        console.debug(x, y, width, height);
-    };
     return label;
 }
 
@@ -266,144 +251,83 @@ interface PoiLabelView {
     readonly worldX: number;
     readonly worldY: number;
     readonly text: string;
-    readonly textMetrics: TextMetrics;
+    readonly textMetrics: PIXI.CanvasTextMetrics;
     readonly guid: string;
-    readonly options: WayspotLabelOptions;
+    readonly style: PIXI.TextStyle;
+}
+function createPoiLabelView(
+    { PIXI, options: store }: CanvasRenderer,
+    poi: PoiRecord,
+): PoiLabelView {
+    const { lat, lng, guid, name } = poi;
+    const options = entityKindToLabelOptions(store, getKind(poi));
+    const style = new PIXI.TextStyle({
+        fontFamily: options.fontFamily,
+        fontWeight: options.fontWeight,
+        fontSize: options.fontSize,
+        fill: options.fillColor,
+        stroke: {
+            color: options.strokeColor,
+            join: options.lineJoin,
+            width: options.strokeWeight,
+        },
+        dropShadow: {
+            alpha: 1,
+            angle: 0,
+            distance: 0,
+            color: options.strokeColor,
+            blur: options.shadowBlur,
+        },
+    });
+    let truncatedMetrics = getEllipsisTextWithMetrics(PIXI, style, name, 140);
+    let truncatedText = name;
+    if (!(truncatedMetrics instanceof PIXI.CanvasTextMetrics)) {
+        truncatedText = truncatedMetrics.bestText;
+        truncatedMetrics = truncatedMetrics.bestMetrics;
+    }
+    const { x, y } = latLngToWorldPoint(lat, lng, createZeroPoint());
+    return {
+        worldX: x,
+        worldY: y,
+        text: truncatedText,
+        textMetrics: truncatedMetrics,
+        guid,
+        style,
+    };
 }
 export function createCell14PoiNames(
-    store: OverlayOptions,
+    renderer: CanvasRenderer,
     { zoom }: Viewport,
-    ctx: RenderingContext,
     stat14: Cell14Statistics,
 ) {
-    // const pointResultCache = createZeroPoint();
-    // function createPoiLabelView(
-    //     ctx: RenderingContext,
-    //     poi: PoiRecord,
-    // ): PoiLabelView {
-    //     const { lat, lng, guid, name } = poi;
-    //     const options = entityKindToLabelOptions(store, getKind(poi));
-    //     ctx.save();
-    //     applyLabelOptions(ctx, options);
-    //     let truncatedMetrics = getEllipsisTextWithMetrics(ctx, name, 140);
-    //     let truncatedText = name;
-    //     if (!(truncatedMetrics instanceof TextMetrics)) {
-    //         truncatedText = truncatedMetrics.bestText;
-    //         truncatedMetrics = truncatedMetrics.bestMetrics;
-    //     }
-    //     const { x, y } = latLngToWorldPoint(lat, lng, pointResultCache);
-    //     ctx.restore();
-    //     return {
-    //         worldX: x,
-    //         worldY: y,
-    //         text: truncatedText,
-    //         textMetrics: truncatedMetrics,
-    //         guid,
-    //         options,
-    //     };
-    // }
-    // const pois: PoiRecord[] = [];
-    // for (const poi of stat14.pois.values()) {
-    //     if (poi.data.isCommunityContributed) pois.push(poi);
-    // }
-    // pois.sort(comparePoiByImportance);
-    // // 基準となるズームレベル
-    // const referenceZoom = 16;
-    // // 基準となるズームレベルでの最大POI数
-    // const maxPoisAtReferenceZoom = 6;
-    // const maxPois = Math.max(
-    //     1,
-    //     Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom)),
-    // );
-    // // 上位POIのみを残す
-    // pois.length = Math.min(pois.length, maxPois);
-    // const labels = pois.map((poi) => createPoiLabelView(ctx, poi));
-    // return {
-    //     zIndex: store.poiLabelBaseZIndex,
-    //     draw: (context: ViewsRenderingContext) => {
-    //         const { ctx, checker } = context;
-    //         ctx.save();
-    //         try {
-    //             ctx.textBaseline = "middle";
-    //             ctx.textAlign = "center";
-    //             for (const {
-    //                 options,
-    //                 worldX,
-    //                 worldY,
-    //                 text,
-    //                 textMetrics,
-    //                 guid,
-    //             } of labels) {
-    //                 applyLabelOptions(ctx, options);
-    //                 const { x, y } = worldPointToScreenPoint(
-    //                     context.nwWorld,
-    //                     context.zoom,
-    //                     worldX,
-    //                     worldY,
-    //                     context._point_result_cache,
-    //                 );
-    //                 const textX = x;
-    //                 const textY = y + 15;
-    //                 const box = getTextBox(
-    //                     ctx,
-    //                     textMetrics,
-    //                     textX,
-    //                     textY,
-    //                     guid,
-    //                 );
-    //                 if (checker.check(box)) continue;
-    //                 checker.addBox(box);
-    //                 ctx.strokeText(text, textX, textY);
-    //                 ctx.fillText(text, textX, textY);
-    //             }
-    //         } finally {
-    //             ctx.restore();
-    //         }
-    //     },
-    // };
+    const { PIXI } = renderer;
+
+    const pois: PoiRecord[] = [];
+    for (const poi of stat14.pois.values()) {
+        if (poi.data.isCommunityContributed) pois.push(poi);
+    }
+    pois.sort(comparePoiByImportance);
+    // 基準となるズームレベル
+    const referenceZoom = 16;
+    // 基準となるズームレベルでの最大POI数
+    const maxPoisAtReferenceZoom = 6;
+    const maxPois = Math.max(
+        1,
+        Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom)),
+    );
+    // 上位POIのみを残す
+    pois.length = Math.min(pois.length, maxPois);
+    return pois.map((poi) => {
+        const { worldX, worldY, text, style } = createPoiLabelView(
+            renderer,
+            poi,
+        );
+        const label = new PIXI.Text();
+        label.text = text;
+        label.style = style;
+        label.x = worldX;
+        label.y = worldY;
+        label.anchor.set(0.5, -0.5);
+        return label;
+    });
 }
-function applyLabelOptions(
-    ctx: RenderingContext,
-    options: WayspotLabelOptions,
-) {
-    ctx.font = options.font;
-    ctx.strokeStyle = options.strokeColor;
-    ctx.lineJoin = options.lineJoin;
-    ctx.lineWidth = options.strokeWeight;
-
-    ctx.shadowColor = options.strokeColor;
-    ctx.shadowBlur = options.shadowBlur;
-    ctx.fillStyle = options.fillColor;
-}
-
-function getTextBox(
-    ctx: RenderingContext,
-    metrics: TextMetrics,
-    textX: number,
-    textY: number,
-    guid: string,
-) {
-    const actualHeight =
-        metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-    const textWidth =
-        metrics.width +
-        ctx.lineWidth +
-        ctx.shadowBlur +
-        Math.abs(ctx.shadowOffsetX);
-    const textHeight =
-        actualHeight +
-        ctx.lineWidth +
-        ctx.shadowBlur +
-        Math.abs(ctx.shadowOffsetY);
-
-    const box = {
-        centerX: textX,
-        centerY: textY,
-        width: textWidth,
-        height: textHeight,
-        key: guid,
-    };
-    return box;
-}
-
-type LatLngPath = readonly LatLng[];
