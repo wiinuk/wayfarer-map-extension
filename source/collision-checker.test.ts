@@ -21,8 +21,8 @@ describe("createCollisionChecker", () => {
 
     it("離れた位置にあるボックス同士は衝突しないこと", () => {
         checker.addBox({
-            centerX: 0,
-            centerY: 0,
+            x: 0,
+            y: 0,
             width: 50,
             height: 50,
             key: 1,
@@ -41,8 +41,8 @@ describe("createCollisionChecker", () => {
     it("重なっているボックス同士は衝突と判定されること", () => {
         // 中心(50,50) 幅50 => 範囲は x:25~75, y:25~75
         checker.addBox({
-            centerX: 50,
-            centerY: 50,
+            x: 50,
+            y: 50,
             width: 50,
             height: 50,
             key: 1,
@@ -76,8 +76,8 @@ describe("createCollisionChecker", () => {
     it("エッジ（端）がちょうど接している場合は衝突とみなさないこと", () => {
         // x: 0~50
         checker.addBox({
-            centerX: 25,
-            centerY: 25,
+            x: 25,
+            y: 25,
             width: 50,
             height: 50,
             key: 1,
@@ -96,15 +96,15 @@ describe("createCollisionChecker", () => {
 
     it("複数のボックスのうち、1つでも重なれば衝突と判定されること", () => {
         checker.addBox({
-            centerX: 0,
-            centerY: 0,
+            x: 0,
+            y: 0,
             width: 10,
             height: 10,
             key: 1,
         });
         checker.addBox({
-            centerX: 100,
-            centerY: 100,
+            x: 100,
+            y: 100,
             width: 10,
             height: 10,
             key: 2,

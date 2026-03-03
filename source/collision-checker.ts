@@ -1,11 +1,12 @@
 interface Box {
-    readonly centerX: number;
-    readonly centerY: number;
+    readonly x: number;
+    readonly y: number;
     readonly width: number;
     readonly height: number;
     readonly key: unknown;
 }
 
+export type CollisionChecker = ReturnType<typeof createCollisionChecker>;
 /**
  * @param cellSize 判定対象Boxの平均的なサイズの2〜3倍が目安
  */
@@ -17,10 +18,10 @@ export function createCollisionChecker(cellSize = 128) {
     }
 
     function getGridKeys(box: Box, result: number[]) {
-        const minX = box.centerX - box.width / 2;
-        const maxX = box.centerX + box.width / 2;
-        const minY = box.centerY - box.height / 2;
-        const maxY = box.centerY + box.height / 2;
+        const minX = box.x - box.width / 2;
+        const maxX = box.x + box.width / 2;
+        const minY = box.y - box.height / 2;
+        const maxY = box.y + box.height / 2;
 
         const startX = Math.floor(minX / cellSize);
         const endX = Math.floor(maxX / cellSize);
@@ -66,11 +67,11 @@ export function createCollisionChecker(cellSize = 128) {
             for (const other of candidatesCache) {
                 if (box.key === other.key) continue;
 
-                const dx = Math.abs(box.centerX - other.centerX);
+                const dx = Math.abs(box.x - other.x);
                 const combinedHalfWidth = (box.width + other.width) / 2;
                 if (dx >= combinedHalfWidth) continue;
 
-                const dy = Math.abs(box.centerY - other.centerY);
+                const dy = Math.abs(box.y - other.y);
                 const combinedHalfHeight = (box.height + other.height) / 2;
                 if (dy >= combinedHalfHeight) continue;
 
