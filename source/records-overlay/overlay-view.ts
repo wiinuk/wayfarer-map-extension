@@ -121,14 +121,15 @@ function initCanvas(
 ) {
     const { canvas } = ctx;
     const { width, height, devicePixelRatio } = port;
-    const canvasWidth = width * devicePixelRatio;
-    const canvasHeight = height * devicePixelRatio;
+
+    // 非整数DPR環境を考慮
+    const canvasWidth = Math.round(width * devicePixelRatio);
+    const canvasHeight = Math.round(height * devicePixelRatio);
     if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
     }
-    ctx.scale(devicePixelRatio, devicePixelRatio);
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 }
 
 export type PoiRecordsCanvasOverlay = Awaited<

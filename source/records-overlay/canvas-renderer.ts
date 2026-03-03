@@ -127,7 +127,8 @@ async function initPIXI(canvas: OffscreenCanvas) {
     const app = new PIXI.Application();
     await app.init({
         canvas,
-        autoDensity: true,
+        // OffscreenCanvas では自動追従されない
+        autoDensity: false,
         autoStart: false,
         backgroundAlpha: 0,
         antialias: true,
