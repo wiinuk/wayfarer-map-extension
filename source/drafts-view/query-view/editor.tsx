@@ -1,4 +1,4 @@
-//spell:words antlr
+//spell:words antlr keymap
 import { styleSetter } from "../../dom-extensions";
 import {
     createTypedCustomEvent,
@@ -11,8 +11,11 @@ import {
     Decoration,
     ViewPlugin,
     ViewUpdate,
+    keymap,
 } from "@codemirror/view";
 import { EditorState, RangeSet, RangeSetBuilder } from "@codemirror/state";
+import { indentWithTab } from "@codemirror/commands";
+import { indentUnit } from "@codemirror/language";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams } from "antlr4ts";
 
@@ -202,6 +205,10 @@ export async function createEditor({
 
         // 行折り返し
         EditorView.lineWrapping,
+
+        // Tabで2スペースインデント
+        keymap.of([indentWithTab]),
+        indentUnit.of("  "),
 
         EditorView.theme({
             "&": { height: "100%" },
