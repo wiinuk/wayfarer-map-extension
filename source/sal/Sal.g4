@@ -69,8 +69,10 @@ fragment WORD_PART: (WORD_START | [-.']);
 WORD: WORD_START WORD_PART*;
 
 // コメント
-LINE_COMMENT: '//' ~[\r\n]* -> skip;
-BLOCK_COMMENT: '/*' ( BLOCK_COMMENT | .)*? '*/' -> skip;
+LINE_COMMENT: '//' ~[\r\n]* -> channel(HIDDEN);
+BLOCK_COMMENT:
+    '/*' (BLOCK_COMMENT | .)*? '*/' -> channel(HIDDEN)
+;
 
 // 空白
 WS: [\p{Z}\p{C}]+ -> skip;
