@@ -225,31 +225,38 @@ describe("Sal Parser", () => {
             ]);
         });
 
-        it("should skip comments", () => {
+        it("should not skip comments", () => {
             const code = `
         // line comment
         a
-        /* block
-           comment */
+        /* block comment */
         b
       `;
             const tokens = new SalLexer(
                 CharStreams.fromString(code),
             ).getAllTokens();
-            expect(tokens.map((t) => t.text)).toEqual(["a", "b"]);
+            expect(tokens.map((t) => t.text)).toEqual([
+                "// line comment",
+                "a",
+                "/* block comment */",
+                "b",
+            ]);
         });
 
         it("should parse nested comments", () => {
             const code = `
         a
-        /* block
-           comment /* nested */ */
+        /* block comment /* nested */ */
         b
       `;
             const tokens = new SalLexer(
                 CharStreams.fromString(code),
             ).getAllTokens();
-            expect(tokens.map((t) => t.text)).toEqual(["a", "b"]);
+            expect(tokens.map((t) => t.text)).toEqual([
+                "a",
+                "/* block comment /* nested */ */",
+                "b",
+            ]);
         });
         it("should skip spaces", () => {
             const code = `a \u0009\u000B\u000C\u0020\u00A0\uFEFF\u1680\u3000 b`;
