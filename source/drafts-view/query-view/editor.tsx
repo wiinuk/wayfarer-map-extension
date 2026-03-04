@@ -17,10 +17,11 @@ import { EditorState, RangeSet, RangeSetBuilder } from "@codemirror/state";
 import { indentWithTab } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
-import { CharStreams } from "antlr4ts";
+import { CharStreams, Token } from "antlr4ts";
 
 const setStyle = styleSetter(cssText);
 
+type Styles = ReturnType<typeof createStyles>;
 function createStyles() {
     function tips(className: string) {
         return classNames["token-tips"] + " " + className;
@@ -41,6 +42,40 @@ function createStyles() {
         }),
         word: Decoration.mark({ class: tips(classNames["token-tips-word"]) }),
     };
+}
+
+function tokenTypeToDecoration(token: Token, styles: Styles) {
+    switch (token.type) {
+        case SalLexer.LINE_COMMENT:
+        case SalLexer.BLOCK_COMMENT:
+            return styles.comment;
+
+        case SalLexer.STRING:
+            return styles.string;
+
+        case SalLexer.NUMBER:
+            return styles.number;
+
+        case SalLexer.AND:
+        case SalLexer.OR:
+        case SalLexer.WHERE:
+        case SalLexer.FUNCTION:
+            return styles.keyword;
+
+        case SalLexer.AT:
+        case SalLexer.COLON:
+        case SalLexer.EQUALS:
+        case SalLexer.MINUS:
+        case SalLexer.PAREN_BEGIN:
+        case SalLexer.PAREN_END:
+        case SalLexer.SLASH:
+            return styles.special;
+
+        case SalLexer.WORD:
+            return styles.word;
+        default:
+            break;
+    }
 }
 
 function createDiffs(docString: string) {
@@ -90,19 +125,14 @@ class PosConverter {
 class SalTokenizerPlugin {
     readonly lexer = new SalLexer(CharStreams.fromString(""));
     readonly styles = createStyles();
-    positionMap: PosConverter;
     decorations: RangeSet<Decoration>;
     constructor(view: EditorView) {
-        this.positionMap = new PosConverter(view.state.doc.toString());
         this.decorations = this.tokenize(view);
     }
 
     // ドキュメントが変更されたら再解析する
     update(update: ViewUpdate) {
         if (update.docChanged || update.viewportChanged) {
-            this.positionMap = new PosConverter(
-                update.view.state.doc.toString(),
-            );
             this.decorations = this.tokenize(update.view);
         }
     }
@@ -114,50 +144,21 @@ class SalTokenizerPlugin {
 
         for (const { from, to } of view.visibleRanges) {
             const text = doc.sliceString(from, to);
+            const slicePositionMap = new PosConverter(text);
             lexer.inputStream = CharStreams.fromString(text);
             for (const token of lexer.getAllTokens()) {
-                let decoration;
-                switch (token.type) {
-                    case SalLexer.LINE_COMMENT:
-                    case SalLexer.BLOCK_COMMENT:
-                        decoration = styles.comment;
-                        break;
-
-                    case SalLexer.STRING:
-                        decoration = styles.string;
-                        break;
-
-                    case SalLexer.NUMBER:
-                        decoration = styles.number;
-                        break;
-
-                    case SalLexer.AND:
-                    case SalLexer.OR:
-                    case SalLexer.WHERE:
-                    case SalLexer.FUNCTION:
-                        decoration = styles.keyword;
-                        break;
-
-                    case SalLexer.AT:
-                    case SalLexer.COLON:
-                    case SalLexer.EQUALS:
-                    case SalLexer.MINUS:
-                    case SalLexer.PAREN_BEGIN:
-                    case SalLexer.PAREN_END:
-                    case SalLexer.SLASH:
-                        decoration = styles.special;
-                        break;
-
-                    case SalLexer.WORD:
-                        decoration = styles.word;
-                        break;
-                    default:
-                        break;
-                }
+                const decoration = tokenTypeToDecoration(token, styles);
                 if (decoration) {
-                    const from = this.positionMap.toCodeUnit(token.startIndex);
-                    const to = this.positionMap.toCodeUnit(token.stopIndex + 1);
-                    builder.add(from, to, decoration);
+                    const relativeTokenFrom = slicePositionMap.toCodeUnit(
+                        token.startIndex,
+                    );
+                    const relativeTokenTo = slicePositionMap.toCodeUnit(
+                        token.stopIndex + 1,
+                    );
+
+                    const absoluteTokenFrom = from + relativeTokenFrom;
+                    const absoluteTokenTo = from + relativeTokenTo;
+                    builder.add(absoluteTokenFrom, absoluteTokenTo, decoration);
                 }
             }
         }
