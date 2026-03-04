@@ -9,6 +9,7 @@ import TypedCssModulePlugin from "./esbuild-typed-css-module-plugin/index.js";
 import glslPlugin from "./esbuild-glsl-plugin/index.js";
 import chokidar from "chokidar";
 
+const cdnTypeFile = "./shims/cdn-generated.d.ts";
 const mainFile = "./wayfarer-map-extension.user.ts";
 const args = process.argv.slice(2);
 const esbuildOnly = args.includes("--esbuild-only");
@@ -16,6 +17,69 @@ const watchMode = args.includes("--watch");
 const wsHost = process.env.WS_HOST || "127.0.0.1";
 const wsPort = Number(process.env.WS_PORT || 35729);
 
+async function runCdnTypes() {
+    const cdnBase = "https://cdn.jsdelivr.net/npm";
+    const semver = await import("semver");
+
+    const {
+        default: { cdnOnly, devDependencies },
+    } = await import("./package.json", {
+        with: { type: "json" },
+    });
+
+    let contents = "";
+    function writeLine(/** @type {string} */ line) {
+        contents += line;
+        contents += `
+`;
+    }
+    for (const [name, spec] of Object.entries(cdnOnly)) {
+        const moduleName = /** @type {keyof typeof cdnOnly} */ (name);
+        const version = devDependencies[moduleName];
+        if (version == null) {
+            console.error(
+                `[cdn-types] Module '${moduleName}' is missing from devDependencies. Please install module '${moduleName}' with a fixed version.`,
+            );
+            return false;
+        }
+        if (semver.valid(version) === null) {
+            console.error(
+                `[cdn-types] Please specify a fixed version. module: ${moduleName}@${version}`,
+            );
+            return false;
+        }
+        const packageBaseUrl = `${cdnBase}/${moduleName}@${version}/`;
+
+        const specs = Array.isArray(spec) ? spec : [spec];
+        for (const spec of specs) {
+            let path;
+            if (typeof spec === "string") {
+                if (spec === "auto") {
+                    path = "+esm";
+                } else {
+                    console.error(
+                        `[cdn-types] unknown cdn spec: ${JSON.stringify(spec)}, expected spec is "auto"`,
+                    );
+                    return false;
+                }
+            } else {
+                path = spec.path;
+            }
+
+            const url = new URL(path, packageBaseUrl).href;
+            writeLine(`declare module ${JSON.stringify(url)} {`);
+            writeLine(`    export * from ${JSON.stringify(moduleName)};`);
+            writeLine(`}`);
+        }
+    }
+    await fs.writeFile(cdnTypeFile, contents);
+    console.log(`[cdn-types] generated: ${cdnTypeFile}`);
+    return true;
+}
+
+/**
+ * @returns {Promise<boolean>}
+ */
 async function runAntlr() {
     console.log("[antlr] Running antlr4ts...");
     return new Promise((resolve) => {
@@ -181,6 +245,7 @@ async function build() {
     if (watchMode) {
         const context = await esbuild.context(baseOptions);
         await runAntlr();
+        await runCdnTypes();
         await context.watch({
             delay: 3000,
         });
@@ -199,6 +264,11 @@ async function build() {
         const antlrPassed = await runAntlr();
         if (!antlrPassed) {
             console.error("Build aborted due to antlr4ts errors.");
+            process.exit(1);
+        }
+        const cdnTypesPassed = await runCdnTypes();
+        if (!cdnTypesPassed) {
+            console.error("Build aborted due to cdn-types errors.");
             process.exit(1);
         }
         const tscPassed = await runTsc();

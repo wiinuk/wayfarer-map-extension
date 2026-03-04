@@ -7,8 +7,8 @@ import js from "@eslint/js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
 import { FlatCompat } from "@eslint/eslintrc";
+import PackageJson from "./package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,26 +88,11 @@ export default defineConfig([
             "@typescript-eslint/no-restricted-imports": [
                 "error",
                 {
-                    paths: [
-                        {
-                            name: "pixi.js",
-                            message:
-                                "型定義か動的インポートを利用してください。",
-                            allowTypeImports: true,
-                        },
-                        {
-                            name: "Comlink",
-                            message:
-                                "型定義か動的インポートを利用してください。",
-                            allowTypeImports: true,
-                        },
-                        {
-                            name: "zod",
-                            message:
-                                "型定義か動的インポートを利用してください。",
-                            allowTypeImports: true,
-                        },
-                    ],
+                    paths: Object.keys(PackageJson.cdnOnly).map((name) => ({
+                        name,
+                        message: "型定義か動的インポートを利用してください。",
+                        allowTypeImports: true,
+                    })),
                 },
             ],
         },
