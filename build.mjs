@@ -21,11 +21,10 @@ async function runCdnTypes() {
     const cdnBase = "https://cdn.jsdelivr.net/npm";
     const semver = await import("semver");
 
-    const {
-        default: { cdnOnly, devDependencies },
-    } = await import("./package.json", {
-        with: { type: "json" },
-    });
+    /** @type {typeof import("./package.json")} */
+    const { cdnOnly, devDependencies } = JSON.parse(
+        await fs.readFile("./package.json", "utf-8"),
+    );
 
     let contents = "";
     function writeLine(/** @type {string} */ line) {

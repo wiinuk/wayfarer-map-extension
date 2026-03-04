@@ -10,9 +10,3 @@ declare module "https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm" {
 declare module "https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs" {
     export * from "pixi.js";
 }
-declare module "https://cdn.jsdelivr.net/npm/@codemirror/lint@6.9.5/+esm" {
-    export * from "@codemirror/lint";
-}
-declare module "https://cdn.jsdelivr.net/npm/codemirror@6.0.2/+esm" {
-    export * from "codemirror";
-}

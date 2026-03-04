@@ -88,8 +88,8 @@ export default defineConfig([
             "@typescript-eslint/no-restricted-imports": [
                 "error",
                 {
-                    paths: Object.keys(PackageJson.cdnOnly).map((name) => ({
-                        name,
+                    patterns: Object.keys(PackageJson.cdnOnly).map((name) => ({
+                        group: [name, `${name}/*`],
                         message: "型定義か動的インポートを利用してください。",
                         allowTypeImports: true,
                     })),
