@@ -99,8 +99,8 @@ function getDictionaryEntry(page: PageResource, key: keyof Dictionary) {
         page.defaultDictionary[key]
     );
 }
-function setupDraftManagerDialog(page: PageResource) {
-    const draftList = createDraftList({
+async function setupDraftManagerDialog(page: PageResource) {
+    const draftList = await createDraftList({
         overlay: page.drafts,
         remote: page.remote,
         records: page.records,
@@ -159,7 +159,7 @@ async function asyncSetup(signal: AbortSignal) {
 
     await setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
-    setupDraftManagerDialog(page);
+    await setupDraftManagerDialog(page);
     await setupDraftsOverlay(page.drafts, local, scheduler);
 }
 

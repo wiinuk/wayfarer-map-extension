@@ -3,11 +3,34 @@
     width: 100%;
     overflow: hidden;
 }
-.textarea {
-    height: 100%;
-    width: 100%;
-    resize: none;
-    font-family: "Courier New", Courier, monospace;
 
-    background-color: transparent;
+.token-keyword {
+    color: blue;
+}
+.token-number {
+    color: darkgreen;
+}
+.token-special {
+    color: gray;
+    font-weight: bold;
+}
+
+.token-tips {
+    position: relative;
+    z-index: 0;
+
+    border-radius: 1em;
+    box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.token-tips-comment {
+    color: #244b12;
+    background-color: #d5ffef;
+    --border-color: #78fb3c;
+}
+.token-tips-string,
+.token-tips-word {
+    color: #412b11;
+    background-color: #fff7d5;
+    --border-color: #fba83c;
 }

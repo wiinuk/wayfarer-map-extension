@@ -120,7 +120,7 @@ function openGoogleMaps({ lat, lng }: LatLng, title: string) {
 }
 
 const setStyle = styleSetter(cssText);
-export function createDraftList({
+export async function createDraftList({
     overlay,
     remote,
     records,
@@ -145,7 +145,10 @@ export function createDraftList({
         title: "検索一覧",
     });
 
-    const editor = createEditor({ initialText: getSelectedSource() ?? "" });
+    const editor = await createEditor({
+        initialFileName: getSelectedSourceId() ?? "",
+        initialText: getSelectedSource() ?? "",
+    });
     const editorDialog = createDialog(editor.element, {
         title: "検索ワードを編集",
     });
@@ -212,25 +215,37 @@ export function createDraftList({
         });
     });
     editor.events.addEventListener("input", ({ detail: value }) => {
-        setSelectedSourceAndNotify(value);
+        setSelectedSourceAndNotify(value, false);
     });
-    function setCurrentSourcesAndNotify(newSources: typeof currentSources) {
+    function setCurrentSourcesAndNotify(
+        newSources: typeof currentSources,
+        updateEditor = true,
+    ) {
         currentSources = newSources;
         sourceList.setSources(currentSources);
+        const selectedSourceId = getSelectedSourceId() ?? "";
         const selectedSource = getSelectedSource() ?? "";
 
         // 選択中のソースが更新されたかもしれないので処理
         filterInput.setValue(selectedSource);
         requestFilterUpdate();
 
-        editor.setSource(selectedSource);
+        if (updateEditor) {
+            editor.setSource(selectedSourceId, selectedSource);
+        }
         local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
         return currentSources.sources[currentSources.selectedIndex ?? -1]
             ?.contents;
     }
-    function setSelectedSourceAndNotify(newContents: string) {
+    function getSelectedSourceId() {
+        return currentSources.sources[currentSources.selectedIndex ?? -1]?.id;
+    }
+    function setSelectedSourceAndNotify(
+        newContents: string,
+        updateEditor = true,
+    ) {
         const index = currentSources.selectedIndex ?? -1;
         const source = currentSources.sources[index];
         if (source == null) return;
@@ -240,7 +255,10 @@ export function createDraftList({
             contents: newContents,
         }) as QuerySource[] as [QuerySource, ...QuerySource[]]; // 削除して追加するので元と同じ
 
-        setCurrentSourcesAndNotify({ ...currentSources, sources });
+        setCurrentSourcesAndNotify(
+            { ...currentSources, sources },
+            updateEditor,
+        );
     }
 
     overlay.events.addEventListener("selection-changed", ({ detail: id }) => {
