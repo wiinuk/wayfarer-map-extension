@@ -28,7 +28,12 @@ export function newCirclesMeshBuilder(
     const fillColors: number[] = [];
     const strokeColors: number[] = [];
 
-    function add(center: LatLng, radius: number, options: WayspotOptions) {
+    function add(
+        center: LatLng,
+        radius: number,
+        options: WayspotOptions,
+        strength: number,
+    ) {
         const strokeWidth = options.borderWidth;
         const fillColor = normalizeColor(options.fillColor);
         const strokeColor = normalizeColor(options.borderColor);
@@ -43,8 +48,18 @@ export function newCirclesMeshBuilder(
             centers.push(x - cellX, y - cellY);
             radiuses.push(radius);
             strokeWidths.push(strokeWidth);
-            fillColors.push(...fillColor);
-            strokeColors.push(...strokeColor);
+            fillColors.push(
+                fillColor[0],
+                fillColor[1],
+                fillColor[2],
+                fillColor[3] * strength,
+            );
+            strokeColors.push(
+                strokeColor[0],
+                strokeColor[1],
+                strokeColor[2],
+                strokeColor[3] * strength,
+            );
         }
         indices.push(
             vOffset + 0,

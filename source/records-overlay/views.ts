@@ -49,6 +49,7 @@ function createCell14Label(
     { PIXI, cell14LabelTextStyle }: CanvasRenderer,
     text: string,
     { lat, lng }: LatLng,
+    strength: number,
 ) {
     const pointResultCache = createZeroPoint();
     const { x: worldX, y: worldY } = latLngToWorldPoint(
@@ -63,6 +64,7 @@ function createCell14Label(
     label.anchor.set(0.5);
     label.x = worldX;
     label.y = worldY;
+    label.alpha = strength;
     return label;
 }
 
@@ -103,6 +105,19 @@ function sumGymAndPokestopCount({ kindToPois }: Cell14Statistics) {
         (kindToPois.get("POKESTOP")?.length ?? 0)
     );
 }
+
+function isObsolete(stat14: Cell14Statistics) {
+    const freshnessInterval = 1000 * 60 * 60 * 24 * 7;
+    const lastFetchDate = stat14.minLastFetchDate ?? stat14.maxLastFetchDate;
+    return (
+        lastFetchDate === undefined ||
+        lastFetchDate < Date.now() - freshnessInterval
+    );
+}
+function getStrength(stat14: Cell14Statistics) {
+    return isObsolete(stat14) ? 0.3 : 1;
+}
+
 export function addCell14Bound(
     renderer: CanvasRenderer,
     cellViews: CellViews,
@@ -112,7 +127,11 @@ export function addCell14Bound(
     const entityCount = sumGymAndPokestopCount(cell14);
     const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
     const options = getCell14Options(store, entityCount, coverRate);
-    return cellViews.cellMeshBuilder.add(cell14.corner, options);
+    return cellViews.cellMeshBuilder.add(
+        cell14.corner,
+        options,
+        getStrength(cell14),
+    );
 }
 
 export function createCell17CountLabel(
@@ -122,7 +141,8 @@ export function createCell17CountLabel(
     const count = sumGymAndPokestopCount(cell14);
     if (count <= 0) return;
 
-    return createCell14Label(renderer, `${count}`, cell14.center);
+    const strength = getStrength(cell14);
+    return createCell14Label(renderer, `${count}`, cell14.center, strength);
 }
 
 function has(kind: EntityKind, cell17: CellStatistic<17>) {
@@ -145,7 +165,7 @@ export function addCell17Bounds(
             options = store.cell17EmptyOptions;
         }
         const path = cell17.cell.getCornerLatLngs();
-        builder.add(path, options);
+        builder.add(path, options, getStrength(stat14));
     }
 }
 
@@ -193,7 +213,7 @@ export function addCell14PoiCircles(
             zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
         for (const poi of pois) {
             if (!poi.data.isCommunityContributed) continue;
-            builder.add(poi, radius, options);
+            builder.add(poi, radius, options, getStrength(stat14));
         }
     }
 }
@@ -317,6 +337,8 @@ export function createCell14PoiNames(
     );
     // 上位POIのみを残す
     pois.length = Math.min(pois.length, maxPois);
+
+    const strength = getStrength(stat14);
     return pois.map((poi) => {
         const { worldX, worldY, text, style } = createPoiLabelView(
             renderer,
@@ -328,6 +350,7 @@ export function createCell14PoiNames(
         label.x = worldX;
         label.y = worldY;
         label.anchor.set(0.5, -0.5);
+        label.alpha = strength;
         return label;
     });
 }

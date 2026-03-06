@@ -20,7 +20,11 @@ export function newCellMeshBuilder(
     const fillColors: number[] = [];
     const strokeColors: number[] = [];
     const lineWidths: number[] = [];
-    function add(cornerPath: readonly LatLng[], options: Cell17Options) {
+    function add(
+        cornerPath: readonly LatLng[],
+        options: Cell17Options,
+        strength: number,
+    ) {
         if (cornerPath.length !== cornerCount) return raise`internal error`;
 
         const fillColor = normalizeColor(options.fillColor);
@@ -32,8 +36,18 @@ export function newCellMeshBuilder(
             const { lat, lng } = cornerPath[i]!;
             const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
             vertices.push(x - cellX, y - cellY);
-            fillColors.push(...fillColor);
-            strokeColors.push(...strokeColor);
+            fillColors.push(
+                fillColor[0],
+                fillColor[1],
+                fillColor[2],
+                fillColor[3] * strength,
+            );
+            strokeColors.push(
+                strokeColor[0],
+                strokeColor[1],
+                strokeColor[2],
+                strokeColor[3] * strength,
+            );
             lineWidths.push(lineWidth);
         }
         uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
