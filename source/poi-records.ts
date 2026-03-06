@@ -356,6 +356,8 @@ export interface Cell14Statistics {
     readonly id: CellId<14>;
     readonly pois: Map<string, PoiRecord>;
     readonly kindToPois: Map<EntityKind | "", PoiRecord[]>;
+    minLastFetchDate: number | undefined;
+    maxLastFetchDate: number | undefined;
 }
 function createEmptyCell14Statistics(cell: Cell<14>): Cell14Statistics {
     return {
@@ -367,6 +369,8 @@ function createEmptyCell14Statistics(cell: Cell<14>): Cell14Statistics {
         cell17s: new Map(),
         cell16s: new Map(),
         kindToPois: new Map(),
+        minLastFetchDate: undefined,
+        maxLastFetchDate: undefined,
     };
 }
 function updateCellStatisticsByCell<TLevel extends number>(
@@ -444,6 +448,15 @@ export async function getCell14Stats(
         }
 
         cell14 ??= createEmptyCell14Statistics(cell);
+
+        cell14.minLastFetchDate = Math.min(
+            (cell14.minLastFetchDate ??= childCell.lastFetchDate),
+            childCell.lastFetchDate,
+        );
+        cell14.maxLastFetchDate = Math.max(
+            (cell14.maxLastFetchDate ??= childCell.lastFetchDate),
+            childCell.lastFetchDate,
+        );
 
         const cell17 = createCellFromCoordinates(
             { lat: childCell.centerLat, lng: childCell.centerLng },
