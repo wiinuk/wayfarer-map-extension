@@ -19,7 +19,7 @@ import {
     getCancel,
     type Effective,
 } from "../sal/effective";
-import { evaluateExpression } from "../sal/evaluator";
+import { evaluateExpression, type ErrorReporter } from "../sal/evaluator";
 import { cached, memoizeWith } from "../standard-extensions";
 import {
     createCellFromCoordinates,
@@ -146,9 +146,14 @@ export async function filterDrafts(
     drafts: readonly Draft[],
     source: string,
     signal: AbortSignal,
+    reportError: ErrorReporter,
 ): Promise<Draft[]> {
     const queryGlobals = createStandardQueries();
-    const effective = evaluateExpression(source, (k) => queryGlobals.get(k));
+    const effective = evaluateExpression(
+        source,
+        (k) => queryGlobals.get(k),
+        reportError,
+    );
     const filter = await forceAsPromise(effective, signal);
     const queryBuilder = filter as unknown as DraftQueryBuilder;
     const environment = createEnvironment(records, drafts);

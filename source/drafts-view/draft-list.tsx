@@ -21,7 +21,7 @@ import { styleSetter } from "../dom-extensions";
 import { createSourceList } from "./query-view/source-list";
 import { filterDrafts } from "./draft-filter";
 import { createAsyncCancelScope, sleep } from "../standard-extensions";
-import { createEditor } from "./query-view/editor";
+import { createEditor, type SalDiagnostic } from "./query-view/editor";
 import type { PoiRecords } from "../poi-records";
 import { SalEvaluationError } from "../sal/evaluator";
 
@@ -628,28 +628,55 @@ export async function createDraftList({
     };
     updateDetailPane();
 
+    function errorToDiagnostic(e: Error): SalDiagnostic {
+        let start = 0;
+        let stop = 0;
+        if (e instanceof SalEvaluationError && e.range) {
+            start = e.range.start.index;
+            stop = e.range.stop.index;
+        }
+        return {
+            start,
+            stop,
+            message: e.message,
+            severity: "error",
+            source: "evaluator",
+        };
+    }
     const applyFilterCancelScope = createAsyncCancelScope(handleAsyncError);
     const requestFilterUpdate = () =>
         applyFilterCancelScope(async (signal) => {
             await sleep(500, { signal });
+            const queryId = getSelectedSourceId() ?? "";
             const query = getSelectedSource() ?? "";
 
             events.dispatchEvent(
                 createTypedCustomEvent("filter-start", undefined),
             );
+            const diagnostics: SalDiagnostic[] = [];
             try {
                 filteredDrafts = await filterDrafts(
                     records,
                     allDrafts,
                     query,
                     signal,
+                    (message, start, stop) => {
+                        diagnostics.push({
+                            severity: "error",
+                            start,
+                            stop,
+                            message,
+                            source: "parser",
+                        });
+                    },
                 );
+                editor.setErrors(queryId, diagnostics);
             } catch (e) {
-                const id = getSelectedSourceId();
-                if (id && e instanceof Error) {
-                    const range =
-                        e instanceof SalEvaluationError ? e.range : undefined;
-                    editor.setError(id, e.message, range);
+                if (e instanceof Error) {
+                    editor.setErrors(queryId, [
+                        ...diagnostics,
+                        errorToDiagnostic(e),
+                    ]);
                 }
                 throw e;
             } finally {

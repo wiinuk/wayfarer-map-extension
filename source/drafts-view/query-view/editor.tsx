@@ -198,6 +198,14 @@ function createSalTokenHighlighter() {
     });
 }
 
+export interface SalDiagnostic {
+    readonly severity: "error";
+    readonly message: string;
+    readonly start: number;
+    readonly stop: number;
+    readonly source?: string;
+}
+
 export async function createEditor({
     initialFileName,
     initialText,
@@ -206,40 +214,26 @@ export async function createEditor({
     initialText: string;
 }) {
     setStyle();
-    const fileErrors = new Map<
-        string,
-        { message: string; range: SourceRange | undefined }
-    >();
+    const fileErrors = new Map<string, readonly SalDiagnostic[]>();
 
     let currentFileName = initialFileName;
     const errorLinter = linter((view) => {
+        const errors = fileErrors.get(currentFileName) ?? [];
         const diagnostics: Diagnostic[] = [];
-        const error = fileErrors.get(currentFileName);
-        if (!error) return diagnostics;
+        const text = view.state.doc.toString();
+        const slicePositionMap = new PosConverter(text);
 
-        const { message, range } = error;
-        const doc = view.state.doc;
-
-        let from = 0;
-        let to = doc.length;
-
-        if (range) {
-            const startLine = doc.line(range.start.line);
-            const startOffset = startLine.from + range.start.column;
-
-            const stopLine = doc.line(range.stop.line);
-            const stopOffset = stopLine.from + range.stop.column;
-
-            from = startOffset;
-            to = stopOffset;
+        for (const error of errors) {
+            const from = slicePositionMap.toCodeUnit(error.start);
+            const to = slicePositionMap.toCodeUnit(error.stop + 1);
+            diagnostics.push({
+                severity: "error",
+                from,
+                to,
+                message: error.message,
+                source: error.source,
+            });
         }
-
-        diagnostics.push({
-            from,
-            to,
-            severity: "error",
-            message,
-        });
         return diagnostics;
     });
 
@@ -389,21 +383,16 @@ export async function createEditor({
         currentFileName = fileName;
         switchFile(fileName, value);
     }
-    function setError(
+    function setErrors(
         fileName: string,
-        message: string,
-        range: SourceRange | undefined,
+        diagnostics: readonly SalDiagnostic[],
     ) {
-        if (message) {
-            fileErrors.set(fileName, { message, range });
-        } else {
-            fileErrors.delete(fileName);
-        }
+        fileErrors.set(fileName, diagnostics);
     }
     return {
         element,
         events,
         setSource,
-        setError,
+        setErrors,
     };
 }

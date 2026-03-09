@@ -4,6 +4,7 @@ import {
     CommonTokenStream,
     ParserRuleContext,
     Token,
+    type ANTLRErrorListener,
 } from "antlr4ts";
 import { SalLexer } from "./.antlr-generated/SalLexer";
 import {
@@ -38,6 +39,7 @@ import { done, type Effective } from "./effective";
 export interface SourcePosition {
     readonly line: number;
     readonly column: number;
+    readonly index: number;
 }
 export interface SourceRange {
     readonly start: SourcePosition;
@@ -80,10 +82,12 @@ export function getNodeRange(node: LocatableNode): SourceRange {
         start: {
             line: start.line,
             column: start.charPositionInLine,
+            index: start.startIndex,
         },
         stop: {
             line: stop.line,
             column: stop.charPositionInLine + (stop.text?.length ?? 0),
+            index: stop.stopIndex,
         },
     };
 }
@@ -507,14 +511,52 @@ function createStandardGlobals() {
     return new Map<string, Value>(Object.entries(globals));
 }
 
+export type ErrorReporter = (
+    message: string,
+    startIndex: number,
+    stopIndex: number,
+) => void;
 export function evaluateExpression(
     source: string,
     resolveGlobal: (key: string) => Value | undefined,
+    reportError?: ErrorReporter,
 ) {
     const chars = CharStreams.fromString(source);
     const lexer = new SalLexer(chars);
     const tokens = new CommonTokenStream(lexer);
     const parser = new SalParser(tokens);
+
+    if (reportError) {
+        const errorListener: ANTLRErrorListener<number | Token> = {
+            syntaxError(
+                recognizer,
+                offendingSymbol,
+                _line,
+                _charPositionInLine,
+                message,
+                _exception,
+            ) {
+                if (typeof offendingSymbol !== "number") {
+                    if (offendingSymbol != null) {
+                        reportError(
+                            message,
+                            offendingSymbol.startIndex,
+                            offendingSymbol.stopIndex,
+                        );
+                    }
+                } else {
+                    if (recognizer.inputStream) {
+                        const startIndex = recognizer.inputStream.index;
+                        reportError(message, startIndex, startIndex + 1);
+                    }
+                }
+            },
+        };
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(errorListener);
+        parser.removeErrorListeners();
+        parser.addErrorListener(errorListener);
+    }
     const tree = parser.sourceFile();
 
     const globals = createStandardGlobals();
