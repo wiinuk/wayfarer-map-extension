@@ -347,9 +347,23 @@ export async function createEditor({
 
     const fileStates = new Map<string, EditorState>();
     function switchFile(newFileName: string, newContent: string) {
-        const status = fileStates.get(newFileName);
-        if (status != null) {
-            view.setState(status);
+        const cachedState = fileStates.get(newFileName);
+        if (cachedState != null) {
+            if (cachedState.doc.toString() === newContent) {
+                view.setState(cachedState);
+                return;
+            }
+
+            const transaction = cachedState.update({
+                changes: {
+                    from: 0,
+                    to: cachedState.doc.length,
+                    insert: newContent,
+                },
+            });
+            const updatedState = transaction.state;
+            fileStates.set(newFileName, updatedState);
+            view.setState(updatedState);
             return;
         }
 
