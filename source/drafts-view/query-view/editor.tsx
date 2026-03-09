@@ -36,7 +36,7 @@ import {
 } from "@codemirror/language";
 import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { lintKeymap } from "@codemirror/lint";
+import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams, Token } from "antlr4ts";
 import type { SourceRange } from "../../sal/evaluator";
@@ -206,12 +206,50 @@ export async function createEditor({
     initialText: string;
 }) {
     setStyle();
+    const fileErrors = new Map<
+        string,
+        { message: string; range: SourceRange | undefined }
+    >();
+
+    let currentFileName = initialFileName;
+    const errorLinter = linter((view) => {
+        const diagnostics: Diagnostic[] = [];
+        const error = fileErrors.get(currentFileName);
+        if (!error) return diagnostics;
+
+        const { message, range } = error;
+        const doc = view.state.doc;
+
+        let from = 0;
+        let to = doc.length;
+
+        if (range) {
+            const startLine = doc.line(range.start.line);
+            const startOffset = startLine.from + range.start.column;
+
+            const stopLine = doc.line(range.stop.line);
+            const stopOffset = stopLine.from + range.stop.column;
+
+            from = startOffset;
+            to = stopOffset;
+        }
+
+        diagnostics.push({
+            from,
+            to,
+            severity: "error",
+            message,
+        });
+        return diagnostics;
+    });
+
     const events = createTypedEventTarget<{ input: string }>();
 
     let isDispatching = false;
     const notifyInputPlugin = EditorView.updateListener.of((update) => {
         if (isDispatching) return;
         if (update.docChanged) {
+            fileErrors.delete(currentFileName);
             try {
                 isDispatching = true;
                 events.dispatchEvent(
@@ -253,6 +291,9 @@ export async function createEditor({
 
         // シンタックスハイライト
         createSalTokenHighlighter(),
+
+        // エラーに波線
+        errorLinter,
 
         // 行折り返し
         EditorView.lineWrapping,
@@ -304,7 +345,6 @@ export async function createEditor({
         parent: element,
     });
 
-    let currentFileName = initialFileName;
     const fileStates = new Map<string, EditorState>();
     function switchFile(newFileName: string, newContent: string) {
         const status = fileStates.get(newFileName);
@@ -340,7 +380,11 @@ export async function createEditor({
         message: string,
         range: SourceRange | undefined,
     ) {
-        // TODO:
+        if (message) {
+            fileErrors.set(fileName, { message, range });
+        } else {
+            fileErrors.delete(fileName);
+        }
     }
     return {
         element,
