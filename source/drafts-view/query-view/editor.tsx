@@ -5,17 +5,39 @@ import {
     createTypedEventTarget,
 } from "../../typed-event-target";
 import classNames, { cssText } from "./editor.module.css";
-import { basicSetup } from "codemirror";
 import {
     EditorView,
     Decoration,
     ViewPlugin,
     ViewUpdate,
     keymap,
+    lineNumbers,
+    highlightSpecialChars,
+    drawSelection,
+    dropCursor,
+    rectangularSelection,
+    crosshairCursor,
+    highlightActiveLine,
+    highlightActiveLineGutter,
 } from "@codemirror/view";
-import { EditorState, RangeSet, RangeSetBuilder } from "@codemirror/state";
-import { indentWithTab } from "@codemirror/commands";
-import { indentUnit } from "@codemirror/language";
+import {
+    EditorState,
+    RangeSet,
+    RangeSetBuilder,
+    type Extension,
+} from "@codemirror/state";
+import { defaultKeymap, indentWithTab, history } from "@codemirror/commands";
+import {
+    bracketMatching,
+    defaultHighlightStyle,
+    foldGutter,
+    indentOnInput,
+    indentUnit,
+    syntaxHighlighting,
+} from "@codemirror/language";
+import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { lintKeymap } from "@codemirror/lint";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams, Token } from "antlr4ts";
 
@@ -146,7 +168,12 @@ class SalTokenizerPlugin {
             const text = doc.sliceString(from, to);
             const slicePositionMap = new PosConverter(text);
             lexer.inputStream = CharStreams.fromString(text);
-            for (const token of lexer.getAllTokens()) {
+
+            for (
+                let token = lexer.nextToken();
+                token.type !== Token.EOF;
+                token = lexer.nextToken()
+            ) {
                 const decoration = tokenTypeToDecoration(token, styles);
                 if (decoration) {
                     const relativeTokenFrom = slicePositionMap.toCodeUnit(
@@ -198,6 +225,29 @@ export async function createEditor({
             }
         }
     });
+
+    const basicSetup: Extension = [
+        keymap.of(defaultKeymap),
+        // lineNumbers()
+        highlightSpecialChars(),
+        history(),
+        foldGutter(),
+        drawSelection(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        indentOnInput(),
+        syntaxHighlighting(defaultHighlightStyle),
+        bracketMatching(),
+        closeBrackets(),
+        autocompletion(),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        highlightSelectionMatches(),
+        keymap.of(searchKeymap),
+        keymap.of(lintKeymap),
+    ];
     const extensions = [
         basicSetup,
 
@@ -211,16 +261,32 @@ export async function createEditor({
         keymap.of([indentWithTab]),
         indentUnit.of("  "),
 
-        EditorView.theme({
-            "&": { height: "100%" },
+        EditorView.theme(
+            {
+                "&": { height: "100%" },
 
-            // モバイルでのズーム防止
-            ".cm-content": { fontSize: "16px" },
-            ".cm-lintRange-error": {
-                backgroundImage: "none",
-                textDecoration: "underline wavy #e74c3c",
+                // モバイルでのズーム防止
+                ".cm-content": {
+                    fontSize: "16px",
+                    fontFamily: `font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDGothic", "Segoe UI Mono", "Roboto Mono", monospace;
+`,
+                },
+                // 選択色
+                ".cm-selectionBackground": {
+                    backgroundColor: "#1890ff !important",
+                },
+                // 行番号
+                ".cm-gutters": {
+                    fontFamily: "inherit",
+                },
+
+                ".cm-lintRange-error": {
+                    backgroundImage: "none",
+                    textDecoration: "underline wavy #e74c3c",
+                },
             },
-        }),
+            { dark: false },
+        ),
 
         // 優先順位を確実にするためのベーステーマ設定
         EditorView.baseTheme({
