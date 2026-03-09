@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.5.2
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -10415,7 +10415,7 @@
       var Decorators_1 = require_Decorators();
       var RuleContext_1 = require_RuleContext();
       var TerminalNode_1 = require_TerminalNode();
-      var ParserRuleContext2 = class _ParserRuleContext extends RuleContext_1.RuleContext {
+      var ParserRuleContext3 = class _ParserRuleContext extends RuleContext_1.RuleContext {
         constructor(parent, invokingStateNumber) {
           if (invokingStateNumber == null) {
             super();
@@ -10651,17 +10651,17 @@
           return "ParserRuleContext" + rules + "{start=" + this._start + ", stop=" + this._stop + "}";
         }
       };
-      ParserRuleContext2.EMPTY = new ParserRuleContext2();
+      ParserRuleContext3.EMPTY = new ParserRuleContext3();
       __decorate([
         Decorators_1.Override
-      ], ParserRuleContext2.prototype, "parent", null);
+      ], ParserRuleContext3.prototype, "parent", null);
       __decorate([
         Decorators_1.Override
-      ], ParserRuleContext2.prototype, "childCount", null);
+      ], ParserRuleContext3.prototype, "childCount", null);
       __decorate([
         Decorators_1.Override
-      ], ParserRuleContext2.prototype, "sourceInterval", null);
-      exports.ParserRuleContext = ParserRuleContext2;
+      ], ParserRuleContext3.prototype, "sourceInterval", null);
+      exports.ParserRuleContext = ParserRuleContext3;
     }
   });
 
@@ -20555,9 +20555,9 @@
     throw new Error(String.raw(templateStringsArray, ...substitutions));
   }
   var AbortError = class extends Error {
+    name = "AbortError";
     constructor(message) {
       super(message);
-      this.name = "AbortError";
     }
   };
   function newAbortError(message = "The operation was aborted.") {
@@ -21568,7 +21568,7 @@
 
   // source/records-overlay/canvas-renderer.worker.ts?worker
   function Worker2() {
-    return inlineWorker('var Ye=Object.defineProperty,Ze=Object.defineProperties;var He=Object.getOwnPropertyDescriptors;var J=Object.getOwnPropertySymbols;var Je=Object.prototype.hasOwnProperty,$e=Object.prototype.propertyIsEnumerable;var V=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),ze=t=>{throw TypeError(t)};var $=(t,e,n)=>e in t?Ye(t,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):t[e]=n,C=(t,e)=>{for(var n in e||(e={}))Je.call(e,n)&&$(t,n,e[n]);if(J)for(var n of J(e))$e.call(e,n)&&$(t,n,e[n]);return t},I=(t,e)=>Ze(t,He(e));var et=function(t,e){this[0]=t,this[1]=e};var W=t=>{var e=t[V("asyncIterator")],n=!1,s,a={};return e==null?(e=t[V("iterator")](),s=l=>a[l]=u=>e[l](u)):(e=e.call(t),s=l=>a[l]=u=>{if(n){if(n=!1,l==="throw")throw u;return u}return n=!0,{done:!1,value:new et(new Promise(d=>{var o=e[l](u);o instanceof Object||ze("Object expected"),d(o)}),1)}}),a[V("iterator")]=()=>a,s("next"),"throw"in e?s("throw"):a.throw=l=>{throw l},"return"in e&&s("return"),a};function z(t=128){let e=new Map;function n(o,r){return o<<16|r&65535}function s(o,r){let i=o.x-o.width/2,c=o.x+o.width/2,f=o.y-o.height/2,p=o.y+o.height/2,m=Math.floor(i/t),T=Math.floor(c/t),y=Math.floor(f/t),h=Math.floor(p/t);for(let g=m;g<=T;g++)for(let S=y;S<=h;S++)r.push(n(g,S))}let a=[];function l(o){s(o,a);try{for(let r of a){let i=e.get(r);i||(i=[],e.set(r,i)),i.push(o)}}finally{a.length=0}}let u=new Set;function d(o){s(o,a);try{for(let r of a){let i=e.get(r);if(i)for(let c of i)u.add(c)}for(let r of u){if(o.key===r.key)continue;let i=Math.abs(o.x-r.x),c=(o.width+r.width)/2;if(i>=c)continue;let f=Math.abs(o.y-r.y),p=(o.height+r.height)/2;if(!(f>=p))return!0}}finally{u.clear(),a.length=0}return!1}return{addBox:l,check:d}}var U=256,ee=Math.PI,tt=ee/180,nt=U/360,rt=U/(2*ee),ot=U/2;function w(t,e,n){let s=(e+180)*nt,a=Math.sin(t*tt),l=a>.9999?.9999:a<-.9999?-.9999:a,u=ot-Math.atanh(l)*rt;return n.x=s,n.y=u,n}function R(){return{x:0,y:0}}function te(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function ne(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function re(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function oe(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?at(t,e):!1}function at(t,e){let n=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!n&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:O(t,e.sw.lng)||O(t,e.ne.lng)||O(e,t.sw.lng)||O(e,t.ne.lng)||n&&s}function O(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function G(t){return t}function se(...t){}function ie(t,...e){throw new Error(String.raw(t,...e))}var X=class extends Error{constructor(n){super(n);this.name="AbortError"}};function le(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new X(t)}function ce(t){return new Promise((e,n)=>{if(t.aborted)return n(t.reason);let s=()=>{cancelAnimationFrame(a),t.removeEventListener("abort",s)},a=requestAnimationFrame(l=>{s(),e(l)});t.addEventListener("abort",s,{once:!0})})}function de(t){let e=new Map;return{async task(n,...s){let a=new AbortController;e.set(n,a);try{return await t(a.signal,...s)}finally{e.delete(n)}},cancelTask(n){let s=e.get(n);s&&(s.abort(),e.delete(n))}}}function st(t,e){for(let[n,s]of Object.entries(e)){let a=t.createObjectStore(n,{keyPath:s.key.slice()});for(let[l,u]of Object.entries(s.indexes))a.createIndex(l,u.key,u)}}function ue(t,e,n){return new Promise((s,a)=>{let l=indexedDB.open(t,e);l.addEventListener("upgradeneeded",()=>st(l.result,n)),l.addEventListener("blocked",()=>a(new Error("database blocked"))),l.addEventListener("error",()=>a(l.error)),l.addEventListener("success",()=>s(l.result))})}var B=class{constructor(e,n,s){this.source=e;this.query=n;this.action=s}};function fe(t,{mode:e,signal:n},s,...a){return new Promise((l,u)=>{if(n!=null&&n.aborted){u(le());return}let d=!1,o,r=t.transaction(a,e),i=n?()=>{d||r.abort()}:se;r.addEventListener("complete",()=>{n==null||n.removeEventListener("abort",i),d?l(o):u(new Error("internal error"))}),r.addEventListener("error",x=>{n==null||n.removeEventListener("abort",i),u(x.target.error)}),n==null||n.addEventListener("abort",i);let c={};for(let x of a)c[x]=r.objectStore(x);let f=s(c),p,m,T,y,h,g;function S(){let x;switch(p){case void 0:x=f.next();break;case"Request":{let v=m.result;p=void 0,m=void 0,x=f.next(v);break}case"WaitRequests":{let v=T,L=y,k=L[v.length].result;if(v.push(k),v.length!==L.length)return;p=void 0,y=void 0,T=void 0,x=f.next(v);break}case"OpenCursor":{let v=h.result;if(v===null||g(v.value)==="break")p=void 0,h=void 0,g=void 0,x=f.next(void 0);else{v.continue();return}break}default:{u(new Error(`Invalid resolving kind: ${p}`));return}}if(x.done){d=!0,o=x.value;return}let b=x.value;if(b instanceof IDBRequest){p="Request",m=b,b.onsuccess=S;return}if(b instanceof B){p="OpenCursor",h=b.source.openCursor(b.query),g=b.action,h.onsuccess=S;return}p="WaitRequests",y=b,T=[];for(let v of b)v.onsuccess=S}S()})}function D(t,e){return t.index(e)}function*q(t,e,n){yield new B(t,e,n)}function lt(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(o,r,i){var c=parseFloat(o,10),f=parseFloat(r,10);if(isNaN(c)||isNaN(f))throw new Error("Invalid LatLng object: ("+o+", "+r+")");return i!==!0&&(c=Math.max(Math.min(c,90),-90),f=(f+180)%360+(f<-180||f===180?180:-180)),{lat:c,lng:f}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(o){var r=e.L.LatLng.DEG_TO_RAD,i=o.lat*r,c=o.lng*r,f=Math.cos(i);return[Math.cos(c)*f,Math.sin(c)*f,Math.sin(i)]},e.XYZToLatLng=function(o){var r=e.L.LatLng.RAD_TO_DEG,i=Math.atan2(o[2],Math.sqrt(o[0]*o[0]+o[1]*o[1])),c=Math.atan2(o[1],o[0]);return e.L.LatLng(i*r,c*r)};var n=function(o){var r=[Math.abs(o[0]),Math.abs(o[1]),Math.abs(o[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(o,r){var i,c;switch(o){case 0:i=r[1]/r[0],c=r[2]/r[0];break;case 1:i=-r[0]/r[1],c=r[2]/r[1];break;case 2:i=-r[0]/r[2],c=-r[1]/r[2];break;case 3:i=r[2]/r[0],c=r[1]/r[0];break;case 4:i=r[2]/r[1],c=-r[0]/r[1];break;case 5:i=-r[1]/r[2],c=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[i,c]};e.XYZToFaceUV=function(o){var r=n(o);o[r]<0&&(r+=3);var i=s(r,o);return[r,i]},e.FaceUVToXYZ=function(o,r){var i=r[0],c=r[1];switch(o){case 0:return[1,i,c];case 1:return[-i,1,c];case 2:return[-i,-c,1];case 3:return[-1,-c,-i];case 4:return[c,-1,-i];case 5:return[c,i,-1];default:throw{error:"Invalid face"}}};var a=function(o){return o>=.5?1/3*(4*o*o-1):1/3*(1-4*(1-o)*(1-o))};e.STToUV=function(o){return[a(o[0]),a(o[1])]};var l=function(o){return o>=0?.5*Math.sqrt(1+3*o):1-.5*Math.sqrt(1-3*o)};e.UVToST=function(o){return[l(o[0]),l(o[1])]},e.STToIJ=function(o,r){var i=1<<r,c=function(f){var p=Math.floor(f*i);return Math.max(0,Math.min(i-1,p))};return[c(o[0]),c(o[1])]},e.IJToST=function(o,r,i){var c=1<<r;return[(o[0]+i[0])/c,(o[1]+i[1])/c]};var u=function(o,r,i,c){var f,p;if(c==0){i==1&&(r.x=o-1-r.x,r.y=o-1-r.y);var m=r.x;r.x=r.y,r.y=m}},d=function(o,r,i,c){var f={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof c!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var p=c%2?"d":"a",m=[],T=i-1;T>=0;T--){var y=1<<T,h=o&y?1:0,g=r&y?1:0,S=f[p][h*2+g];m.push(S[0]),p=S[1]}return m};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(o){var r=o.split("/"),i=parseInt(r[0]),c=r[1],f=c.length,p={x:0,y:0},m,T,y,h,g,S;for(m=f-1;m>=0;m--)T=f-m,y=c[m],h=0,g=0,y==="1"?g=1:y==="2"?(h=1,g=1):y==="3"&&(h=1),S=Math.pow(2,T-1),u(S,p,h,g),p.x+=S*h,p.y+=S*g;if(i%2===1){var x=p.x;p.x=p.y,p.y=x}return e.S2Cell.FromFaceIJ(parseInt(i),[p.x,p.y],T)},e.S2Cell.FromLatLng=function(o,r){if(!o.lat&&o.lat!==0||!o.lng&&o.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var i=e.LatLngToXYZ(o),c=e.XYZToFaceUV(i),f=e.UVToST(c[1]),p=e.STToIJ(f,r);return e.S2Cell.FromFaceIJ(c[0],p,r)},e.S2Cell.FromFaceIJ=function(o,r,i){var c=new e.S2Cell;return c.face=o,c.ij=r,c.level=i,c},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var o=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(o),i=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(i)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var o=[],r=[[0,0],[0,1],[1,1],[1,0]],i=0;i<4;i++){var c=e.IJToST(this.ij,this.level,r[i]),f=e.STToUV(c),p=e.FaceUVToXYZ(this.face,f);o.push(e.XYZToLatLng(p))}return o},e.S2Cell.prototype.getFaceAndQuads=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return[this.face,o]},e.S2Cell.prototype.toHilbertQuadkey=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+o.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(o,r,i){return e.S2Cell.FromLatLng({lat:o,lng:r},i).getNeighbors().map(function(c){return c.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var o=function(p,m,T){var y=1<<T;if(m[0]>=0&&m[1]>=0&&m[0]<y&&m[1]<y)return e.S2Cell.FromFaceIJ(p,m,T);var h=e.IJToST(m,T,[.5,.5]),g=e.STToUV(h),S=e.FaceUVToXYZ(p,g),x=e.XYZToFaceUV(S);return p=x[0],g=x[1],h=e.UVToST(g),m=e.STToIJ(h,T),e.S2Cell.FromFaceIJ(p,m,T)},r=this.face,i=this.ij[0],c=this.ij[1],f=this.level;return[o(r,[i-1,c],f),o(r,[i,c-1],f),o(r,[i+1,c],f),o(r,[i,c+1],f)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(o,r,i){var c=t.dcodeIO&&t.dcodeIO.Long,f,p,m;for(i||(i=r.length),r.length>i&&(r=r.substr(0,i)),f=c.fromString(o.toString(10),!0,10).toString(2);f.length<e.FACE_BITS;)f="0"+f;for(p=c.fromString(r,!0,4).toString(2);p.length<2*i;)p="0"+p;for(m=f+p,m+="1";m.length<e.FACE_BITS+e.POS_BITS;)m+="0";return c.fromString(m,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(o){var r=o.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(o){for(var r=t.dcodeIO&&t.dcodeIO.Long,i=r.fromString(o,!0,10).toString(2);i.length<e.FACE_BITS+e.POS_BITS;)i="0"+i;for(var c=i.lastIndexOf("1"),f=i.substring(0,3),p=i.substring(3,c),m=p.length/2,T=r.fromString(f,!0,2).toString(10),y=r.fromString(p,!0,2).toString(4);y.length<m;)y="0"+y;return T+"/"+y},e.keyToLatLng=e.S2Cell.keyToLatLng=function(o){var r=e.S2Cell.FromHilbertQuadKey(o);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(o){var r=e.idToKey(o);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(o,r,i){if(isNaN(i)||i<1||i>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:o,lng:r},i).toHilbertQuadkey()},e.stepKey=function(o,r){var i=t.dcodeIO&&t.dcodeIO.Long,c=o.split("/"),f=c[0],p=c[1],m=c[1].length,T=i.fromString(p,!0,4),y;r>0?y=T.add(Math.abs(r)):r<0&&(y=T.subtract(Math.abs(r)));var h=y.toString(4);for(h==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));h.length<m;)h="0"+h;return f+"/"+h},e.S2Cell.prevKey=e.prevKey=function(o){return e.stepKey(o,-1)},e.S2Cell.nextKey=e.nextKey=function(o){return e.stepKey(o,1)},e}var pe=lt(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function A(t,e){return pe.S2Cell.FromLatLng(t,e)}var un=Object.freeze(["0","1","2","3"]);var ct=new BigUint64Array(1),fn=new Uint32Array(ct.buffer);function me(t=1024){let e=new Array(t),n=t-1,s=0,a=0;return{enqueue(l){e[a&n]=l,a++},dequeue(){if(s===a)return;let l=e[s&n];return s++,l}}}function _(){return typeof window=="undefined"&&typeof self!="undefined"}var dt={pois:{recordType:G,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:G,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},ut=Symbol("_pois"),ft=Symbol("_cells"),pt=Symbol("_coordinatesIndex"),ge=Symbol("_cellIdsIndex"),Se=Symbol("_ancestorIdsIndexSymbol");function mt(t,e,n){return q(t[ge],e,n)}function yt(t,e,n){return q(t[Se],e,n)}var Tt="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",ht=1,xe=Symbol("_database");async function Q(){return{[xe]:await ue(Tt,ht,dt)}}function gt(t,e,n,s){return fe(t[xe],{mode:e,signal:n==null?void 0:n.signal},({pois:a,cells:l})=>{let u={[ut]:a,[ft]:l,[pt]:D(a,"coordinates"),[ge]:D(a,"cellIds"),[Se]:D(l,"ancestorIds")};return s(u)},"pois","cells")}function be(t,e,n){return t.set(e,n),n}function ve(t,e){let n=[],s=new Set,a=me();a.enqueue(A(ne(t),e));for(let l;l=a.dequeue();){let u=l.toString();if(s.has(u))continue;s.add(u);let d=te();for(let o of l.getCornerLatLngs())d=re(d,o);if(oe(t,d)){n.push(l);for(let o of l.getNeighbors())a.enqueue(o)}}return n}function ye(t){return{cell:t,id:t.toString(),pois:new Map,corner:t.getCornerLatLngs(),center:t.getLatLng(),cell17s:new Map,cell16s:new Map,kindToPois:new Map,minLastFetchDate:void 0,maxLastFetchDate:void 0}}function Ce(t,e,n){var l;let s=e.toString(),a=(l=t.get(s))!=null?l:be(t,s,{cell:e,center:e.getLatLng(),kindToCount:new Map,lastFetchDate:n});return a.lastFetchDate||(a.lastFetchDate=n),a}function Te(t,e,n){var l;let s=A(e,n),{kindToCount:a}=Ce(t,s,void 0);for(let{entity:u}of e.data.gmo){let d=(l=a.get(u))!=null?l:0;a.set(u,d+1)}}function St(t){return t.entity==="GYM"||t.entity==="POKESTOP"}function he(t,e,n){var a;((a=t.kindToPois.get(e))!=null?a:be(t.kindToPois,e,[])).push(n)}async function Ie(t,e,n){let s=e.toString(),a,l=d=>{a!=null||(a=ye(e));let o=`(${d.lat}, ${d.lng})`;if(a.pois.get(o)!=null)return"continue";a.pois.set(o,d);let{gmo:r}=d.data;for(let{entity:i}of r)he(a,i,d);r.length===0&&he(a,"",d),r.some(St)&&(Te(a.cell16s,d,16),Te(a.cell17s,d,17))},u=d=>{var r,i;if(d.level!==17)return"continue";a!=null||(a=ye(e)),a.minLastFetchDate=Math.min((r=a.minLastFetchDate)!=null?r:a.minLastFetchDate=d.lastFetchDate,d.lastFetchDate),a.maxLastFetchDate=Math.max((i=a.maxLastFetchDate)!=null?i:a.maxLastFetchDate=d.lastFetchDate,d.lastFetchDate);let o=A({lat:d.centerLat,lng:d.centerLng},17);Ce(a.cell17s,o,d.lastFetchDate)};return await gt(t,"readonly",{signal:n},function*(d){yield*W(mt(d,s,l)),yield*W(yt(d,s,u))}),a}function Le(){let a=Object.freeze({strokeColor:"rgba(253, 255, 114, 0.4)",strokeWeight:1,fillColor:"#0000002d",clickable:!1,zIndex:3101}),l=Object.freeze(I(C({},a),{fillColor:"rgba(0, 191, 255, 0.4)",strokeColor:"rgba(0, 191, 255, 0.6)",zIndex:3100})),u=Object.freeze(I(C({},l),{fillColor:"rgba(255, 0, 13, 0.4)",strokeColor:"rgba(255, 0, 13, 0.6)"})),o=Object.freeze({strokeColor:"#c54545b7",strokeWeight:2,fillColor:"#00000000",clickable:!1,zIndex:3102}),r=o,i=Object.freeze(I(C({},o),{fillColor:"#dd767625"})),c=Object.freeze(I(C({},o),{fillColor:"#d3b71738"})),p=Object.freeze({markerSize:8,borderColor:"#ff6600",borderWidth:2,fillColor:"#ff660080",zIndex:3200}),m=Object.freeze(I(C({},p),{borderColor:"#ffffff",fillColor:"#ff2450"})),T=Object.freeze(I(C({},p),{borderColor:"#0000cd",fillColor:"#00bfff"})),y=Object.freeze(I(C({},p),{borderColor:"#e762d3",fillColor:"#f195eb"})),g=Object.freeze({fontWeight:"normal",fontSize:"11px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',strokeColor:"rgb(0, 0, 0)",fillColor:"#FFFFBB",strokeWeight:2,lineJoin:"round",shadowBlur:1}),S=Object.freeze(I(C({},g),{strokeColor:"#000030",fillColor:"#f0ffff"})),x=Object.freeze(I(C({},g),{fontWeight:"bold",strokeColor:"#ffffffd5",fillColor:"#9c1933"})),b=Object.freeze(I(C({},g),{strokeColor:"#e762d3"}));return{cell17EmptyOptions:a,cell17PokestopOptions:l,cell17GymOptions:u,cell14Options:o,cell14OptionsEmpty:r,cell14Options1:i,cell14Options2:c,wayspotOptions:p,gymOptions:m,pokestopOptions:T,powerspotOptions:y,wayspotLabelOptions:g,pokestopLabelOptions:S,gymLabelOptions:x,powerspotLabelOptions:b,cellBaseZIndex:3100,poiBaseZIndex:3200,poiLabelBaseZIndex:3300,statLabelBaseZIndex:3400}}function xt({CanvasTextMetrics:t},e,n,s,a="\\u2026"){let l=t.measureText(n,e);if(l.width<=s)return l;let u=0,d=n.length,o=a,r=t.measureText(a,e);for(;u<=d;){let i=Math.floor((u+d)/2),c=n.substring(0,i)+a,f=t.measureText(c,e);f.width<=s?(o=c,r=f,u=i+1):d=i-1}return{bestText:o,bestMetrics:r}}function bt({PIXI:t,cell14LabelTextStyle:e},n,{lat:s,lng:a},l){let u=R(),{x:d,y:o}=w(s,a,u),r=new t.Text;return r.text=n,r.style=e,r.anchor.set(.5),r.x=d,r.y=o,r.alpha=l,r}function vt(t,e){switch(e){case 0:return t.cell14OptionsEmpty;case 1:case 5:case 19:return t.cell14Options1;case 4:case 18:return t.cell14Options2}return t.cell14Options}function Ct(t,e,n){let s=vt(t,e);return n===1?s:I(C({},s),{strokeWeight:s.strokeWeight*2+s.strokeWeight*10*(1-n),strokeOpacity:.3+.4*n,fillColor:"#00000000"})}function ke({kindToPois:t}){var e,n,s,a;return((n=(e=t.get("GYM"))==null?void 0:e.length)!=null?n:0)+((a=(s=t.get("POKESTOP"))==null?void 0:s.length)!=null?a:0)}function It(t){var s;let n=(s=t.minLastFetchDate)!=null?s:t.maxLastFetchDate;return n===void 0||n<Date.now()-6048e5}function M(t){return It(t)?.3:1}function Re(t,e,n){let{options:s}=t,a=ke(n),l=n.cell17s.size/4**3,u=Ct(s,a,l);return e.cellMeshBuilder.add(n.corner,u,M(n))}function Me(t,e){let n=ke(e);if(n<=0)return;let s=M(e);return bt(t,`${n}`,e.center,s)}function we(t,e){var n;return((n=e.kindToCount.get(t))!=null?n:0)!==0}function Oe(t,e,n){let{options:s}=t;for(let a of e.cell17s.values()){let l;we("GYM",a)?l=s.cell17GymOptions:we("POKESTOP",a)?l=s.cell17PokestopOptions:l=s.cell17EmptyOptions;let u=a.cell.getCornerLatLngs();n.add(u,l,M(e))}}function Lt(t,e){switch(e){case"GYM":return t.gymOptions;case"POKESTOP":return t.pokestopOptions;case"POWERSPOT":return t.powerspotOptions;default:return t.wayspotOptions}}function wt(t,e){switch(e){case"GYM":return t.gymLabelOptions;case"POKESTOP":return t.pokestopLabelOptions;case"POWERSPOT":return t.powerspotLabelOptions;default:return t.wayspotLabelOptions}}function Be({options:t},{zoom:e},n,s){for(let[a,l]of n.kindToPois){let u=Lt(t,a),d=e<=16?u.markerSize*.5:u.markerSize;for(let o of l)o.data.isCommunityContributed&&s.add(o,d,u,M(n))}}function Pe({data:t}){let e=0;t.isCommunityContributed&&(e+=.5);let n=!1,s=!1,a=!1,l=!1;for(let{status:u,entity:d}of t.gmo)switch(u==="ACTIVE"&&(n=!0),d){case"GYM":s=!0;break;case"POKESTOP":a=!0;break;case"POWERSPOT":l=!0;break}return n&&(e+=.5),s&&(e+=.4),a&&(e+=.1),l&&(e+=.05),t.hasAdditionalImages&&(e+=.01),e}function Pt(t,e){return Pe(e)-Pe(t)}function kt(t){for(let{entity:e}of t.data.gmo)return e;return""}function Rt({PIXI:t,options:e},n){let{lat:s,lng:a,guid:l,name:u}=n,d=wt(e,kt(n)),o=new t.TextStyle({fontFamily:d.fontFamily,fontWeight:d.fontWeight,fontSize:d.fontSize,fill:d.fillColor,stroke:{color:d.strokeColor,join:d.lineJoin,width:d.strokeWeight},dropShadow:{alpha:1,angle:0,distance:0,color:d.strokeColor,blur:d.shadowBlur}}),r=xt(t,o,u,140),i=u;r instanceof t.CanvasTextMetrics||(i=r.bestText,r=r.bestMetrics);let{x:c,y:f}=w(s,a,R());return{worldX:c,worldY:f,text:i,textMetrics:r,guid:l,style:o}}function De(t,{zoom:e},n){let{PIXI:s}=t,a=[];for(let r of n.pois.values())r.data.isCommunityContributed&&a.push(r);a.sort(Pt);let d=Math.max(1,Math.ceil(6*2**(e-16)));a.length=Math.min(a.length,d);let o=M(n);return a.map(r=>{let{worldX:i,worldY:c,text:f,style:p}=Rt(t,r),m=new s.Text;return m.text=f,m.style=p,m.x=i,m.y=c,m.anchor.set(.5,-.5),m.alpha=o,m})}var Mt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aPosition;\\r\nin vec2 aUV;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\nin float aLineWidth;\\r\n\\r\nout vec2 vUV;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\nout float vLineWidth;\\r\n\\r\nvoid main() {\\r\n    vUV = aUV;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n    vLineWidth = aLineWidth;\\r\n\\r\n    vec3 worldPos = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix * vec3(aPosition, 1.0f);\\r\n    gl_Position = vec4(worldPos.xy, 0.0f, 1.0f);\\r\n}\\r\n`,Ot={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Bt={aPosition:{type:"vec2"},aUV:{type:"vec2"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"},aLineWidth:{type:"float"}},Ae={source:Mt,uniforms:Ot,attributes:Bt};var Dt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vUV;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\nin float vLineWidth;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    vec4 fillColor = vFillColor;\\r\n    vec4 strokeColor = vStrokeColor;\\r\n    float lineWidth = vLineWidth;\\r\n\\r\n    vec2 dEdge = min(vUV, 1.0f - vUV);\\r\n    float minEdgeDist = min(dEdge.x, dEdge.y);\\r\n\\r\n    float dx = fwidth(vUV.x);\\r\n    float dy = fwidth(vUV.y);\\r\n    float pixelSize = max(dx, dy);\\r\n\\r\n    float threshold = pixelSize * lineWidth;\\r\n\\r\n    float edgeAlpha = smoothstep(threshold - pixelSize, threshold, minEdgeDist);\\r\n    vec4 color = mix(strokeColor, fillColor, edgeAlpha);\\r\n\\r\n    fragColor = vec4(color.rgb * color.a, color.a);\\r\n}`,At={},Kt={vUV:{type:"vec2"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"},vLineWidth:{type:"float"}},Ke={source:Dt,uniforms:At,attributes:Kt};var Ft=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aQuadPos;\\r\nin vec2 aCenter;\\r\nin float aRadius;\\r\nin float aStrokeWidth;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\n\\r\nout vec2 vPixelPos;\\r\nout float vRadius;\\r\nout float vStrokeWidth;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\n\\r\nvoid main() {\\r\n    mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;\\r\n    vec3 clip = mvp * vec3(aCenter, 1.0f);\\r\n\\r\n    float ndcPxX = uProjectionMatrix[0][0];\\r\n    float ndcPxY = -uProjectionMatrix[1][1];\\r\n\\r\n    float quadR = aRadius + aStrokeWidth;\\r\n    vec2 ndcOffset = vec2(aQuadPos.x * quadR * ndcPxX, aQuadPos.y * quadR * ndcPxY);\\r\n\\r\n    gl_Position = vec4(clip.xy + ndcOffset, 0.0f, 1.0f);\\r\n\\r\n    vPixelPos = aQuadPos * quadR;\\r\n    vRadius = aRadius;\\r\n    vStrokeWidth = aStrokeWidth;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n}`,Et={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Nt={aQuadPos:{type:"vec2"},aCenter:{type:"vec2"},aRadius:{type:"float"},aStrokeWidth:{type:"float"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"}},Fe={source:Ft,uniforms:Et,attributes:Nt};var Vt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vPixelPos;\\r\nin float vRadius;\\r\nin float vStrokeWidth;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    float d = length(vPixelPos);\\r\n    float fw = fwidth(d);\\r\n\\r\n    float outerEdge = vRadius + vStrokeWidth;\\r\n    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);\\r\n    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);\\r\n\\r\n    if(outerMask <= 0.0f)\\r\n        discard;\\r\n\\r\n    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);\\r\n    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);\\r\n\\r\n    vec4 finalColor = mix(s, f, fillMask);\\r\n    fragColor = finalColor * outerMask;\\r\n}`,Wt={},Ut={vPixelPos:{type:"vec2"},vRadius:{type:"float"},vStrokeWidth:{type:"float"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"}},Ee={source:Vt,uniforms:Wt,attributes:Ut};function K(t){return new t.Geometry}function j(t,e,n,s){return t.Shader.from({gl:{vertex:e.source,fragment:n.source},resources:{typedUniforms:s}})}function P(t){var e;if(t=t.trim().toLowerCase(),t.startsWith("#")){let n=t.slice(1),s=parseInt(n.substring(0,2),16)/255,a=parseInt(n.substring(2,4),16)/255,l=parseInt(n.substring(4,6),16)/255,u=n.length===8?parseInt(n.substring(6,8),16)/255:1;return[s,a,l,u]}if(t.startsWith("rgb")){let n=(e=t.match(/[\\d.]+/g))==null?void 0:e.map(Number);if((n==null?void 0:n.length)===4)return[n[0]/255,n[1]/255,n[2]/255,n[3]]}throw new Error("Unsupported format")}var Ne=4;function Ve(t,e){let{x:n,y:s}=e,{PIXI:a,shader:l,_point_result_cache:u}=t,d=[],o=[],r=[],i=[],c=[],f=[];function p(T,y,h){if(T.length!==Ne)return ie`internal error`;let g=P(y.fillColor),S=P(y.strokeColor),x=y.strokeWeight,b=f.length;for(let v=0;v<Ne;v++){let{lat:L,lng:k}=T[v],{x:F,y:E}=w(L,k,u);d.push(F-n,E-s),i.push(g[0],g[1],g[2],g[3]*h),c.push(S[0],S[1],S[2],S[3]*h),f.push(x)}o.push(0,0,1,0,1,1,0,1),r.push(b+0,b+1,b+2,b+0,b+2,b+3)}function m(){let T=K(a);T.addAttribute("aPosition",{buffer:new Float32Array(d),format:"float32x2"}),T.addAttribute("aUV",{buffer:new Float32Array(o),format:"float32x2"}),T.addIndex(r),T.addAttribute("aFillColor",{buffer:new Float32Array(i),format:"float32x4"}),T.addAttribute("aStrokeColor",{buffer:new Float32Array(c),format:"float32x4"}),T.addAttribute("aLineWidth",{buffer:new Float32Array(f),format:"float32"});let y=new a.Mesh({geometry:T,shader:l});return y.position.set(n,s),y}return{add:p,bake:m}}var We=[[-1,-1],[1,-1],[1,1],[-1,1]];function Ue(t,e){let{PIXI:n,circleShader:s,_point_result_cache:a}=t,{x:l,y:u}=e,d=[],o=[],r=[],i=[],c=[],f=[],p=[];function m(y,h,g,S){let x=g.borderWidth,b=P(g.fillColor),v=P(g.borderColor),L=i.length,{lat:k,lng:F}=y,{x:E,y:_e}=w(k,F,a);for(let N=0;N<We.length;N++){let[Qe,je]=We[N];d.push(Qe,je),o.push(E-l,_e-u),i.push(h),c.push(x),f.push(b[0],b[1],b[2],b[3]*S),p.push(v[0],v[1],v[2],v[3]*S)}r.push(L+0,L+1,L+2,L+0,L+2,L+3)}function T(){let y=K(n);y.addAttribute("aQuadPos",{buffer:new Float32Array(d),format:"float32x2"}),y.addIndex(r),y.addAttribute("aCenter",{buffer:new Float32Array(o),format:"float32x2"}),y.addAttribute("aRadius",{buffer:new Float32Array(i),format:"float32"}),y.addAttribute("aFillColor",{buffer:new Float32Array(f),format:"float32x4"}),y.addAttribute("aStrokeColor",{buffer:new Float32Array(p),format:"float32x4"}),y.addAttribute("aStrokeWidth",{buffer:new Float32Array(c),format:"float32"});let h=new n.Mesh({geometry:y,shader:s});return h.position.set(l,u),h}return{add:m,bake:T}}function Gt(t,e){let{lat:n,lng:s}=e.getLatLng(),a=w(n,s,R()),l=Ve(t,a),u=Ue(t,a);return{views:[],center:a,cellMeshBuilder:l,circlesBuilder:u}}function qt(t){return class extends t.Bounds{constructor(s){super();this.key=s}}}async function _t(t){let e;_()?(e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs"),e.DOMAdapter.set(e.WebWorkerAdapter)):e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm");let n=new e.Application;return await n.init({canvas:t,autoDensity:!1,autoStart:!1,backgroundAlpha:0,antialias:!0,roundPixels:!0}),{PIXI:e,app:n}}function Qt(t){return j(t,Ae,Ke,new t.UniformGroup({}))}function jt(t){return j(t,Fe,Ee,new t.UniformGroup({}))}function Xe(t,e){if(e.parent==null)return;let{scale:n}=e.parent.worldTransform.decompose(t._tempTransform);e.scale.x=1/n.x,e.scale.y=1/n.y}async function Ge(t,e){let n=await Q(),s=new OffscreenCanvas(0,0),{PIXI:a,app:l}=await _t(s),u=l.stage.addChild(new a.Container),d=new a.TextStyle({align:"center",fontWeight:"bold",fontSize:"20px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',fill:"rgb(255, 255, 255)",stroke:{width:4,join:"round",color:"#c54545"}});return{canvas:s,layers:{cellLayer:u.addChild(new a.Container),circleLayer:u.addChild(new a.Container),labelLayer:u.addChild(new a.Container),cell14TextLayer:u.addChild(new a.Container)},PIXI:a,BoxBounds:qt(a),shader:Qt(a),circleShader:jt(a),cell14LabelTextStyle:d,app:l,worldContainer:u,handleAsyncError:t,onRenderUpdated:e,options:Le(),records:n,cells:new Map,_point_result_cache:{x:0,y:0},_pois_cache:[],_tempTransform:new a.Transform}}function Yt(t,e){let n=2**e.zoom;t.scale.set(n),t.x=-e.nwWorld.x*n,t.y=-e.nwWorld.y*n}function Zt({BoxBounds:t},e,n){let s=new t(n.uid);if(n.visible=!0,n.getBounds(!1,s),e.check(s)){n.visible=!1;return}e.addBox(s),n.visible=!0}function Ht(t){for(let n of t.layers.cell14TextLayer.children)Xe(t,n);for(let n of t.layers.labelLayer.children)Xe(t,n);let e=z();for(let n of t.layers.labelLayer.children)Zt(t,e,n)}async function Y(t,e,n){await ce(n);let{app:s,worldContainer:a}=t,{width:l,height:u,devicePixelRatio:d}=e;s.renderer.resize(l,u,d),Yt(a,e),Ht(t),s.render();let o=t.canvas.transferToImageBitmap();t.onRenderUpdated(o,e)}function Z(t,e){let n=t.get(e);if(n){for(let s of n.views)s.destroy();t.delete(e)}}function Jt({cells:t},e){let n=new Set(e.map(s=>s.toString()));for(let s of t.keys())n.has(s)||Z(t,s)}async function $t(t,e,n,s){let{cells:a,records:l}=t,{zoom:u}=e,d=n.toString();Z(a,d);let o=await Ie(l,n,s);if(o==null)return;let r=Gt(t,n);if(a.set(d,r),14<u&&Oe(t,o,r.cellMeshBuilder),Re(t,r,o),14<u&&u<18&&Be(t,e,o,r.circlesBuilder),14<u)for(let i of De(t,e,o))r.views.push(t.layers.labelLayer.addChild(i));if(13<u){let i=Me(t,o);i&&r.views.push(t.layers.cell14TextLayer.addChild(i))}r.views.push(t.layers.cellLayer.addChild(r.cellMeshBuilder.bake())),r.views.push(t.layers.circleLayer.addChild(r.circlesBuilder.bake()))}async function qe(t,e,n){let{cells:s}=t,{zoom:a,bounds:l}=e;if(a<=12){for(let d of s.keys())Z(s,d);return Y(t,e,n)}let u=ve(l,14);Jt(t,u),await Y(t,e,n);for(let d of u)await $t(t,e,d,n),await Y(t,e,n)}function H(t){console.error("An error occurred during asynchronous processing:",t)}function zt(t){return t instanceof Error?t:String(t)}async function en(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self);try{let n=d=>{e.reportError(zt(d)).catch(H)},s=await Ge(n,(d,o)=>{e.notifyRenderCompleted(t.transfer(d,[d]),o).catch(n)}),{task:a,cancelTask:l}=de((d,o)=>qe(s,o,d)),u={draw:a,drawCancel:l};return t.expose(u),u}catch(n){let s=n instanceof Error?n:String(n);e.reportError(s).catch(H)}}async function tn(){await en()}tn().catch(H);\n');
+    return inlineWorker('var Ze=Object.defineProperty,He=Object.defineProperties;var Je=Object.getOwnPropertyDescriptors;var $=Object.getOwnPropertySymbols;var $e=Object.prototype.hasOwnProperty,ze=Object.prototype.propertyIsEnumerable;var V=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),et=t=>{throw TypeError(t)};var W=(t,e,n)=>e in t?Ze(t,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):t[e]=n,C=(t,e)=>{for(var n in e||(e={}))$e.call(e,n)&&W(t,n,e[n]);if($)for(var n of $(e))ze.call(e,n)&&W(t,n,e[n]);return t},I=(t,e)=>He(t,Je(e));var z=(t,e,n)=>W(t,typeof e!="symbol"?e+"":e,n);var tt=function(t,e){this[0]=t,this[1]=e};var U=t=>{var e=t[V("asyncIterator")],n=!1,s,a={};return e==null?(e=t[V("iterator")](),s=l=>a[l]=u=>e[l](u)):(e=e.call(t),s=l=>a[l]=u=>{if(n){if(n=!1,l==="throw")throw u;return u}return n=!0,{done:!1,value:new tt(new Promise(d=>{var o=e[l](u);o instanceof Object||et("Object expected"),d(o)}),1)}}),a[V("iterator")]=()=>a,s("next"),"throw"in e?s("throw"):a.throw=l=>{throw l},"return"in e&&s("return"),a};function ee(t=128){let e=new Map;function n(o,r){return o<<16|r&65535}function s(o,r){let i=o.x-o.width/2,c=o.x+o.width/2,f=o.y-o.height/2,p=o.y+o.height/2,m=Math.floor(i/t),T=Math.floor(c/t),y=Math.floor(f/t),h=Math.floor(p/t);for(let g=m;g<=T;g++)for(let S=y;S<=h;S++)r.push(n(g,S))}let a=[];function l(o){s(o,a);try{for(let r of a){let i=e.get(r);i||(i=[],e.set(r,i)),i.push(o)}}finally{a.length=0}}let u=new Set;function d(o){s(o,a);try{for(let r of a){let i=e.get(r);if(i)for(let c of i)u.add(c)}for(let r of u){if(o.key===r.key)continue;let i=Math.abs(o.x-r.x),c=(o.width+r.width)/2;if(i>=c)continue;let f=Math.abs(o.y-r.y),p=(o.height+r.height)/2;if(!(f>=p))return!0}}finally{u.clear(),a.length=0}return!1}return{addBox:l,check:d}}var X=256,te=Math.PI,nt=te/180,rt=X/360,ot=X/(2*te),at=X/2;function w(t,e,n){let s=(e+180)*rt,a=Math.sin(t*nt),l=a>.9999?.9999:a<-.9999?-.9999:a,u=at-Math.atanh(l)*ot;return n.x=s,n.y=u,n}function R(){return{x:0,y:0}}function ne(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function re(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function oe(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function ae(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?st(t,e):!1}function st(t,e){let n=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!n&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:O(t,e.sw.lng)||O(t,e.ne.lng)||O(e,t.sw.lng)||O(e,t.ne.lng)||n&&s}function O(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function q(t){return t}function ie(...t){}function le(t,...e){throw new Error(String.raw(t,...e))}var G=class extends Error{constructor(n){super(n);z(this,"name","AbortError")}};function ce(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new G(t)}function de(t){return new Promise((e,n)=>{if(t.aborted)return n(t.reason);let s=()=>{cancelAnimationFrame(a),t.removeEventListener("abort",s)},a=requestAnimationFrame(l=>{s(),e(l)});t.addEventListener("abort",s,{once:!0})})}function ue(t){let e=new Map;return{async task(n,...s){let a=new AbortController;e.set(n,a);try{return await t(a.signal,...s)}finally{e.delete(n)}},cancelTask(n){let s=e.get(n);s&&(s.abort(),e.delete(n))}}}function it(t,e){for(let[n,s]of Object.entries(e)){let a=t.createObjectStore(n,{keyPath:s.key.slice()});for(let[l,u]of Object.entries(s.indexes))a.createIndex(l,u.key,u)}}function fe(t,e,n){return new Promise((s,a)=>{let l=indexedDB.open(t,e);l.addEventListener("upgradeneeded",()=>it(l.result,n)),l.addEventListener("blocked",()=>a(new Error("database blocked"))),l.addEventListener("error",()=>a(l.error)),l.addEventListener("success",()=>s(l.result))})}var B=class{constructor(e,n,s){this.source=e;this.query=n;this.action=s}};function pe(t,{mode:e,signal:n},s,...a){return new Promise((l,u)=>{if(n!=null&&n.aborted){u(ce());return}let d=!1,o,r=t.transaction(a,e),i=n?()=>{d||r.abort()}:ie;r.addEventListener("complete",()=>{n==null||n.removeEventListener("abort",i),d?l(o):u(new Error("internal error"))}),r.addEventListener("error",x=>{n==null||n.removeEventListener("abort",i),u(x.target.error)}),n==null||n.addEventListener("abort",i);let c={};for(let x of a)c[x]=r.objectStore(x);let f=s(c),p,m,T,y,h,g;function S(){let x;switch(p){case void 0:x=f.next();break;case"Request":{let v=m.result;p=void 0,m=void 0,x=f.next(v);break}case"WaitRequests":{let v=T,L=y,k=L[v.length].result;if(v.push(k),v.length!==L.length)return;p=void 0,y=void 0,T=void 0,x=f.next(v);break}case"OpenCursor":{let v=h.result;if(v===null||g(v.value)==="break")p=void 0,h=void 0,g=void 0,x=f.next(void 0);else{v.continue();return}break}default:{u(new Error(`Invalid resolving kind: ${p}`));return}}if(x.done){d=!0,o=x.value;return}let b=x.value;if(b instanceof IDBRequest){p="Request",m=b,b.onsuccess=S;return}if(b instanceof B){p="OpenCursor",h=b.source.openCursor(b.query),g=b.action,h.onsuccess=S;return}p="WaitRequests",y=b,T=[];for(let v of b)v.onsuccess=S}S()})}function D(t,e){return t.index(e)}function*_(t,e,n){yield new B(t,e,n)}function ct(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(o,r,i){var c=parseFloat(o,10),f=parseFloat(r,10);if(isNaN(c)||isNaN(f))throw new Error("Invalid LatLng object: ("+o+", "+r+")");return i!==!0&&(c=Math.max(Math.min(c,90),-90),f=(f+180)%360+(f<-180||f===180?180:-180)),{lat:c,lng:f}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(o){var r=e.L.LatLng.DEG_TO_RAD,i=o.lat*r,c=o.lng*r,f=Math.cos(i);return[Math.cos(c)*f,Math.sin(c)*f,Math.sin(i)]},e.XYZToLatLng=function(o){var r=e.L.LatLng.RAD_TO_DEG,i=Math.atan2(o[2],Math.sqrt(o[0]*o[0]+o[1]*o[1])),c=Math.atan2(o[1],o[0]);return e.L.LatLng(i*r,c*r)};var n=function(o){var r=[Math.abs(o[0]),Math.abs(o[1]),Math.abs(o[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(o,r){var i,c;switch(o){case 0:i=r[1]/r[0],c=r[2]/r[0];break;case 1:i=-r[0]/r[1],c=r[2]/r[1];break;case 2:i=-r[0]/r[2],c=-r[1]/r[2];break;case 3:i=r[2]/r[0],c=r[1]/r[0];break;case 4:i=r[2]/r[1],c=-r[0]/r[1];break;case 5:i=-r[1]/r[2],c=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[i,c]};e.XYZToFaceUV=function(o){var r=n(o);o[r]<0&&(r+=3);var i=s(r,o);return[r,i]},e.FaceUVToXYZ=function(o,r){var i=r[0],c=r[1];switch(o){case 0:return[1,i,c];case 1:return[-i,1,c];case 2:return[-i,-c,1];case 3:return[-1,-c,-i];case 4:return[c,-1,-i];case 5:return[c,i,-1];default:throw{error:"Invalid face"}}};var a=function(o){return o>=.5?1/3*(4*o*o-1):1/3*(1-4*(1-o)*(1-o))};e.STToUV=function(o){return[a(o[0]),a(o[1])]};var l=function(o){return o>=0?.5*Math.sqrt(1+3*o):1-.5*Math.sqrt(1-3*o)};e.UVToST=function(o){return[l(o[0]),l(o[1])]},e.STToIJ=function(o,r){var i=1<<r,c=function(f){var p=Math.floor(f*i);return Math.max(0,Math.min(i-1,p))};return[c(o[0]),c(o[1])]},e.IJToST=function(o,r,i){var c=1<<r;return[(o[0]+i[0])/c,(o[1]+i[1])/c]};var u=function(o,r,i,c){var f,p;if(c==0){i==1&&(r.x=o-1-r.x,r.y=o-1-r.y);var m=r.x;r.x=r.y,r.y=m}},d=function(o,r,i,c){var f={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof c!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var p=c%2?"d":"a",m=[],T=i-1;T>=0;T--){var y=1<<T,h=o&y?1:0,g=r&y?1:0,S=f[p][h*2+g];m.push(S[0]),p=S[1]}return m};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(o){var r=o.split("/"),i=parseInt(r[0]),c=r[1],f=c.length,p={x:0,y:0},m,T,y,h,g,S;for(m=f-1;m>=0;m--)T=f-m,y=c[m],h=0,g=0,y==="1"?g=1:y==="2"?(h=1,g=1):y==="3"&&(h=1),S=Math.pow(2,T-1),u(S,p,h,g),p.x+=S*h,p.y+=S*g;if(i%2===1){var x=p.x;p.x=p.y,p.y=x}return e.S2Cell.FromFaceIJ(parseInt(i),[p.x,p.y],T)},e.S2Cell.FromLatLng=function(o,r){if(!o.lat&&o.lat!==0||!o.lng&&o.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var i=e.LatLngToXYZ(o),c=e.XYZToFaceUV(i),f=e.UVToST(c[1]),p=e.STToIJ(f,r);return e.S2Cell.FromFaceIJ(c[0],p,r)},e.S2Cell.FromFaceIJ=function(o,r,i){var c=new e.S2Cell;return c.face=o,c.ij=r,c.level=i,c},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var o=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(o),i=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(i)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var o=[],r=[[0,0],[0,1],[1,1],[1,0]],i=0;i<4;i++){var c=e.IJToST(this.ij,this.level,r[i]),f=e.STToUV(c),p=e.FaceUVToXYZ(this.face,f);o.push(e.XYZToLatLng(p))}return o},e.S2Cell.prototype.getFaceAndQuads=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return[this.face,o]},e.S2Cell.prototype.toHilbertQuadkey=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+o.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(o,r,i){return e.S2Cell.FromLatLng({lat:o,lng:r},i).getNeighbors().map(function(c){return c.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var o=function(p,m,T){var y=1<<T;if(m[0]>=0&&m[1]>=0&&m[0]<y&&m[1]<y)return e.S2Cell.FromFaceIJ(p,m,T);var h=e.IJToST(m,T,[.5,.5]),g=e.STToUV(h),S=e.FaceUVToXYZ(p,g),x=e.XYZToFaceUV(S);return p=x[0],g=x[1],h=e.UVToST(g),m=e.STToIJ(h,T),e.S2Cell.FromFaceIJ(p,m,T)},r=this.face,i=this.ij[0],c=this.ij[1],f=this.level;return[o(r,[i-1,c],f),o(r,[i,c-1],f),o(r,[i+1,c],f),o(r,[i,c+1],f)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(o,r,i){var c=t.dcodeIO&&t.dcodeIO.Long,f,p,m;for(i||(i=r.length),r.length>i&&(r=r.substr(0,i)),f=c.fromString(o.toString(10),!0,10).toString(2);f.length<e.FACE_BITS;)f="0"+f;for(p=c.fromString(r,!0,4).toString(2);p.length<2*i;)p="0"+p;for(m=f+p,m+="1";m.length<e.FACE_BITS+e.POS_BITS;)m+="0";return c.fromString(m,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(o){var r=o.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(o){for(var r=t.dcodeIO&&t.dcodeIO.Long,i=r.fromString(o,!0,10).toString(2);i.length<e.FACE_BITS+e.POS_BITS;)i="0"+i;for(var c=i.lastIndexOf("1"),f=i.substring(0,3),p=i.substring(3,c),m=p.length/2,T=r.fromString(f,!0,2).toString(10),y=r.fromString(p,!0,2).toString(4);y.length<m;)y="0"+y;return T+"/"+y},e.keyToLatLng=e.S2Cell.keyToLatLng=function(o){var r=e.S2Cell.FromHilbertQuadKey(o);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(o){var r=e.idToKey(o);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(o,r,i){if(isNaN(i)||i<1||i>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:o,lng:r},i).toHilbertQuadkey()},e.stepKey=function(o,r){var i=t.dcodeIO&&t.dcodeIO.Long,c=o.split("/"),f=c[0],p=c[1],m=c[1].length,T=i.fromString(p,!0,4),y;r>0?y=T.add(Math.abs(r)):r<0&&(y=T.subtract(Math.abs(r)));var h=y.toString(4);for(h==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));h.length<m;)h="0"+h;return f+"/"+h},e.S2Cell.prevKey=e.prevKey=function(o){return e.stepKey(o,-1)},e.S2Cell.nextKey=e.nextKey=function(o){return e.stepKey(o,1)},e}var me=ct(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function A(t,e){return me.S2Cell.FromLatLng(t,e)}var pn=Object.freeze(["0","1","2","3"]);var dt=new BigUint64Array(1),mn=new Uint32Array(dt.buffer);function ye(t=1024){let e=new Array(t),n=t-1,s=0,a=0;return{enqueue(l){e[a&n]=l,a++},dequeue(){if(s===a)return;let l=e[s&n];return s++,l}}}function Q(){return typeof window=="undefined"&&typeof self!="undefined"}var ut={pois:{recordType:q,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:q,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},ft=Symbol("_pois"),pt=Symbol("_cells"),mt=Symbol("_coordinatesIndex"),Se=Symbol("_cellIdsIndex"),xe=Symbol("_ancestorIdsIndexSymbol");function yt(t,e,n){return _(t[Se],e,n)}function Tt(t,e,n){return _(t[xe],e,n)}var ht="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",gt=1,be=Symbol("_database");async function j(){return{[be]:await fe(ht,gt,ut)}}function St(t,e,n,s){return pe(t[be],{mode:e,signal:n==null?void 0:n.signal},({pois:a,cells:l})=>{let u={[ft]:a,[pt]:l,[mt]:D(a,"coordinates"),[Se]:D(a,"cellIds"),[xe]:D(l,"ancestorIds")};return s(u)},"pois","cells")}function ve(t,e,n){return t.set(e,n),n}function Ce(t,e){let n=[],s=new Set,a=ye();a.enqueue(A(re(t),e));for(let l;l=a.dequeue();){let u=l.toString();if(s.has(u))continue;s.add(u);let d=ne();for(let o of l.getCornerLatLngs())d=oe(d,o);if(ae(t,d)){n.push(l);for(let o of l.getNeighbors())a.enqueue(o)}}return n}function Te(t){return{cell:t,id:t.toString(),pois:new Map,corner:t.getCornerLatLngs(),center:t.getLatLng(),cell17s:new Map,cell16s:new Map,kindToPois:new Map,minLastFetchDate:void 0,maxLastFetchDate:void 0}}function Ie(t,e,n){var l;let s=e.toString(),a=(l=t.get(s))!=null?l:ve(t,s,{cell:e,center:e.getLatLng(),kindToCount:new Map,lastFetchDate:n});return a.lastFetchDate||(a.lastFetchDate=n),a}function he(t,e,n){var l;let s=A(e,n),{kindToCount:a}=Ie(t,s,void 0);for(let{entity:u}of e.data.gmo){let d=(l=a.get(u))!=null?l:0;a.set(u,d+1)}}function xt(t){return t.entity==="GYM"||t.entity==="POKESTOP"}function ge(t,e,n){var a;((a=t.kindToPois.get(e))!=null?a:ve(t.kindToPois,e,[])).push(n)}async function Le(t,e,n){let s=e.toString(),a,l=d=>{a!=null||(a=Te(e));let o=`(${d.lat}, ${d.lng})`;if(a.pois.get(o)!=null)return"continue";a.pois.set(o,d);let{gmo:r}=d.data;for(let{entity:i}of r)ge(a,i,d);r.length===0&&ge(a,"",d),r.some(xt)&&(he(a.cell16s,d,16),he(a.cell17s,d,17))},u=d=>{var r,i;if(d.level!==17)return"continue";a!=null||(a=Te(e)),a.minLastFetchDate=Math.min((r=a.minLastFetchDate)!=null?r:a.minLastFetchDate=d.lastFetchDate,d.lastFetchDate),a.maxLastFetchDate=Math.max((i=a.maxLastFetchDate)!=null?i:a.maxLastFetchDate=d.lastFetchDate,d.lastFetchDate);let o=A({lat:d.centerLat,lng:d.centerLng},17);Ie(a.cell17s,o,d.lastFetchDate)};return await St(t,"readonly",{signal:n},function*(d){yield*U(yt(d,s,l)),yield*U(Tt(d,s,u))}),a}function we(){let a=Object.freeze({strokeColor:"rgba(253, 255, 114, 0.4)",strokeWeight:1,fillColor:"#0000002d",clickable:!1,zIndex:3101}),l=Object.freeze(I(C({},a),{fillColor:"rgba(0, 191, 255, 0.4)",strokeColor:"rgba(0, 191, 255, 0.6)",zIndex:3100})),u=Object.freeze(I(C({},l),{fillColor:"rgba(255, 0, 13, 0.4)",strokeColor:"rgba(255, 0, 13, 0.6)"})),o=Object.freeze({strokeColor:"#c54545b7",strokeWeight:2,fillColor:"#00000000",clickable:!1,zIndex:3102}),r=o,i=Object.freeze(I(C({},o),{fillColor:"#dd767625"})),c=Object.freeze(I(C({},o),{fillColor:"#d3b71738"})),p=Object.freeze({markerSize:8,borderColor:"#ff6600",borderWidth:2,fillColor:"#ff660080",zIndex:3200}),m=Object.freeze(I(C({},p),{borderColor:"#ffffff",fillColor:"#ff2450"})),T=Object.freeze(I(C({},p),{borderColor:"#0000cd",fillColor:"#00bfff"})),y=Object.freeze(I(C({},p),{borderColor:"#e762d3",fillColor:"#f195eb"})),g=Object.freeze({fontWeight:"normal",fontSize:"11px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',strokeColor:"rgb(0, 0, 0)",fillColor:"#FFFFBB",strokeWeight:2,lineJoin:"round",shadowBlur:1}),S=Object.freeze(I(C({},g),{strokeColor:"#000030",fillColor:"#f0ffff"})),x=Object.freeze(I(C({},g),{fontWeight:"bold",strokeColor:"#ffffffd5",fillColor:"#9c1933"})),b=Object.freeze(I(C({},g),{strokeColor:"#e762d3"}));return{cell17EmptyOptions:a,cell17PokestopOptions:l,cell17GymOptions:u,cell14Options:o,cell14OptionsEmpty:r,cell14Options1:i,cell14Options2:c,wayspotOptions:p,gymOptions:m,pokestopOptions:T,powerspotOptions:y,wayspotLabelOptions:g,pokestopLabelOptions:S,gymLabelOptions:x,powerspotLabelOptions:b,cellBaseZIndex:3100,poiBaseZIndex:3200,poiLabelBaseZIndex:3300,statLabelBaseZIndex:3400}}function bt({CanvasTextMetrics:t},e,n,s,a="\\u2026"){let l=t.measureText(n,e);if(l.width<=s)return l;let u=0,d=n.length,o=a,r=t.measureText(a,e);for(;u<=d;){let i=Math.floor((u+d)/2),c=n.substring(0,i)+a,f=t.measureText(c,e);f.width<=s?(o=c,r=f,u=i+1):d=i-1}return{bestText:o,bestMetrics:r}}function vt({PIXI:t,cell14LabelTextStyle:e},n,{lat:s,lng:a},l){let u=R(),{x:d,y:o}=w(s,a,u),r=new t.Text;return r.text=n,r.style=e,r.anchor.set(.5),r.x=d,r.y=o,r.alpha=l,r}function Ct(t,e){switch(e){case 0:return t.cell14OptionsEmpty;case 1:case 5:case 19:return t.cell14Options1;case 4:case 18:return t.cell14Options2}return t.cell14Options}function It(t,e,n){let s=Ct(t,e);return n===1?s:I(C({},s),{strokeWeight:s.strokeWeight*2+s.strokeWeight*10*(1-n),strokeOpacity:.3+.4*n,fillColor:"#00000000"})}function Re({kindToPois:t}){var e,n,s,a;return((n=(e=t.get("GYM"))==null?void 0:e.length)!=null?n:0)+((a=(s=t.get("POKESTOP"))==null?void 0:s.length)!=null?a:0)}function Lt(t){var s;let n=(s=t.minLastFetchDate)!=null?s:t.maxLastFetchDate;return n===void 0||n<Date.now()-6048e5}function M(t){return Lt(t)?.3:1}function Me(t,e,n){let{options:s}=t,a=Re(n),l=n.cell17s.size/4**3,u=It(s,a,l);return e.cellMeshBuilder.add(n.corner,u,M(n))}function Oe(t,e){let n=Re(e);if(n<=0)return;let s=M(e);return vt(t,`${n}`,e.center,s)}function Pe(t,e){var n;return((n=e.kindToCount.get(t))!=null?n:0)!==0}function Be(t,e,n){let{options:s}=t;for(let a of e.cell17s.values()){let l;Pe("GYM",a)?l=s.cell17GymOptions:Pe("POKESTOP",a)?l=s.cell17PokestopOptions:l=s.cell17EmptyOptions;let u=a.cell.getCornerLatLngs();n.add(u,l,M(e))}}function wt(t,e){switch(e){case"GYM":return t.gymOptions;case"POKESTOP":return t.pokestopOptions;case"POWERSPOT":return t.powerspotOptions;default:return t.wayspotOptions}}function Pt(t,e){switch(e){case"GYM":return t.gymLabelOptions;case"POKESTOP":return t.pokestopLabelOptions;case"POWERSPOT":return t.powerspotLabelOptions;default:return t.wayspotLabelOptions}}function De({options:t},{zoom:e},n,s){for(let[a,l]of n.kindToPois){let u=wt(t,a),d=e<=16?u.markerSize*.5:u.markerSize;for(let o of l)o.data.isCommunityContributed&&s.add(o,d,u,M(n))}}function ke({data:t}){let e=0;t.isCommunityContributed&&(e+=.5);let n=!1,s=!1,a=!1,l=!1;for(let{status:u,entity:d}of t.gmo)switch(u==="ACTIVE"&&(n=!0),d){case"GYM":s=!0;break;case"POKESTOP":a=!0;break;case"POWERSPOT":l=!0;break}return n&&(e+=.5),s&&(e+=.4),a&&(e+=.1),l&&(e+=.05),t.hasAdditionalImages&&(e+=.01),e}function kt(t,e){return ke(e)-ke(t)}function Rt(t){for(let{entity:e}of t.data.gmo)return e;return""}function Mt({PIXI:t,options:e},n){let{lat:s,lng:a,guid:l,name:u}=n,d=Pt(e,Rt(n)),o=new t.TextStyle({fontFamily:d.fontFamily,fontWeight:d.fontWeight,fontSize:d.fontSize,fill:d.fillColor,stroke:{color:d.strokeColor,join:d.lineJoin,width:d.strokeWeight},dropShadow:{alpha:1,angle:0,distance:0,color:d.strokeColor,blur:d.shadowBlur}}),r=bt(t,o,u,140),i=u;r instanceof t.CanvasTextMetrics||(i=r.bestText,r=r.bestMetrics);let{x:c,y:f}=w(s,a,R());return{worldX:c,worldY:f,text:i,textMetrics:r,guid:l,style:o}}function Ae(t,{zoom:e},n){let{PIXI:s}=t,a=[];for(let r of n.pois.values())r.data.isCommunityContributed&&a.push(r);a.sort(kt);let d=Math.max(1,Math.ceil(6*2**(e-16)));a.length=Math.min(a.length,d);let o=M(n);return a.map(r=>{let{worldX:i,worldY:c,text:f,style:p}=Mt(t,r),m=new s.Text;return m.text=f,m.style=p,m.x=i,m.y=c,m.anchor.set(.5,-.5),m.alpha=o,m})}var Ot=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aPosition;\\r\nin vec2 aUV;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\nin float aLineWidth;\\r\n\\r\nout vec2 vUV;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\nout float vLineWidth;\\r\n\\r\nvoid main() {\\r\n    vUV = aUV;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n    vLineWidth = aLineWidth;\\r\n\\r\n    vec3 worldPos = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix * vec3(aPosition, 1.0f);\\r\n    gl_Position = vec4(worldPos.xy, 0.0f, 1.0f);\\r\n}\\r\n`,Bt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Dt={aPosition:{type:"vec2"},aUV:{type:"vec2"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"},aLineWidth:{type:"float"}},Ke={source:Ot,uniforms:Bt,attributes:Dt};var At=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vUV;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\nin float vLineWidth;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    vec4 fillColor = vFillColor;\\r\n    vec4 strokeColor = vStrokeColor;\\r\n    float lineWidth = vLineWidth;\\r\n\\r\n    vec2 dEdge = min(vUV, 1.0f - vUV);\\r\n    float minEdgeDist = min(dEdge.x, dEdge.y);\\r\n\\r\n    float dx = fwidth(vUV.x);\\r\n    float dy = fwidth(vUV.y);\\r\n    float pixelSize = max(dx, dy);\\r\n\\r\n    float threshold = pixelSize * lineWidth;\\r\n\\r\n    float edgeAlpha = smoothstep(threshold - pixelSize, threshold, minEdgeDist);\\r\n    vec4 color = mix(strokeColor, fillColor, edgeAlpha);\\r\n\\r\n    fragColor = vec4(color.rgb * color.a, color.a);\\r\n}`,Kt={},Ft={vUV:{type:"vec2"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"},vLineWidth:{type:"float"}},Fe={source:At,uniforms:Kt,attributes:Ft};var Et=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aQuadPos;\\r\nin vec2 aCenter;\\r\nin float aRadius;\\r\nin float aStrokeWidth;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\n\\r\nout vec2 vPixelPos;\\r\nout float vRadius;\\r\nout float vStrokeWidth;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\n\\r\nvoid main() {\\r\n    mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;\\r\n    vec3 clip = mvp * vec3(aCenter, 1.0f);\\r\n\\r\n    float ndcPxX = uProjectionMatrix[0][0];\\r\n    float ndcPxY = -uProjectionMatrix[1][1];\\r\n\\r\n    float quadR = aRadius + aStrokeWidth;\\r\n    vec2 ndcOffset = vec2(aQuadPos.x * quadR * ndcPxX, aQuadPos.y * quadR * ndcPxY);\\r\n\\r\n    gl_Position = vec4(clip.xy + ndcOffset, 0.0f, 1.0f);\\r\n\\r\n    vPixelPos = aQuadPos * quadR;\\r\n    vRadius = aRadius;\\r\n    vStrokeWidth = aStrokeWidth;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n}`,Nt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Vt={aQuadPos:{type:"vec2"},aCenter:{type:"vec2"},aRadius:{type:"float"},aStrokeWidth:{type:"float"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"}},Ee={source:Et,uniforms:Nt,attributes:Vt};var Wt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vPixelPos;\\r\nin float vRadius;\\r\nin float vStrokeWidth;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    float d = length(vPixelPos);\\r\n    float fw = fwidth(d);\\r\n\\r\n    float outerEdge = vRadius + vStrokeWidth;\\r\n    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);\\r\n    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);\\r\n\\r\n    if(outerMask <= 0.0f)\\r\n        discard;\\r\n\\r\n    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);\\r\n    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);\\r\n\\r\n    vec4 finalColor = mix(s, f, fillMask);\\r\n    fragColor = finalColor * outerMask;\\r\n}`,Ut={},Xt={vPixelPos:{type:"vec2"},vRadius:{type:"float"},vStrokeWidth:{type:"float"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"}},Ne={source:Wt,uniforms:Ut,attributes:Xt};function K(t){return new t.Geometry}function Y(t,e,n,s){return t.Shader.from({gl:{vertex:e.source,fragment:n.source},resources:{typedUniforms:s}})}function P(t){var e;if(t=t.trim().toLowerCase(),t.startsWith("#")){let n=t.slice(1),s=parseInt(n.substring(0,2),16)/255,a=parseInt(n.substring(2,4),16)/255,l=parseInt(n.substring(4,6),16)/255,u=n.length===8?parseInt(n.substring(6,8),16)/255:1;return[s,a,l,u]}if(t.startsWith("rgb")){let n=(e=t.match(/[\\d.]+/g))==null?void 0:e.map(Number);if((n==null?void 0:n.length)===4)return[n[0]/255,n[1]/255,n[2]/255,n[3]]}throw new Error("Unsupported format")}var Ve=4;function We(t,e){let{x:n,y:s}=e,{PIXI:a,shader:l,_point_result_cache:u}=t,d=[],o=[],r=[],i=[],c=[],f=[];function p(T,y,h){if(T.length!==Ve)return le`internal error`;let g=P(y.fillColor),S=P(y.strokeColor),x=y.strokeWeight,b=f.length;for(let v=0;v<Ve;v++){let{lat:L,lng:k}=T[v],{x:F,y:E}=w(L,k,u);d.push(F-n,E-s),i.push(g[0],g[1],g[2],g[3]*h),c.push(S[0],S[1],S[2],S[3]*h),f.push(x)}o.push(0,0,1,0,1,1,0,1),r.push(b+0,b+1,b+2,b+0,b+2,b+3)}function m(){let T=K(a);T.addAttribute("aPosition",{buffer:new Float32Array(d),format:"float32x2"}),T.addAttribute("aUV",{buffer:new Float32Array(o),format:"float32x2"}),T.addIndex(r),T.addAttribute("aFillColor",{buffer:new Float32Array(i),format:"float32x4"}),T.addAttribute("aStrokeColor",{buffer:new Float32Array(c),format:"float32x4"}),T.addAttribute("aLineWidth",{buffer:new Float32Array(f),format:"float32"});let y=new a.Mesh({geometry:T,shader:l});return y.position.set(n,s),y}return{add:p,bake:m}}var Ue=[[-1,-1],[1,-1],[1,1],[-1,1]];function Xe(t,e){let{PIXI:n,circleShader:s,_point_result_cache:a}=t,{x:l,y:u}=e,d=[],o=[],r=[],i=[],c=[],f=[],p=[];function m(y,h,g,S){let x=g.borderWidth,b=P(g.fillColor),v=P(g.borderColor),L=i.length,{lat:k,lng:F}=y,{x:E,y:Qe}=w(k,F,a);for(let N=0;N<Ue.length;N++){let[je,Ye]=Ue[N];d.push(je,Ye),o.push(E-l,Qe-u),i.push(h),c.push(x),f.push(b[0],b[1],b[2],b[3]*S),p.push(v[0],v[1],v[2],v[3]*S)}r.push(L+0,L+1,L+2,L+0,L+2,L+3)}function T(){let y=K(n);y.addAttribute("aQuadPos",{buffer:new Float32Array(d),format:"float32x2"}),y.addIndex(r),y.addAttribute("aCenter",{buffer:new Float32Array(o),format:"float32x2"}),y.addAttribute("aRadius",{buffer:new Float32Array(i),format:"float32"}),y.addAttribute("aFillColor",{buffer:new Float32Array(f),format:"float32x4"}),y.addAttribute("aStrokeColor",{buffer:new Float32Array(p),format:"float32x4"}),y.addAttribute("aStrokeWidth",{buffer:new Float32Array(c),format:"float32"});let h=new n.Mesh({geometry:y,shader:s});return h.position.set(l,u),h}return{add:m,bake:T}}function qt(t,e){let{lat:n,lng:s}=e.getLatLng(),a=w(n,s,R()),l=We(t,a),u=Xe(t,a);return{views:[],center:a,cellMeshBuilder:l,circlesBuilder:u}}function _t(t){return class extends t.Bounds{constructor(s){super();this.key=s}}}async function Qt(t){let e;Q()?(e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs"),e.DOMAdapter.set(e.WebWorkerAdapter)):e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm");let n=new e.Application;return await n.init({canvas:t,autoDensity:!1,autoStart:!1,backgroundAlpha:0,antialias:!0,roundPixels:!0}),{PIXI:e,app:n}}function jt(t){return Y(t,Ke,Fe,new t.UniformGroup({}))}function Yt(t){return Y(t,Ee,Ne,new t.UniformGroup({}))}function Ge(t,e){if(e.parent==null)return;let{scale:n}=e.parent.worldTransform.decompose(t._tempTransform);e.scale.x=1/n.x,e.scale.y=1/n.y}async function qe(t,e){let n=await j(),s=new OffscreenCanvas(0,0),{PIXI:a,app:l}=await Qt(s),u=l.stage.addChild(new a.Container),d=new a.TextStyle({align:"center",fontWeight:"bold",fontSize:"20px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',fill:"rgb(255, 255, 255)",stroke:{width:4,join:"round",color:"#c54545"}});return{canvas:s,layers:{cellLayer:u.addChild(new a.Container),circleLayer:u.addChild(new a.Container),labelLayer:u.addChild(new a.Container),cell14TextLayer:u.addChild(new a.Container)},PIXI:a,BoxBounds:_t(a),shader:jt(a),circleShader:Yt(a),cell14LabelTextStyle:d,app:l,worldContainer:u,handleAsyncError:t,onRenderUpdated:e,options:we(),records:n,cells:new Map,_point_result_cache:{x:0,y:0},_pois_cache:[],_tempTransform:new a.Transform}}function Zt(t,e){let n=2**e.zoom;t.scale.set(n),t.x=-e.nwWorld.x*n,t.y=-e.nwWorld.y*n}function Ht({BoxBounds:t},e,n){let s=new t(n.uid);if(n.visible=!0,n.getBounds(!1,s),e.check(s)){n.visible=!1;return}e.addBox(s),n.visible=!0}function Jt(t){for(let n of t.layers.cell14TextLayer.children)Ge(t,n);for(let n of t.layers.labelLayer.children)Ge(t,n);let e=ee();for(let n of t.layers.labelLayer.children)Ht(t,e,n)}async function Z(t,e,n){await de(n);let{app:s,worldContainer:a}=t,{width:l,height:u,devicePixelRatio:d}=e;s.renderer.resize(l,u,d),Zt(a,e),Jt(t),s.render();let o=t.canvas.transferToImageBitmap();t.onRenderUpdated(o,e)}function H(t,e){let n=t.get(e);if(n){for(let s of n.views)s.destroy();t.delete(e)}}function $t({cells:t},e){let n=new Set(e.map(s=>s.toString()));for(let s of t.keys())n.has(s)||H(t,s)}async function zt(t,e,n,s){let{cells:a,records:l}=t,{zoom:u}=e,d=n.toString();H(a,d);let o=await Le(l,n,s);if(o==null)return;let r=qt(t,n);if(a.set(d,r),14<u&&Be(t,o,r.cellMeshBuilder),Me(t,r,o),14<u&&u<18&&De(t,e,o,r.circlesBuilder),14<u)for(let i of Ae(t,e,o))r.views.push(t.layers.labelLayer.addChild(i));if(13<u){let i=Oe(t,o);i&&r.views.push(t.layers.cell14TextLayer.addChild(i))}r.views.push(t.layers.cellLayer.addChild(r.cellMeshBuilder.bake())),r.views.push(t.layers.circleLayer.addChild(r.circlesBuilder.bake()))}async function _e(t,e,n){let{cells:s}=t,{zoom:a,bounds:l}=e;if(a<=12){for(let d of s.keys())H(s,d);return Z(t,e,n)}let u=Ce(l,14);$t(t,u),await Z(t,e,n);for(let d of u)await zt(t,e,d,n),await Z(t,e,n)}function J(t){console.error("An error occurred during asynchronous processing:",t)}function en(t){return t instanceof Error?t:String(t)}async function tn(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self);try{let n=d=>{e.reportError(en(d)).catch(J)},s=await qe(n,(d,o)=>{e.notifyRenderCompleted(t.transfer(d,[d]),o).catch(n)}),{task:a,cancelTask:l}=ue((d,o)=>_e(s,o,d)),u={draw:a,drawCancel:l};return t.expose(u),u}catch(n){let s=n instanceof Error?n:String(n);e.reportError(s).catch(J)}}async function nn(){await tn()}nn().catch(J);\n');
   }
 
   // source/records-overlay/overlay-view.ts
@@ -21631,10 +21631,11 @@
   async function createPoiRecordsCanvasOverlay(handleAsyncError2) {
     const bufferRatio = 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
+      ctx;
+      drawer;
+      drawDebounceScope = createAsyncCancelScope(handleAsyncError2);
       constructor() {
         super();
-        this.drawDebounceScope = createAsyncCancelScope(handleAsyncError2);
-        this.renderedViewport = null;
         const canvas = document.createElement("canvas");
         canvas.style.position = "absolute";
         canvas.style.transition = "none";
@@ -21664,6 +21665,7 @@
       onRemove() {
         this.ctx.canvas.remove();
       }
+      renderedViewport = null;
       draw() {
         const projection = this.getProjection();
         const map = this.getMap();
@@ -22425,8 +22427,8 @@
         this.config = config3;
         this.drafts = drafts2;
         this.selectedDraftId = selectedDraftId2;
-        this.canvas = null;
       }
+      canvas = null;
       // Overlay が地図に追加された時に呼ばれる
       onAdd() {
         this.canvas = document.createElement("canvas");
@@ -22928,7 +22930,7 @@
 
   // source/poi-records.worker.ts?worker
   function Worker3() {
-    return inlineWorker('var be=Object.defineProperty,Le=Object.defineProperties;var Ie=Object.getOwnPropertyDescriptors;var _=Object.getOwnPropertySymbols;var Ce=Object.prototype.hasOwnProperty,we=Object.prototype.propertyIsEnumerable;var M=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),Re=t=>{throw TypeError(t)};var U=(t,e,o)=>e in t?be(t,e,{enumerable:!0,configurable:!0,writable:!0,value:o}):t[e]=o,W=(t,e)=>{for(var o in e||(e={}))Ce.call(e,o)&&U(t,o,e[o]);if(_)for(var o of _(e))we.call(e,o)&&U(t,o,e[o]);return t},j=(t,e)=>Le(t,Ie(e));var ke=function(t,e){this[0]=t,this[1]=e};var L=t=>{var e=t[M("asyncIterator")],o=!1,s,c={};return e==null?(e=t[M("iterator")](),s=i=>c[i]=d=>e[i](d)):(e=e.call(t),s=i=>c[i]=d=>{if(o){if(o=!1,i==="throw")throw d;return d}return o=!0,{done:!1,value:new ke(new Promise(u=>{var n=e[i](d);n instanceof Object||Re("Object expected"),u(n)}),1)}}),c[M("iterator")]=()=>c,s("next"),"throw"in e?s("throw"):c.throw=i=>{throw i},"return"in e&&s("return"),c};function Y(t,e,{batchSize:o=10}={}){let s=[],c=!1,i=!1;function d(a){s.push(a),u()}function u(){i||(i=!0,queueMicrotask(()=>{i=!1,n().catch(e)}))}async function n(){if(c||s.length===0)return;c=!0;let a=s.splice(0,o);try{await t(a)}finally{c=!1,s.length&&u()}}function r(){s.length=0}return{push:d,close:r}}function X(){return typeof window=="undefined"&&typeof self!="undefined"}function Ee(t,e){let o=performance.now(),s=null;return t.addEventListener("abort",()=>{s!=null&&(cancelAnimationFrame(s),s=null)},{once:!0}),{get isYieldRequested(){var i,d;return(d=(i=navigator.scheduling)==null?void 0:i.isInputPending)!=null&&d.call(i)?!0:performance.now()-o>=e},yield(){return this.isYieldRequested?new Promise(c=>{s=requestAnimationFrame(()=>{o=performance.now(),c()})}):null}}}function De(){return{isYieldRequested:!1,yield(){return null}}}function H(t,e=10){return X()?De():Ee(t,e)}function J(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function Ne(t,e,o,s){return{sw:{lat:t,lng:e},ne:{lat:o,lng:s}}}function Z(t,e){return Ne(t.lat,t.lng,e.lat,e.lng)}function $(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function z(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function ee(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?Ke(t,e):!1}function Ke(t,e){let o=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!o&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:w(t,e.sw.lng)||w(t,e.ne.lng)||w(e,t.sw.lng)||w(e,t.ne.lng)||o&&s}function w(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function I(t){return t}function ne(...t){}var P=class extends Error{constructor(o){super(o);this.name="AbortError"}};function re(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new P(t)}function Pe(t,e){for(let[o,s]of Object.entries(e)){let c=t.createObjectStore(o,{keyPath:s.key.slice()});for(let[i,d]of Object.entries(s.indexes))c.createIndex(i,d.key,d)}}function oe(t,e,o){return new Promise((s,c)=>{let i=indexedDB.open(t,e);i.addEventListener("upgradeneeded",()=>Pe(i.result,o)),i.addEventListener("blocked",()=>c(new Error("database blocked"))),i.addEventListener("error",()=>c(i.error)),i.addEventListener("success",()=>s(i.result))})}var A=class{constructor(e,o,s){this.source=e;this.query=o;this.action=s}};function ae(t,{mode:e,signal:o},s,...c){return new Promise((i,d)=>{if(o!=null&&o.aborted){d(re());return}let u=!1,n,r=t.transaction(c,e),a=o?()=>{u||r.abort()}:ne;r.addEventListener("complete",()=>{o==null||o.removeEventListener("abort",a),u?i(n):d(new Error("internal error"))}),r.addEventListener("error",g=>{o==null||o.removeEventListener("abort",a),d(g.target.error)}),o==null||o.addEventListener("abort",a);let l={};for(let g of c)l[g]=r.objectStore(g);let p=s(l),m,T,y,f,S,h;function v(){let g;switch(m){case void 0:g=p.next();break;case"Request":{let x=T.result;m=void 0,T=void 0,g=p.next(x);break}case"WaitRequests":{let x=y,Q=f,xe=Q[x.length].result;if(x.push(xe),x.length!==Q.length)return;m=void 0,f=void 0,y=void 0,g=p.next(x);break}case"OpenCursor":{let x=S.result;if(x===null||h(x.value)==="break")m=void 0,S=void 0,h=void 0,g=p.next(void 0);else{x.continue();return}break}default:{d(new Error(`Invalid resolving kind: ${m}`));return}}if(g.done){u=!0,n=g.value;return}let b=g.value;if(b instanceof IDBRequest){m="Request",T=b,b.onsuccess=v;return}if(b instanceof A){m="OpenCursor",S=b.source.openCursor(b.query),h=b.action,S.onsuccess=v;return}m="WaitRequests",f=b,y=[];for(let x of b)x.onsuccess=v}v()})}function R(t,e){return t.index(e)}function Ae(t,e){let o=[];for(let s of e)o.push(t.get(s));return o}function*se(t,e){let o=Ae(t,e);return o.length===0?[]:yield o}function*ie(t,e,o){return yield t.getAll(e,o)}function*B(t,e){let o;for(let s of e)o=t.put(s);o!=null&&(yield o)}function*le(t,e){let o;for(let s of e)o=t.delete(s);o!=null&&(yield o)}function Fe(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(n,r,a){var l=parseFloat(n,10),p=parseFloat(r,10);if(isNaN(l)||isNaN(p))throw new Error("Invalid LatLng object: ("+n+", "+r+")");return a!==!0&&(l=Math.max(Math.min(l,90),-90),p=(p+180)%360+(p<-180||p===180?180:-180)),{lat:l,lng:p}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(n){var r=e.L.LatLng.DEG_TO_RAD,a=n.lat*r,l=n.lng*r,p=Math.cos(a);return[Math.cos(l)*p,Math.sin(l)*p,Math.sin(a)]},e.XYZToLatLng=function(n){var r=e.L.LatLng.RAD_TO_DEG,a=Math.atan2(n[2],Math.sqrt(n[0]*n[0]+n[1]*n[1])),l=Math.atan2(n[1],n[0]);return e.L.LatLng(a*r,l*r)};var o=function(n){var r=[Math.abs(n[0]),Math.abs(n[1]),Math.abs(n[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(n,r){var a,l;switch(n){case 0:a=r[1]/r[0],l=r[2]/r[0];break;case 1:a=-r[0]/r[1],l=r[2]/r[1];break;case 2:a=-r[0]/r[2],l=-r[1]/r[2];break;case 3:a=r[2]/r[0],l=r[1]/r[0];break;case 4:a=r[2]/r[1],l=-r[0]/r[1];break;case 5:a=-r[1]/r[2],l=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[a,l]};e.XYZToFaceUV=function(n){var r=o(n);n[r]<0&&(r+=3);var a=s(r,n);return[r,a]},e.FaceUVToXYZ=function(n,r){var a=r[0],l=r[1];switch(n){case 0:return[1,a,l];case 1:return[-a,1,l];case 2:return[-a,-l,1];case 3:return[-1,-l,-a];case 4:return[l,-1,-a];case 5:return[l,a,-1];default:throw{error:"Invalid face"}}};var c=function(n){return n>=.5?1/3*(4*n*n-1):1/3*(1-4*(1-n)*(1-n))};e.STToUV=function(n){return[c(n[0]),c(n[1])]};var i=function(n){return n>=0?.5*Math.sqrt(1+3*n):1-.5*Math.sqrt(1-3*n)};e.UVToST=function(n){return[i(n[0]),i(n[1])]},e.STToIJ=function(n,r){var a=1<<r,l=function(p){var m=Math.floor(p*a);return Math.max(0,Math.min(a-1,m))};return[l(n[0]),l(n[1])]},e.IJToST=function(n,r,a){var l=1<<r;return[(n[0]+a[0])/l,(n[1]+a[1])/l]};var d=function(n,r,a,l){var p,m;if(l==0){a==1&&(r.x=n-1-r.x,r.y=n-1-r.y);var T=r.x;r.x=r.y,r.y=T}},u=function(n,r,a,l){var p={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof l!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var m=l%2?"d":"a",T=[],y=a-1;y>=0;y--){var f=1<<y,S=n&f?1:0,h=r&f?1:0,v=p[m][S*2+h];T.push(v[0]),m=v[1]}return T};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(n){var r=n.split("/"),a=parseInt(r[0]),l=r[1],p=l.length,m={x:0,y:0},T,y,f,S,h,v;for(T=p-1;T>=0;T--)y=p-T,f=l[T],S=0,h=0,f==="1"?h=1:f==="2"?(S=1,h=1):f==="3"&&(S=1),v=Math.pow(2,y-1),d(v,m,S,h),m.x+=v*S,m.y+=v*h;if(a%2===1){var g=m.x;m.x=m.y,m.y=g}return e.S2Cell.FromFaceIJ(parseInt(a),[m.x,m.y],y)},e.S2Cell.FromLatLng=function(n,r){if(!n.lat&&n.lat!==0||!n.lng&&n.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var a=e.LatLngToXYZ(n),l=e.XYZToFaceUV(a),p=e.UVToST(l[1]),m=e.STToIJ(p,r);return e.S2Cell.FromFaceIJ(l[0],m,r)},e.S2Cell.FromFaceIJ=function(n,r,a){var l=new e.S2Cell;return l.face=n,l.ij=r,l.level=a,l},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var n=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(n),a=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(a)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var n=[],r=[[0,0],[0,1],[1,1],[1,0]],a=0;a<4;a++){var l=e.IJToST(this.ij,this.level,r[a]),p=e.STToUV(l),m=e.FaceUVToXYZ(this.face,p);n.push(e.XYZToLatLng(m))}return n},e.S2Cell.prototype.getFaceAndQuads=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return[this.face,n]},e.S2Cell.prototype.toHilbertQuadkey=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+n.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(n,r,a){return e.S2Cell.FromLatLng({lat:n,lng:r},a).getNeighbors().map(function(l){return l.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var n=function(m,T,y){var f=1<<y;if(T[0]>=0&&T[1]>=0&&T[0]<f&&T[1]<f)return e.S2Cell.FromFaceIJ(m,T,y);var S=e.IJToST(T,y,[.5,.5]),h=e.STToUV(S),v=e.FaceUVToXYZ(m,h),g=e.XYZToFaceUV(v);return m=g[0],h=g[1],S=e.UVToST(h),T=e.STToIJ(S,y),e.S2Cell.FromFaceIJ(m,T,y)},r=this.face,a=this.ij[0],l=this.ij[1],p=this.level;return[n(r,[a-1,l],p),n(r,[a,l-1],p),n(r,[a+1,l],p),n(r,[a,l+1],p)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(n,r,a){var l=t.dcodeIO&&t.dcodeIO.Long,p,m,T;for(a||(a=r.length),r.length>a&&(r=r.substr(0,a)),p=l.fromString(n.toString(10),!0,10).toString(2);p.length<e.FACE_BITS;)p="0"+p;for(m=l.fromString(r,!0,4).toString(2);m.length<2*a;)m="0"+m;for(T=p+m,T+="1";T.length<e.FACE_BITS+e.POS_BITS;)T+="0";return l.fromString(T,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(n){var r=n.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(n){for(var r=t.dcodeIO&&t.dcodeIO.Long,a=r.fromString(n,!0,10).toString(2);a.length<e.FACE_BITS+e.POS_BITS;)a="0"+a;for(var l=a.lastIndexOf("1"),p=a.substring(0,3),m=a.substring(3,l),T=m.length/2,y=r.fromString(p,!0,2).toString(10),f=r.fromString(m,!0,2).toString(4);f.length<T;)f="0"+f;return y+"/"+f},e.keyToLatLng=e.S2Cell.keyToLatLng=function(n){var r=e.S2Cell.FromHilbertQuadKey(n);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(n){var r=e.idToKey(n);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(n,r,a){if(isNaN(a)||a<1||a>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:n,lng:r},a).toHilbertQuadkey()},e.stepKey=function(n,r){var a=t.dcodeIO&&t.dcodeIO.Long,l=n.split("/"),p=l[0],m=l[1],T=l[1].length,y=a.fromString(m,!0,4),f;r>0?f=y.add(Math.abs(r)):r<0&&(f=y.subtract(Math.abs(r)));var S=f.toString(4);for(S==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));S.length<T;)S="0"+S;return p+"/"+S},e.S2Cell.prevKey=e.prevKey=function(n){return e.stepKey(n,-1)},e.S2Cell.nextKey=e.nextKey=function(n){return e.stepKey(n,1)},e}var C=Fe(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function F(t,e){return C.S2Cell.FromLatLng(t,e)}function Ge(t){return C.S2Cell.FromHilbertQuadKey(t)}function D(t,e){return F(t,e).toString()}var qe=Object.freeze(["0","1","2","3"]);function N(t){let e=t.level;if(C.MAX_LEVEL<=e)throw new Error("Cannot get children for a cell at MAX_LEVEL (30).");let o=t.toHilbertQuadkey(),s=[];for(let c of qe){let i=o+c;s.push(Ge(i))}return s}function ce(t){let e=t.padEnd(16,"0"),o=BigInt(`0x${e}`),s=Ve(o);return C.S2Cell.FromHilbertQuadKey(s)}var G=new BigUint64Array(1),E=new Uint32Array(G.buffer);function Oe(t){G[0]=t;let e=E[0],o=E[1];return e!==0?31-Math.clz32(e&-e):o!==0?32+(31-Math.clz32(o&-o)):64}var k=[];function Ve(t){G[0]=t;let e=E[0],o=E[1],s=o>>>29,c=Qe(t);k.length=0,k.push(s,"/");for(let i=1;i<=c;i++){let d=61-2*i,u;d>=32?u=o>>>d-32&3:d===31?u=(o&1)<<1|e>>>31:u=e>>>d&3,k.push(u)}return k.join("")}function Qe(t){let e=Oe(t);if(e>60||(e&1)!==0)throw new Error("Invalid S2CellID");return 60-e>>1}function de(t=1024){let e=new Array(t),o=t-1,s=0,c=0;return{enqueue(i){e[c&o]=i,c++},dequeue(){if(s===c)return;let i=e[s&o];return s++,i}}}var _e={pois:{recordType:I,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:I,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},K=Symbol("_pois"),ue=Symbol("_cells"),Ue=Symbol("_coordinatesIndex"),me=Symbol("_cellIdsIndex"),We=Symbol("_ancestorIdsIndexSymbol");var je="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",Ye=1,pe=Symbol("_database");async function Te(){return{[pe]:await oe(je,Ye,_e)}}function Xe(t,e,o,s){return ae(t[pe],{mode:e,signal:o==null?void 0:o.signal},({pois:c,cells:i})=>{let d={[K]:c,[ue]:i,[Ue]:R(c,"coordinates"),[me]:R(c,"cellIds"),[We]:R(i,"ancestorIds")};return s(d)},"pois","cells")}function He(t,e){let o=[],s=new Set,c=de();c.enqueue(F($(t),e));for(let i;i=c.dequeue();){let d=i.toString();if(s.has(d))continue;s.add(d);let u=J();for(let n of i.getCornerLatLngs())u=z(u,n);if(ee(t,u)){o.push(i);for(let n of i.getNeighbors())c.enqueue(n)}}return o}function Je(t,e,o,s){let c=o.latE6/1e6,i=o.lngE6/1e6,d=o.title,u={lat:c,lng:i},n=[D(u,14),D(u,15)],r=t!=null?t:{guid:e,lat:c,lng:i,name:d,data:o,cellIds:n,firstFetchDate:s,lastFetchDate:s};return j(W({},r),{name:d!==""?d:r.name,lat:c,lng:i,data:o,cellIds:n,lastFetchDate:s})}async function fe(t,e,o,s,c){let i=new Map;for(let d of o)for(let u of He(d,q)){let n=u.toString();e.has(n)||i.set(n,{cell:u})}await Xe(t,"readwrite",{signal:c},function*(d){yield*L(Ze(d,e)),yield*L($e(e,d,s)),yield*L(ze(d,e,i,s))})}function*Ze(t,e){let o=[];for(let[s,{pois:c}]of e){let i=new Set;for(let u of c)i.add(u.poiId);let d=yield*L(ie(t[me],s));for(let{guid:u}of d)i.has(u)||o.push(u)}yield*L(le(t[K],o))}function*$e(t,e,o){let s=[],c=[];for(let{pois:u}of t.values())for(let n of u)s.push(n.poiId),c.push(n);let d=(yield*L(se(e[K],s))).map((u,n)=>{let r=c[n];return Je(u,r.poiId,r,o)});yield*L(B(e[K],d))}function*ze(t,e,o,s){let c=[];for(let{cell:i}of[...e.values(),...o.values()])for(let d of N(i))for(let u of N(d))for(let n of N(u)){let r=n.getLatLng();c.push({cellId:n.toString(),centerLat:r.lat,centerLng:r.lng,level:n.level,ancestorIds:[D(r,14)],firstFetchDate:s,lastFetchDate:s})}yield*L(B(t[ue],c))}function ye(){return new EventTarget}function Se(t,e){return new CustomEvent(t,{detail:e})}function et(t){let e={};return t.searchParams.forEach((o,s)=>{e[s]=o}),e}async function tt(t,e,{cells:o,bounds:s},c){await fe(t,o,s,Date.now(),c),e.dispatchEvent(Se("gcs-saved",void 0))}var q=14;async function nt(t,e,o){let s=new Map,c=[];for(let{queries:i,responseText:d}of e){await o.yield();let u=t.parseGcsResponse(d);if(u.captcha||!u.result.success)continue;let n=t.parseGcsQueries(i);c.push(Z(n.sw,n.ne));for(let{metadata:r,pois:a}of u.result.data){if(r.s2CellLevel!==q)continue;let l=ce(r.s2CellId),p=l.toString();s.set(p,{pois:a,cell:l})}}return{cells:s,bounds:c}}async function ge(t,e,o){let s=await Te(),c=Y(async i=>{let{signal:d}=new AbortController,u=H(d),n=await nt(t,i,u);await tt(s,e,n,d)},o);return(i,d)=>{c.push({queries:et(i),responseText:d})}}function O(t,e){return t}var rt=[O("config-changed",I),O("gcs-received",I),O("gcs-saved",I)],he=rt;async function ve(){let t=await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm"),e=t.enum(["DETAILED"]),o=t.enum(["GYM","POKESTOP","POWERSPOT"]),s=t.enum(["HOLOHOLO"]),c=t.enum(["ACTIVE","INACTIVE"]),i=/^\\(\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)$/,d=t.string().transform((T,y)=>{let f=i.exec(T);return f?{lat:Number(f[1]),lng:Number(f[2])}:(y.addIssue({code:"invalid_format",message:"Invalid point format. Expected `(${number},${number})",format:"custom",pattern:i.source,input:T}),t.NEVER)}),u=t.object({ne:d,sw:d}),n=t.object({s2CellLevel:t.number(),s2CellId:t.string(),generatedTimestamp:t.string(),count:t.number(),format:e}),r=t.object({gameBrand:s,entity:o,status:c}),a=t.object({poiId:t.string(),latE6:t.number(),lngE6:t.number(),title:t.string(),description:t.string(),address:t.string(),categoryTags:t.array(t.unknown()),mainImage:t.string(),hasAdditionalImages:t.boolean(),gmo:t.array(r),isCommunityContributed:t.boolean()}),l=t.object({metadata:n,pois:t.array(a),clusters:t.array(t.unknown())}),p=t.object({success:t.boolean(),data:t.array(l),cellsQueried:t.number(),cellsLoaded:t.number(),snapshot:t.string(),cellLevel:t.number()}),m=t.object({result:p,message:t.unknown(),code:t.string(),errorsWithIcon:t.unknown(),fieldErrors:t.unknown(),errorDetails:t.unknown(),version:t.string(),captcha:t.boolean()});return{FormatSchema:e,EntityKindSchema:o,GameBrandSchema:s,StatusSchema:c,MetadataSchema:n,GmoSchema:r,PoiSchema:a,DatumSchema:l,ResultSchema:p,GcsQueriesSchema:u,GcsResponseSchema:m,parseGcsResponse(T){return m.parse(JSON.parse(T))},parseGcsQueries(T){return u.parse(T)}}}function V(t){console.error("An error occurred during asynchronous processing:",t)}async function ot(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self),o=await ve(),s=ye(),c=u=>{e.dispatchEvent(u.type,u.detail).catch(V)};he.forEach(u=>s.addEventListener(u,c));let i=await ge(o,s,V),d={onGcsReceived(u,n){i(new URL(u),n)}};t.expose(d)}ot().catch(V);\n');
+    return inlineWorker('var Le=Object.defineProperty,Ie=Object.defineProperties;var Ce=Object.getOwnPropertyDescriptors;var U=Object.getOwnPropertySymbols;var we=Object.prototype.hasOwnProperty,Re=Object.prototype.propertyIsEnumerable;var M=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),ke=t=>{throw TypeError(t)};var P=(t,e,o)=>e in t?Le(t,e,{enumerable:!0,configurable:!0,writable:!0,value:o}):t[e]=o,W=(t,e)=>{for(var o in e||(e={}))we.call(e,o)&&P(t,o,e[o]);if(U)for(var o of U(e))Re.call(e,o)&&P(t,o,e[o]);return t},j=(t,e)=>Ie(t,Ce(e));var Y=(t,e,o)=>P(t,typeof e!="symbol"?e+"":e,o);var Ee=function(t,e){this[0]=t,this[1]=e};var L=t=>{var e=t[M("asyncIterator")],o=!1,s,c={};return e==null?(e=t[M("iterator")](),s=i=>c[i]=d=>e[i](d)):(e=e.call(t),s=i=>c[i]=d=>{if(o){if(o=!1,i==="throw")throw d;return d}return o=!0,{done:!1,value:new Ee(new Promise(u=>{var n=e[i](d);n instanceof Object||ke("Object expected"),u(n)}),1)}}),c[M("iterator")]=()=>c,s("next"),"throw"in e?s("throw"):c.throw=i=>{throw i},"return"in e&&s("return"),c};function X(t,e,{batchSize:o=10}={}){let s=[],c=!1,i=!1;function d(a){s.push(a),u()}function u(){i||(i=!0,queueMicrotask(()=>{i=!1,n().catch(e)}))}async function n(){if(c||s.length===0)return;c=!0;let a=s.splice(0,o);try{await t(a)}finally{c=!1,s.length&&u()}}function r(){s.length=0}return{push:d,close:r}}function H(){return typeof window=="undefined"&&typeof self!="undefined"}function De(t,e){let o=performance.now(),s=null;return t.addEventListener("abort",()=>{s!=null&&(cancelAnimationFrame(s),s=null)},{once:!0}),{get isYieldRequested(){var i,d;return(d=(i=navigator.scheduling)==null?void 0:i.isInputPending)!=null&&d.call(i)?!0:performance.now()-o>=e},yield(){return this.isYieldRequested?new Promise(c=>{s=requestAnimationFrame(()=>{o=performance.now(),c()})}):null}}}function Ne(){return{isYieldRequested:!1,yield(){return null}}}function J(t,e=10){return H()?Ne():De(t,e)}function Z(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function Ke(t,e,o,s){return{sw:{lat:t,lng:e},ne:{lat:o,lng:s}}}function $(t,e){return Ke(t.lat,t.lng,e.lat,e.lng)}function z(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function ee(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function te(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?Me(t,e):!1}function Me(t,e){let o=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!o&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:w(t,e.sw.lng)||w(t,e.ne.lng)||w(e,t.sw.lng)||w(e,t.ne.lng)||o&&s}function w(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function I(t){return t}function re(...t){}var A=class extends Error{constructor(o){super(o);Y(this,"name","AbortError")}};function oe(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new A(t)}function Ae(t,e){for(let[o,s]of Object.entries(e)){let c=t.createObjectStore(o,{keyPath:s.key.slice()});for(let[i,d]of Object.entries(s.indexes))c.createIndex(i,d.key,d)}}function ae(t,e,o){return new Promise((s,c)=>{let i=indexedDB.open(t,e);i.addEventListener("upgradeneeded",()=>Ae(i.result,o)),i.addEventListener("blocked",()=>c(new Error("database blocked"))),i.addEventListener("error",()=>c(i.error)),i.addEventListener("success",()=>s(i.result))})}var B=class{constructor(e,o,s){this.source=e;this.query=o;this.action=s}};function se(t,{mode:e,signal:o},s,...c){return new Promise((i,d)=>{if(o!=null&&o.aborted){d(oe());return}let u=!1,n,r=t.transaction(c,e),a=o?()=>{u||r.abort()}:re;r.addEventListener("complete",()=>{o==null||o.removeEventListener("abort",a),u?i(n):d(new Error("internal error"))}),r.addEventListener("error",g=>{o==null||o.removeEventListener("abort",a),d(g.target.error)}),o==null||o.addEventListener("abort",a);let l={};for(let g of c)l[g]=r.objectStore(g);let p=s(l),m,T,y,f,S,h;function v(){let g;switch(m){case void 0:g=p.next();break;case"Request":{let x=T.result;m=void 0,T=void 0,g=p.next(x);break}case"WaitRequests":{let x=y,_=f,be=_[x.length].result;if(x.push(be),x.length!==_.length)return;m=void 0,f=void 0,y=void 0,g=p.next(x);break}case"OpenCursor":{let x=S.result;if(x===null||h(x.value)==="break")m=void 0,S=void 0,h=void 0,g=p.next(void 0);else{x.continue();return}break}default:{d(new Error(`Invalid resolving kind: ${m}`));return}}if(g.done){u=!0,n=g.value;return}let b=g.value;if(b instanceof IDBRequest){m="Request",T=b,b.onsuccess=v;return}if(b instanceof B){m="OpenCursor",S=b.source.openCursor(b.query),h=b.action,S.onsuccess=v;return}m="WaitRequests",f=b,y=[];for(let x of b)x.onsuccess=v}v()})}function R(t,e){return t.index(e)}function Be(t,e){let o=[];for(let s of e)o.push(t.get(s));return o}function*ie(t,e){let o=Be(t,e);return o.length===0?[]:yield o}function*le(t,e,o){return yield t.getAll(e,o)}function*F(t,e){let o;for(let s of e)o=t.put(s);o!=null&&(yield o)}function*ce(t,e){let o;for(let s of e)o=t.delete(s);o!=null&&(yield o)}function Ge(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(n,r,a){var l=parseFloat(n,10),p=parseFloat(r,10);if(isNaN(l)||isNaN(p))throw new Error("Invalid LatLng object: ("+n+", "+r+")");return a!==!0&&(l=Math.max(Math.min(l,90),-90),p=(p+180)%360+(p<-180||p===180?180:-180)),{lat:l,lng:p}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(n){var r=e.L.LatLng.DEG_TO_RAD,a=n.lat*r,l=n.lng*r,p=Math.cos(a);return[Math.cos(l)*p,Math.sin(l)*p,Math.sin(a)]},e.XYZToLatLng=function(n){var r=e.L.LatLng.RAD_TO_DEG,a=Math.atan2(n[2],Math.sqrt(n[0]*n[0]+n[1]*n[1])),l=Math.atan2(n[1],n[0]);return e.L.LatLng(a*r,l*r)};var o=function(n){var r=[Math.abs(n[0]),Math.abs(n[1]),Math.abs(n[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(n,r){var a,l;switch(n){case 0:a=r[1]/r[0],l=r[2]/r[0];break;case 1:a=-r[0]/r[1],l=r[2]/r[1];break;case 2:a=-r[0]/r[2],l=-r[1]/r[2];break;case 3:a=r[2]/r[0],l=r[1]/r[0];break;case 4:a=r[2]/r[1],l=-r[0]/r[1];break;case 5:a=-r[1]/r[2],l=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[a,l]};e.XYZToFaceUV=function(n){var r=o(n);n[r]<0&&(r+=3);var a=s(r,n);return[r,a]},e.FaceUVToXYZ=function(n,r){var a=r[0],l=r[1];switch(n){case 0:return[1,a,l];case 1:return[-a,1,l];case 2:return[-a,-l,1];case 3:return[-1,-l,-a];case 4:return[l,-1,-a];case 5:return[l,a,-1];default:throw{error:"Invalid face"}}};var c=function(n){return n>=.5?1/3*(4*n*n-1):1/3*(1-4*(1-n)*(1-n))};e.STToUV=function(n){return[c(n[0]),c(n[1])]};var i=function(n){return n>=0?.5*Math.sqrt(1+3*n):1-.5*Math.sqrt(1-3*n)};e.UVToST=function(n){return[i(n[0]),i(n[1])]},e.STToIJ=function(n,r){var a=1<<r,l=function(p){var m=Math.floor(p*a);return Math.max(0,Math.min(a-1,m))};return[l(n[0]),l(n[1])]},e.IJToST=function(n,r,a){var l=1<<r;return[(n[0]+a[0])/l,(n[1]+a[1])/l]};var d=function(n,r,a,l){var p,m;if(l==0){a==1&&(r.x=n-1-r.x,r.y=n-1-r.y);var T=r.x;r.x=r.y,r.y=T}},u=function(n,r,a,l){var p={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof l!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var m=l%2?"d":"a",T=[],y=a-1;y>=0;y--){var f=1<<y,S=n&f?1:0,h=r&f?1:0,v=p[m][S*2+h];T.push(v[0]),m=v[1]}return T};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(n){var r=n.split("/"),a=parseInt(r[0]),l=r[1],p=l.length,m={x:0,y:0},T,y,f,S,h,v;for(T=p-1;T>=0;T--)y=p-T,f=l[T],S=0,h=0,f==="1"?h=1:f==="2"?(S=1,h=1):f==="3"&&(S=1),v=Math.pow(2,y-1),d(v,m,S,h),m.x+=v*S,m.y+=v*h;if(a%2===1){var g=m.x;m.x=m.y,m.y=g}return e.S2Cell.FromFaceIJ(parseInt(a),[m.x,m.y],y)},e.S2Cell.FromLatLng=function(n,r){if(!n.lat&&n.lat!==0||!n.lng&&n.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var a=e.LatLngToXYZ(n),l=e.XYZToFaceUV(a),p=e.UVToST(l[1]),m=e.STToIJ(p,r);return e.S2Cell.FromFaceIJ(l[0],m,r)},e.S2Cell.FromFaceIJ=function(n,r,a){var l=new e.S2Cell;return l.face=n,l.ij=r,l.level=a,l},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var n=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(n),a=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(a)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var n=[],r=[[0,0],[0,1],[1,1],[1,0]],a=0;a<4;a++){var l=e.IJToST(this.ij,this.level,r[a]),p=e.STToUV(l),m=e.FaceUVToXYZ(this.face,p);n.push(e.XYZToLatLng(m))}return n},e.S2Cell.prototype.getFaceAndQuads=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return[this.face,n]},e.S2Cell.prototype.toHilbertQuadkey=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+n.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(n,r,a){return e.S2Cell.FromLatLng({lat:n,lng:r},a).getNeighbors().map(function(l){return l.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var n=function(m,T,y){var f=1<<y;if(T[0]>=0&&T[1]>=0&&T[0]<f&&T[1]<f)return e.S2Cell.FromFaceIJ(m,T,y);var S=e.IJToST(T,y,[.5,.5]),h=e.STToUV(S),v=e.FaceUVToXYZ(m,h),g=e.XYZToFaceUV(v);return m=g[0],h=g[1],S=e.UVToST(h),T=e.STToIJ(S,y),e.S2Cell.FromFaceIJ(m,T,y)},r=this.face,a=this.ij[0],l=this.ij[1],p=this.level;return[n(r,[a-1,l],p),n(r,[a,l-1],p),n(r,[a+1,l],p),n(r,[a,l+1],p)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(n,r,a){var l=t.dcodeIO&&t.dcodeIO.Long,p,m,T;for(a||(a=r.length),r.length>a&&(r=r.substr(0,a)),p=l.fromString(n.toString(10),!0,10).toString(2);p.length<e.FACE_BITS;)p="0"+p;for(m=l.fromString(r,!0,4).toString(2);m.length<2*a;)m="0"+m;for(T=p+m,T+="1";T.length<e.FACE_BITS+e.POS_BITS;)T+="0";return l.fromString(T,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(n){var r=n.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(n){for(var r=t.dcodeIO&&t.dcodeIO.Long,a=r.fromString(n,!0,10).toString(2);a.length<e.FACE_BITS+e.POS_BITS;)a="0"+a;for(var l=a.lastIndexOf("1"),p=a.substring(0,3),m=a.substring(3,l),T=m.length/2,y=r.fromString(p,!0,2).toString(10),f=r.fromString(m,!0,2).toString(4);f.length<T;)f="0"+f;return y+"/"+f},e.keyToLatLng=e.S2Cell.keyToLatLng=function(n){var r=e.S2Cell.FromHilbertQuadKey(n);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(n){var r=e.idToKey(n);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(n,r,a){if(isNaN(a)||a<1||a>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:n,lng:r},a).toHilbertQuadkey()},e.stepKey=function(n,r){var a=t.dcodeIO&&t.dcodeIO.Long,l=n.split("/"),p=l[0],m=l[1],T=l[1].length,y=a.fromString(m,!0,4),f;r>0?f=y.add(Math.abs(r)):r<0&&(f=y.subtract(Math.abs(r)));var S=f.toString(4);for(S==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));S.length<T;)S="0"+S;return p+"/"+S},e.S2Cell.prevKey=e.prevKey=function(n){return e.stepKey(n,-1)},e.S2Cell.nextKey=e.nextKey=function(n){return e.stepKey(n,1)},e}var C=Ge(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function G(t,e){return C.S2Cell.FromLatLng(t,e)}function qe(t){return C.S2Cell.FromHilbertQuadKey(t)}function D(t,e){return G(t,e).toString()}var Oe=Object.freeze(["0","1","2","3"]);function N(t){let e=t.level;if(C.MAX_LEVEL<=e)throw new Error("Cannot get children for a cell at MAX_LEVEL (30).");let o=t.toHilbertQuadkey(),s=[];for(let c of Oe){let i=o+c;s.push(qe(i))}return s}function de(t){let e=t.padEnd(16,"0"),o=BigInt(`0x${e}`),s=Qe(o);return C.S2Cell.FromHilbertQuadKey(s)}var q=new BigUint64Array(1),E=new Uint32Array(q.buffer);function Ve(t){q[0]=t;let e=E[0],o=E[1];return e!==0?31-Math.clz32(e&-e):o!==0?32+(31-Math.clz32(o&-o)):64}var k=[];function Qe(t){q[0]=t;let e=E[0],o=E[1],s=o>>>29,c=_e(t);k.length=0,k.push(s,"/");for(let i=1;i<=c;i++){let d=61-2*i,u;d>=32?u=o>>>d-32&3:d===31?u=(o&1)<<1|e>>>31:u=e>>>d&3,k.push(u)}return k.join("")}function _e(t){let e=Ve(t);if(e>60||(e&1)!==0)throw new Error("Invalid S2CellID");return 60-e>>1}function ue(t=1024){let e=new Array(t),o=t-1,s=0,c=0;return{enqueue(i){e[c&o]=i,c++},dequeue(){if(s===c)return;let i=e[s&o];return s++,i}}}var Ue={pois:{recordType:I,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:I,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},K=Symbol("_pois"),me=Symbol("_cells"),We=Symbol("_coordinatesIndex"),pe=Symbol("_cellIdsIndex"),je=Symbol("_ancestorIdsIndexSymbol");var Ye="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",Xe=1,Te=Symbol("_database");async function fe(){return{[Te]:await ae(Ye,Xe,Ue)}}function He(t,e,o,s){return se(t[Te],{mode:e,signal:o==null?void 0:o.signal},({pois:c,cells:i})=>{let d={[K]:c,[me]:i,[We]:R(c,"coordinates"),[pe]:R(c,"cellIds"),[je]:R(i,"ancestorIds")};return s(d)},"pois","cells")}function Je(t,e){let o=[],s=new Set,c=ue();c.enqueue(G(z(t),e));for(let i;i=c.dequeue();){let d=i.toString();if(s.has(d))continue;s.add(d);let u=Z();for(let n of i.getCornerLatLngs())u=ee(u,n);if(te(t,u)){o.push(i);for(let n of i.getNeighbors())c.enqueue(n)}}return o}function Ze(t,e,o,s){let c=o.latE6/1e6,i=o.lngE6/1e6,d=o.title,u={lat:c,lng:i},n=[D(u,14),D(u,15)],r=t!=null?t:{guid:e,lat:c,lng:i,name:d,data:o,cellIds:n,firstFetchDate:s,lastFetchDate:s};return j(W({},r),{name:d!==""?d:r.name,lat:c,lng:i,data:o,cellIds:n,lastFetchDate:s})}async function ye(t,e,o,s,c){let i=new Map;for(let d of o)for(let u of Je(d,O)){let n=u.toString();e.has(n)||i.set(n,{cell:u})}await He(t,"readwrite",{signal:c},function*(d){yield*L($e(d,e)),yield*L(ze(e,d,s)),yield*L(et(d,e,i,s))})}function*$e(t,e){let o=[];for(let[s,{pois:c}]of e){let i=new Set;for(let u of c)i.add(u.poiId);let d=yield*L(le(t[pe],s));for(let{guid:u}of d)i.has(u)||o.push(u)}yield*L(ce(t[K],o))}function*ze(t,e,o){let s=[],c=[];for(let{pois:u}of t.values())for(let n of u)s.push(n.poiId),c.push(n);let d=(yield*L(ie(e[K],s))).map((u,n)=>{let r=c[n];return Ze(u,r.poiId,r,o)});yield*L(F(e[K],d))}function*et(t,e,o,s){let c=[];for(let{cell:i}of[...e.values(),...o.values()])for(let d of N(i))for(let u of N(d))for(let n of N(u)){let r=n.getLatLng();c.push({cellId:n.toString(),centerLat:r.lat,centerLng:r.lng,level:n.level,ancestorIds:[D(r,14)],firstFetchDate:s,lastFetchDate:s})}yield*L(F(t[me],c))}function Se(){return new EventTarget}function ge(t,e){return new CustomEvent(t,{detail:e})}function tt(t){let e={};return t.searchParams.forEach((o,s)=>{e[s]=o}),e}async function nt(t,e,{cells:o,bounds:s},c){await ye(t,o,s,Date.now(),c),e.dispatchEvent(ge("gcs-saved",void 0))}var O=14;async function rt(t,e,o){let s=new Map,c=[];for(let{queries:i,responseText:d}of e){await o.yield();let u=t.parseGcsResponse(d);if(u.captcha||!u.result.success)continue;let n=t.parseGcsQueries(i);c.push($(n.sw,n.ne));for(let{metadata:r,pois:a}of u.result.data){if(r.s2CellLevel!==O)continue;let l=de(r.s2CellId),p=l.toString();s.set(p,{pois:a,cell:l})}}return{cells:s,bounds:c}}async function he(t,e,o){let s=await fe(),c=X(async i=>{let{signal:d}=new AbortController,u=J(d),n=await rt(t,i,u);await nt(s,e,n,d)},o);return(i,d)=>{c.push({queries:tt(i),responseText:d})}}function V(t,e){return t}var ot=[V("config-changed",I),V("gcs-received",I),V("gcs-saved",I)],ve=ot;async function xe(){let t=await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm"),e=t.enum(["DETAILED"]),o=t.enum(["GYM","POKESTOP","POWERSPOT"]),s=t.enum(["HOLOHOLO"]),c=t.enum(["ACTIVE","INACTIVE"]),i=/^\\(\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)$/,d=t.string().transform((T,y)=>{let f=i.exec(T);return f?{lat:Number(f[1]),lng:Number(f[2])}:(y.addIssue({code:"invalid_format",message:"Invalid point format. Expected `(${number},${number})",format:"custom",pattern:i.source,input:T}),t.NEVER)}),u=t.object({ne:d,sw:d}),n=t.object({s2CellLevel:t.number(),s2CellId:t.string(),generatedTimestamp:t.string(),count:t.number(),format:e}),r=t.object({gameBrand:s,entity:o,status:c}),a=t.object({poiId:t.string(),latE6:t.number(),lngE6:t.number(),title:t.string(),description:t.string(),address:t.string(),categoryTags:t.array(t.unknown()),mainImage:t.string(),hasAdditionalImages:t.boolean(),gmo:t.array(r),isCommunityContributed:t.boolean()}),l=t.object({metadata:n,pois:t.array(a),clusters:t.array(t.unknown())}),p=t.object({success:t.boolean(),data:t.array(l),cellsQueried:t.number(),cellsLoaded:t.number(),snapshot:t.string(),cellLevel:t.number()}),m=t.object({result:p,message:t.unknown(),code:t.string(),errorsWithIcon:t.unknown(),fieldErrors:t.unknown(),errorDetails:t.unknown(),version:t.string(),captcha:t.boolean()});return{FormatSchema:e,EntityKindSchema:o,GameBrandSchema:s,StatusSchema:c,MetadataSchema:n,GmoSchema:r,PoiSchema:a,DatumSchema:l,ResultSchema:p,GcsQueriesSchema:u,GcsResponseSchema:m,parseGcsResponse(T){return m.parse(JSON.parse(T))},parseGcsQueries(T){return u.parse(T)}}}function Q(t){console.error("An error occurred during asynchronous processing:",t)}async function at(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self),o=await xe(),s=Se(),c=u=>{e.dispatchEvent(u.type,u.detail).catch(Q)};ve.forEach(u=>s.addEventListener(u,c));let i=await he(o,s,Q),d={onGcsReceived(u,n){i(new URL(u),n)}};t.expose(d)}at().catch(Q);\n');
   }
 
   // source/drafts-view/dialog.module.css
@@ -24055,164 +24057,108 @@
   var import_VocabularyImpl = __toESM(require_VocabularyImpl());
   var Utils = __toESM(require_Utils());
   var SalLexer = class _SalLexer extends import_Lexer.Lexer {
-    static {
-      this.T__0 = 1;
-    }
-    static {
-      this.T__1 = 2;
-    }
-    static {
-      this.T__2 = 3;
-    }
-    static {
-      this.T__3 = 4;
-    }
-    static {
-      this.T__4 = 5;
-    }
-    static {
-      this.OR = 6;
-    }
-    static {
-      this.AND = 7;
-    }
-    static {
-      this.WHERE = 8;
-    }
-    static {
-      this.FUNCTION = 9;
-    }
-    static {
-      this.PAREN_BEGIN = 10;
-    }
-    static {
-      this.PAREN_END = 11;
-    }
-    static {
-      this.COLON = 12;
-    }
-    static {
-      this.SLASH = 13;
-    }
-    static {
-      this.AT = 14;
-    }
-    static {
-      this.MINUS = 15;
-    }
-    static {
-      this.EQUALS = 16;
-    }
-    static {
-      this.NUMBER = 17;
-    }
-    static {
-      this.STRING = 18;
-    }
-    static {
-      this.WORD = 19;
-    }
-    static {
-      this.LINE_COMMENT = 20;
-    }
-    static {
-      this.BLOCK_COMMENT = 21;
-    }
-    static {
-      this.WS = 22;
-    }
-    static {
-      // tslint:disable:no-trailing-whitespace
-      this.channelNames = [
-        "DEFAULT_TOKEN_CHANNEL",
-        "HIDDEN"
-      ];
-    }
-    static {
-      // tslint:disable:no-trailing-whitespace
-      this.modeNames = [
-        "DEFAULT_MODE"
-      ];
-    }
-    static {
-      this.ruleNames = [
-        "T__0",
-        "T__1",
-        "T__2",
-        "T__3",
-        "T__4",
-        "OR",
-        "AND",
-        "WHERE",
-        "FUNCTION",
-        "PAREN_BEGIN",
-        "PAREN_END",
-        "COLON",
-        "SLASH",
-        "AT",
-        "MINUS",
-        "EQUALS",
-        "NUMBER",
-        "STRING",
-        "WORD_START",
-        "WORD_PART",
-        "WORD",
-        "LINE_COMMENT",
-        "BLOCK_COMMENT",
-        "WS"
-      ];
-    }
-    static {
-      this._LITERAL_NAMES = [
-        void 0,
-        "'['",
-        "','",
-        "']'",
-        "'{'",
-        "'}'",
-        "'or'",
-        "'and'",
-        "'where'",
-        void 0,
-        "'('",
-        "')'",
-        "':'",
-        "'/'",
-        "'@'",
-        "'-'",
-        "'='"
-      ];
-    }
-    static {
-      this._SYMBOLIC_NAMES = [
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        "OR",
-        "AND",
-        "WHERE",
-        "FUNCTION",
-        "PAREN_BEGIN",
-        "PAREN_END",
-        "COLON",
-        "SLASH",
-        "AT",
-        "MINUS",
-        "EQUALS",
-        "NUMBER",
-        "STRING",
-        "WORD",
-        "LINE_COMMENT",
-        "BLOCK_COMMENT",
-        "WS"
-      ];
-    }
-    static {
-      this.VOCABULARY = new import_VocabularyImpl.VocabularyImpl(_SalLexer._LITERAL_NAMES, _SalLexer._SYMBOLIC_NAMES, []);
-    }
+    static T__0 = 1;
+    static T__1 = 2;
+    static T__2 = 3;
+    static T__3 = 4;
+    static T__4 = 5;
+    static OR = 6;
+    static AND = 7;
+    static WHERE = 8;
+    static FUNCTION = 9;
+    static PAREN_BEGIN = 10;
+    static PAREN_END = 11;
+    static COLON = 12;
+    static SLASH = 13;
+    static AT = 14;
+    static MINUS = 15;
+    static EQUALS = 16;
+    static NUMBER = 17;
+    static STRING = 18;
+    static WORD = 19;
+    static LINE_COMMENT = 20;
+    static BLOCK_COMMENT = 21;
+    static WS = 22;
+    // tslint:disable:no-trailing-whitespace
+    static channelNames = [
+      "DEFAULT_TOKEN_CHANNEL",
+      "HIDDEN"
+    ];
+    // tslint:disable:no-trailing-whitespace
+    static modeNames = [
+      "DEFAULT_MODE"
+    ];
+    static ruleNames = [
+      "T__0",
+      "T__1",
+      "T__2",
+      "T__3",
+      "T__4",
+      "OR",
+      "AND",
+      "WHERE",
+      "FUNCTION",
+      "PAREN_BEGIN",
+      "PAREN_END",
+      "COLON",
+      "SLASH",
+      "AT",
+      "MINUS",
+      "EQUALS",
+      "NUMBER",
+      "STRING",
+      "WORD_START",
+      "WORD_PART",
+      "WORD",
+      "LINE_COMMENT",
+      "BLOCK_COMMENT",
+      "WS"
+    ];
+    static _LITERAL_NAMES = [
+      void 0,
+      "'['",
+      "','",
+      "']'",
+      "'{'",
+      "'}'",
+      "'or'",
+      "'and'",
+      "'where'",
+      void 0,
+      "'('",
+      "')'",
+      "':'",
+      "'/'",
+      "'@'",
+      "'-'",
+      "'='"
+    ];
+    static _SYMBOLIC_NAMES = [
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      "OR",
+      "AND",
+      "WHERE",
+      "FUNCTION",
+      "PAREN_BEGIN",
+      "PAREN_END",
+      "COLON",
+      "SLASH",
+      "AT",
+      "MINUS",
+      "EQUALS",
+      "NUMBER",
+      "STRING",
+      "WORD",
+      "LINE_COMMENT",
+      "BLOCK_COMMENT",
+      "WS"
+    ];
+    static VOCABULARY = new import_VocabularyImpl.VocabularyImpl(_SalLexer._LITERAL_NAMES, _SalLexer._SYMBOLIC_NAMES, []);
     // @Override
     // @NotNull
     get vocabulary() {
@@ -24243,24 +24189,17 @@
     get modeNames() {
       return _SalLexer.modeNames;
     }
-    static {
-      this._serializedATNSegments = 2;
-    }
-    static {
-      this._serializedATNSegment0 = '\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241\xB8\b					\x07	\x07\b	\b			\n	\n\v	\v\f	\f\r	\r												\x07\x07\x07\b\b\b\b						\n\n\n\n\n\n\n\n\n\n\nU\n\n\v\v\f\f\r\rf\ni\n\rjo\n\rps\nw\nz\n\r{~\n\x07\x84\n\f\x87\v\x8F\n\x07\x93\n\f\x96\v\x07\x9C\n\f\x9F\v\x07\xA8\n\f\xAB\v\xB3\n\r\xB4\xA9\x07	\v\x07\r\b	\n\v\f\r\x1B!#%\')+-/1\x072;GGgg$$^^))/0\f\f\u028D"$$)+.1<@BB]]__}}\x7F\x7F\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\u0284"\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353';
-    }
-    static {
-      this._serializedATNSegment1 = "\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\xC5\x07	\v\r\x1B!#%+-/135\x077	9\v;\r=@DTVXZ\x1B\\^`!b#e%\x7F'\x8A)\x8E+\x90-\x97/\xA21\xB234\x07]456\x07.678\x07_8\b9:\x07}:\n;<\x07\x7F<\f=>\x07q>?\x07t?@A\x07cAB\x07pBC\x07fCDE\x07yEF\x07jFG\x07gGH\x07tHI\x07gIJK\x07hKL\x07wLM\x07pMN\x07eNO\x07vOP\x07kPQ\x07qQU\x07pRS\x07hSU\x07pTJTRUVW\x07*WXY\x07+YZ[\x07<[\\]\x071]^_\x07B_`a\x07/a bc\x07?c\"df\x07/edeffhgi	hgijjhjkkrln\x070mo	nmoppnpqqsrlrss}tv	uw\x07/vuvwwyxz	yxz{{y{||~}t}~~$\x7F\x85\x07$\x80\x81\x07^\x81\x84\v\x82\x84\n\x83\x80\x83\x82\x84\x87\x85\x83\x85\x86\x86\x88\x87\x85\x88\x89\x07$\x89&\x8A\x8B\n\x07\x8B(\x8C\x8F'\x8D\x8F	\x8E\x8C\x8E\x8D\x8F*\x90\x94'\x91\x93)\x92\x91\x93\x96\x94\x92\x94\x95\x95,\x96\x94\x97\x98\x071\x98\x99\x071\x99\x9D\x9A\x9C\n\x9B\x9A\x9C\x9F\x9D\x9B\x9D\x9E\x9E\xA0\x9F\x9D\xA0\xA1\b\xA1.\xA2\xA3\x071\xA3\xA4\x07,\xA4\xA9\xA5\xA8/\xA6\xA8\v\xA7\xA5\xA7\xA6\xA8\xAB\xA9\xAA\xA9\xA7\xAA\xAC\xAB\xA9\xAC\xAD\x07,\xAD\xAE\x071\xAE\xAF\xAF\xB0\b\xB00\xB1\xB3	\b\xB2\xB1\xB3\xB4\xB4\xB2\xB4\xB5\xB5\xB6\xB6\xB7\b\xB72Tejprv{}\x83\x85\x8E\x94\x9D\xA7\xA9\xB4\b";
-    }
-    static {
-      this._serializedATN = Utils.join(
-        [
-          _SalLexer._serializedATNSegment0,
-          _SalLexer._serializedATNSegment1
-        ],
-        ""
-      );
-    }
+    static _serializedATNSegments = 2;
+    static _serializedATNSegment0 = '\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241\xB8\b					\x07	\x07\b	\b			\n	\n\v	\v\f	\f\r	\r												\x07\x07\x07\b\b\b\b						\n\n\n\n\n\n\n\n\n\n\nU\n\n\v\v\f\f\r\rf\ni\n\rjo\n\rps\nw\nz\n\r{~\n\x07\x84\n\f\x87\v\x8F\n\x07\x93\n\f\x96\v\x07\x9C\n\f\x9F\v\x07\xA8\n\f\xAB\v\xB3\n\r\xB4\xA9\x07	\v\x07\r\b	\n\v\f\r\x1B!#%\')+-/1\x072;GGgg$$^^))/0\f\f\u028D"$$)+.1<@BB]]__}}\x7F\x7F\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\u0284"\x81\xA2\xAF\xAF\u037A\u037B\u0382\u0385\u038D\u038D\u038F\u038F\u03A4\u03A4\u0532\u0532\u0559\u055A\u0562\u0562\u058A\u058A\u058D\u058E\u0592\u0592\u05CA\u05D1\u05ED\u05F1\u05F7\u0607\u061E\u061F\u06DF\u06DF\u0710\u0711\u074D\u074E\u07B4\u07C1\u07FD\u0801\u0830\u0831\u0841\u0841\u085E\u085F\u0861\u08A1\u08B7\u08B7\u08C0\u08D5\u08E4\u08E4\u0986\u0986\u098F\u0990\u0993\u0994\u09AB\u09AB\u09B3\u09B3\u09B5\u09B7\u09BC\u09BD\u09C7\u09C8\u09CB\u09CC\u09D1\u09D8\u09DA\u09DD\u09E0\u09E0\u09E6\u09E7\u09FE\u0A02\u0A06\u0A06\u0A0D\u0A10\u0A13\u0A14\u0A2B\u0A2B\u0A33\u0A33\u0A36\u0A36\u0A39\u0A39\u0A3C\u0A3D\u0A3F\u0A3F\u0A45\u0A48\u0A4B\u0A4C\u0A50\u0A52\u0A54\u0A5A\u0A5F\u0A5F\u0A61\u0A67\u0A78\u0A82\u0A86\u0A86\u0A90\u0A90\u0A94\u0A94\u0AAB\u0AAB\u0AB3\u0AB3\u0AB6\u0AB6\u0ABC\u0ABD\u0AC8\u0AC8\u0ACC\u0ACC\u0AD0\u0AD1\u0AD3\u0AE1\u0AE6\u0AE7\u0AF4\u0AFA\u0AFC\u0B02\u0B06\u0B06\u0B0F\u0B10\u0B13\u0B14\u0B2B\u0B2B\u0B33\u0B33\u0B36\u0B36\u0B3C\u0B3D\u0B47\u0B48\u0B4B\u0B4C\u0B50\u0B57\u0B5A\u0B5D\u0B60\u0B60\u0B66\u0B67\u0B7A\u0B83\u0B86\u0B86\u0B8D\u0B8F\u0B93\u0B93\u0B98\u0B9A\u0B9D\u0B9D\u0B9F\u0B9F\u0BA2\u0BA4\u0BA7\u0BA9\u0BAD\u0BAF\u0BBC\u0BBF\u0BC5\u0BC7\u0BCB\u0BCB\u0BD0\u0BD1\u0BD3\u0BD8\u0BDA\u0BE7\u0BFD\u0C01\u0C06\u0C06\u0C0F\u0C0F\u0C13\u0C13\u0C2B\u0C2B\u0C3C\u0C3E\u0C47\u0C47\u0C4B\u0C4B\u0C50\u0C56\u0C59\u0C59\u0C5D\u0C61\u0C66\u0C67\u0C72\u0C79\u0C86\u0C86\u0C8F\u0C8F\u0C93\u0C93\u0CAB\u0CAB\u0CB6\u0CB6\u0CBC\u0CBD\u0CC7\u0CC7\u0CCB\u0CCB\u0CD0\u0CD6\u0CD9\u0CDF\u0CE1\u0CE1\u0CE6\u0CE7\u0CF2\u0CF2\u0CF5\u0D02\u0D06\u0D06\u0D0F\u0D0F\u0D13\u0D13\u0D3D\u0D3E\u0D47\u0D47\u0D4B\u0D4B\u0D52\u0D55\u0D66\u0D67\u0D82\u0D83\u0D86\u0D86\u0D99\u0D9B\u0DB4\u0DB4\u0DBE\u0DBE\u0DC0\u0DC1\u0DC9\u0DCB\u0DCD\u0DD0\u0DD7\u0DD7\u0DD9\u0DD9\u0DE2\u0DE7\u0DF2\u0DF3\u0DF7\u0E02\u0E3D\u0E40\u0E5E\u0E82\u0E85\u0E85\u0E87\u0E88\u0E8B\u0E8B\u0E8D\u0E8E\u0E90\u0E95\u0E9A\u0E9A\u0EA2\u0EA2\u0EA6\u0EA6\u0EA8\u0EA8\u0EAA\u0EAB\u0EAE\u0EAE\u0EBC\u0EBC\u0EC0\u0EC1\u0EC7\u0EC7\u0EC9\u0EC9\u0ED0\u0ED1\u0EDC\u0EDD\u0EE2\u0F01\u0F4A\u0F4A\u0F6F\u0F72\u0F9A\u0F9A\u0FBF\u0FBF\u0FCF\u0FCF\u0FDD\u1001\u10C8\u10C8\u10CA\u10CE\u10D0\u10D1\u124B\u124B\u1250\u1251\u1259\u1259\u125B\u125B\u1260\u1261\u128B\u128B\u1290\u1291\u12B3\u12B3\u12B8\u12B9\u12C1\u12C1\u12C3\u12C3\u12C8\u12C9\u12D9\u12D9\u1313\u1313\u1318\u1319\u135D\u135E\u137F\u1381\u139C\u13A1\u13F8\u13F9\u1400\u1401\u1682\u1682\u169F\u16A1\u16FB\u1701\u170F\u170F\u1717\u1721\u1739\u1741\u1756\u1761\u176F\u176F\u1773\u1773\u1776\u1781\u17E0\u17E1\u17EC\u17F1\u17FC\u1801\u1810\u1811\u181C\u1821\u187A\u1881\u18AD\u18B1\u18F8\u1901\u1921\u1921\u192E\u1931\u193E\u1941\u1943\u1945\u1970\u1971\u1977\u1981\u19AE\u19B1\u19CC\u19D1\u19DD\u19DF\u1A1E\u1A1F\u1A61\u1A61\u1A7F\u1A80\u1A8C\u1A91\u1A9C\u1AA1\u1AB0\u1AB1\u1AC1\u1B01\u1B4E\u1B51\u1B7F\u1B81\u1BF6\u1BFD\u1C3A\u1C3C\u1C4C\u1C4E\u1C8B\u1CC1\u1CCA\u1CD1\u1CF9\u1CF9\u1CFC\u1D01\u1DF8\u1DFC\u1F18\u1F19\u1F20\u1F21\u1F48\u1F49\u1F50\u1F51\u1F5A\u1F5A\u1F5C\u1F5C\u1F5E\u1F5E\u1F60\u1F60\u1F80\u1F81\u1FB7\u1FB7\u1FC7\u1FC7\u1FD6\u1FD7\u1FDE\u1FDE\u1FF2\u1FF3\u1FF7\u1FF7\u2001\u2011\u202A\u2031\u2061\u2071\u2074\u2075\u2091\u2091\u209F\u20A1\u20C1\u20D1\u20F3\u2101\u218E\u2191\u2401\u2401\u2429\u2441\u244D\u2461\u2B76\u2B77\u2B98\u2B99\u2BBC\u2BBE\u2BCB\u2BCB\u2BD4\u2BED\u2BF2\u2C01\u2C31\u2C31\u2C61\u2C61\u2CF6\u2CFA\u2D28\u2D28\u2D2A\u2D2E\u2D30\u2D31\u2D6A\u2D70\u2D73\u2D80\u2D99\u2DA1\u2DA9\u2DA9\u2DB1\u2DB1\u2DB9\u2DB9\u2DC1\u2DC1\u2DC9\u2DC9\u2DD1\u2DD1\u2DD9\u2DD9\u2DE1\u2DE1\u2E47\u2E81\u2E9C\u2E9C\u2EF6\u2F01\u2FD8\u2FF1\u2FFE\u3002\u3042\u3042\u3099\u309A\u3102\u3106\u3130\u3132\u3191\u3191\u31BD\u31C1\u31E6\u31F1\u3221\u3221\u3301\u3301\u4DB8\u4DC1\u9FD8\uA001\uA48F\uA491\uA4C9\uA4D1\uA62E\uA641\uA6FA\uA701\uA7B1\uA7B1\uA7BA\uA7F8\uA82E\uA831\uA83C\uA841\uA87A\uA881\uA8C8\uA8CF\uA8DC\uA8E1\uA900\uA901\uA956\uA960\uA97F\uA981\uA9D0\uA9D0\uA9DC\uA9DF\uAA01\uAA01\uAA39\uAA41\uAA50\uAA51\uAA5C\uAA5D\uAAC5\uAADC\uAAF9\uAB02\uAB09\uAB0A\uAB11\uAB12\uAB19\uAB21\uAB29\uAB29\uAB31\uAB31\uAB68\uAB71\uABF0\uABF1\uABFC\uAC01\uD7A6\uD7B1\uD7C9\uD7CC\uD7FE\uF901\uFA70\uFA71\uFADC\uFB01\uFB09\uFB14\uFB1A\uFB1E\uFB39\uFB39\uFB3F\uFB3F\uFB41\uFB41\uFB44\uFB44\uFB47\uFB47\uFBC4\uFBD4\uFD42\uFD51\uFD92\uFD93\uFDCA\uFDF1\uFE00\uFE01\uFE1C\uFE21\uFE55\uFE55\uFE69\uFE69\uFE6E\uFE71\uFE77\uFE77\uFEFF\uFF02\uFFC1\uFFC3\uFFCA\uFFCB\uFFD2\uFFD3\uFFDA\uFFDB\uFFDF\uFFE1\uFFE9\uFFE9\uFFF1\uFFFD\0))==@@PQ`\x81\xFD\u0101\u0105\u0108\u0136\u0138\u0191\u0191\u019E\u01A1\u01A3\u01D1\u0200\u0281\u029F\u02A1\u02D3\u02E1\u02FE\u0301\u0326\u0331\u034D\u0351\u037D\u0381\u03A0\u03A0\u03C6\u03C9\u03D8\u0401\u04A0\u04A1\u04AC\u04B1\u04D6\u04D9\u04FE\u0501\u052A\u0531\u0566\u0570\u0572\u0601\u0739\u0741\u0758\u0761\u076A\u0801\u0808\u0809\u080B\u080B\u0838\u0838\u083B\u083D\u083F\u0840\u0858\u0858\u08A1\u08A8\u08B2\u08E1\u08F5\u08F5\u08F8\u08FC\u091E\u0920\u093C\u0940\u0942\u0981\u09BA\u09BD\u09D2\u09D3\u0A06\u0A06\u0A09\u0A0D\u0A16\u0A16\u0A1A\u0A1A\u0A36\u0A39\u0A3D\u0A40\u0A4A\u0A51\u0A5B\u0A61\u0AA2\u0AC1\u0AE9\u0AEC\u0AF9\u0B01\u0B38\u0B3A\u0B58\u0B59\u0B75\u0B79\u0B94\u0B9A\u0B9F\u0BAA\u0BB2\u0C01\u0C4B\u0C81\u0CB5\u0CC1\u0CF5\u0CFB\u0D02\u0E61\u0E81\u1001\u1050\u1053\u1072\u1080\u10BF\u10BF\u10C4\u10D1\u10EB\u10F1\u10FC\u1101\u1137\u1137\u1146\u1151\u1179\u1181\u11D0\u11D1\u11E2\u11E2\u11F7\u1201\u1214\u1214\u1241\u1281\u1289\u1289\u128B\u128B\u1290\u1290\u12A0\u12A0\u12AC\u12B1\u12ED\u12F1\u12FC\u1301\u1306\u1306\u130F\u1310\u1313\u1314\u132B\u132B\u1333\u1333\u1336\u1336\u133C\u133D\u1347\u1348\u134B\u134C\u1350\u1351\u1353';
+    static _serializedATNSegment1 = "\u1358\u135A\u135E\u1366\u1367\u136F\u1371\u1377\u1401\u145C\u145C\u145E\u145E\u1460\u1481\u14CA\u14D1\u14DC\u1581\u15B8\u15B9\u15E0\u1601\u1647\u1651\u165C\u1661\u166F\u1681\u16BA\u16C1\u16CC\u1701\u171C\u171E\u172E\u1731\u1742\u18A1\u18F5\u1900\u1902\u1AC1\u1AFB\u1C01\u1C0B\u1C0B\u1C39\u1C39\u1C48\u1C51\u1C6F\u1C71\u1C92\u1C93\u1CAA\u1CAA\u1CB9\u2001\u239C\u2401\u2471\u2471\u2477\u2481\u2546\u3001\u3431\u4401\u4649\u6801\u6A3B\u6A41\u6A61\u6A61\u6A6C\u6A6F\u6A72\u6AD1\u6AF0\u6AF1\u6AF8\u6B01\u6B48\u6B51\u6B5C\u6B5C\u6B64\u6B64\u6B7A\u6B7E\u6B92\u6F01\u6F47\u6F51\u6F81\u6F90\u6FA2\u6FE1\u6FE3\u7001\u87EF\u8801\u8AF5\uB001\uB004\uBC01\uBC6D\uBC71\uBC7F\uBC81\uBC8B\uBC91\uBC9C\uBC9D\uBCA2\uD001\uD0F8\uD101\uD129\uD12A\uD175\uD17C\uD1EB\uD201\uD248\uD301\uD359\uD361\uD374\uD401\uD457\uD457\uD49F\uD49F\uD4A2\uD4A3\uD4A5\uD4A6\uD4A9\uD4AA\uD4AF\uD4AF\uD4BC\uD4BC\uD4BE\uD4BE\uD4C6\uD4C6\uD508\uD508\uD50D\uD50E\uD517\uD517\uD51F\uD51F\uD53C\uD53C\uD541\uD541\uD547\uD547\uD549\uD54B\uD553\uD553\uD6A8\uD6A9\uD7CE\uD7CF\uDA8E\uDA9C\uDAA2\uDAA2\uDAB2\uE001\uE009\uE009\uE01B\uE01C\uE024\uE024\uE027\uE027\uE02D\uE801\uE8C7\uE8C8\uE8D9\uE901\uE94D\uE951\uE95C\uE95F\uE962\uEE01\uEE06\uEE06\uEE22\uEE22\uEE25\uEE25\uEE27\uEE28\uEE2A\uEE2A\uEE35\uEE35\uEE3A\uEE3A\uEE3C\uEE3C\uEE3E\uEE43\uEE45\uEE48\uEE4A\uEE4A\uEE4C\uEE4C\uEE4E\uEE4E\uEE52\uEE52\uEE55\uEE55\uEE57\uEE58\uEE5A\uEE5A\uEE5C\uEE5C\uEE5E\uEE5E\uEE60\uEE60\uEE62\uEE62\uEE65\uEE65\uEE67\uEE68\uEE6D\uEE6D\uEE75\uEE75\uEE7A\uEE7A\uEE7F\uEE7F\uEE81\uEE81\uEE8C\uEE8C\uEE9E\uEEA2\uEEA6\uEEA6\uEEAC\uEEAC\uEEBE\uEEF1\uEEF4\uF001\uF02E\uF031\uF096\uF0A1\uF0B1\uF0B2\uF0C2\uF0C2\uF0D2\uF0D2\uF0F8\uF101\uF10F\uF111\uF131\uF131\uF16E\uF171\uF1AF\uF1E7\uF205\uF211\uF23E\uF241\uF24B\uF251\uF254\uF301\uF6D5\uF6E1\uF6EF\uF6F1\uF6F9\uF701\uF776\uF781\uF7D7\uF801\uF80E\uF811\uF84A\uF851\uF85C\uF861\uF88A\uF891\uF8B0\uF911\uF921\uF921\uF92A\uF931\uF933\uF934\uF941\uF941\uF94E\uF951\uF961\uF981\uF994\uF9C1\uF9C3\uA6D9\uA701\uB737\uB741\uB820\uB821\uCEA4\uF801\uFA20\u0101\u01F2\xC5\x07	\v\r\x1B!#%+-/135\x077	9\v;\r=@DTVXZ\x1B\\^`!b#e%\x7F'\x8A)\x8E+\x90-\x97/\xA21\xB234\x07]456\x07.678\x07_8\b9:\x07}:\n;<\x07\x7F<\f=>\x07q>?\x07t?@A\x07cAB\x07pBC\x07fCDE\x07yEF\x07jFG\x07gGH\x07tHI\x07gIJK\x07hKL\x07wLM\x07pMN\x07eNO\x07vOP\x07kPQ\x07qQU\x07pRS\x07hSU\x07pTJTRUVW\x07*WXY\x07+YZ[\x07<[\\]\x071]^_\x07B_`a\x07/a bc\x07?c\"df\x07/edeffhgi	hgijjhjkkrln\x070mo	nmoppnpqqsrlrss}tv	uw\x07/vuvwwyxz	yxz{{y{||~}t}~~$\x7F\x85\x07$\x80\x81\x07^\x81\x84\v\x82\x84\n\x83\x80\x83\x82\x84\x87\x85\x83\x85\x86\x86\x88\x87\x85\x88\x89\x07$\x89&\x8A\x8B\n\x07\x8B(\x8C\x8F'\x8D\x8F	\x8E\x8C\x8E\x8D\x8F*\x90\x94'\x91\x93)\x92\x91\x93\x96\x94\x92\x94\x95\x95,\x96\x94\x97\x98\x071\x98\x99\x071\x99\x9D\x9A\x9C\n\x9B\x9A\x9C\x9F\x9D\x9B\x9D\x9E\x9E\xA0\x9F\x9D\xA0\xA1\b\xA1.\xA2\xA3\x071\xA3\xA4\x07,\xA4\xA9\xA5\xA8/\xA6\xA8\v\xA7\xA5\xA7\xA6\xA8\xAB\xA9\xAA\xA9\xA7\xAA\xAC\xAB\xA9\xAC\xAD\x07,\xAD\xAE\x071\xAE\xAF\xAF\xB0\b\xB00\xB1\xB3	\b\xB2\xB1\xB3\xB4\xB4\xB2\xB4\xB5\xB5\xB6\xB6\xB7\b\xB72Tejprv{}\x83\x85\x8E\x94\x9D\xA7\xA9\xB4\b";
+    static _serializedATN = Utils.join(
+      [
+        _SalLexer._serializedATNSegment0,
+        _SalLexer._serializedATNSegment1
+      ],
+      ""
+    );
+    static __ATN;
     static get _ATN() {
       if (!_SalLexer.__ATN) {
         _SalLexer.__ATN = new import_ATNDeserializer.ATNDeserializer().deserialize(Utils.toCharArray(_SalLexer._serializedATN));
@@ -24282,148 +24221,86 @@
   var import_VocabularyImpl2 = __toESM(require_VocabularyImpl());
   var Utils2 = __toESM(require_Utils());
   var SalParser = class _SalParser extends import_Parser.Parser {
-    static {
-      this.T__0 = 1;
-    }
-    static {
-      this.T__1 = 2;
-    }
-    static {
-      this.T__2 = 3;
-    }
-    static {
-      this.T__3 = 4;
-    }
-    static {
-      this.T__4 = 5;
-    }
-    static {
-      this.OR = 6;
-    }
-    static {
-      this.AND = 7;
-    }
-    static {
-      this.WHERE = 8;
-    }
-    static {
-      this.FUNCTION = 9;
-    }
-    static {
-      this.PAREN_BEGIN = 10;
-    }
-    static {
-      this.PAREN_END = 11;
-    }
-    static {
-      this.COLON = 12;
-    }
-    static {
-      this.SLASH = 13;
-    }
-    static {
-      this.AT = 14;
-    }
-    static {
-      this.MINUS = 15;
-    }
-    static {
-      this.EQUALS = 16;
-    }
-    static {
-      this.NUMBER = 17;
-    }
-    static {
-      this.STRING = 18;
-    }
-    static {
-      this.WORD = 19;
-    }
-    static {
-      this.LINE_COMMENT = 20;
-    }
-    static {
-      this.BLOCK_COMMENT = 21;
-    }
-    static {
-      this.WS = 22;
-    }
-    static {
-      this.RULE_sourceFile = 0;
-    }
-    static {
-      this.RULE_word = 1;
-    }
-    static {
-      this.RULE_parameter = 2;
-    }
-    static {
-      this.RULE_entry = 3;
-    }
-    static {
-      this.RULE_expression = 4;
-    }
-    static {
-      // tslint:disable:no-trailing-whitespace
-      this.ruleNames = [
-        "sourceFile",
-        "word",
-        "parameter",
-        "entry",
-        "expression"
-      ];
-    }
-    static {
-      this._LITERAL_NAMES = [
-        void 0,
-        "'['",
-        "','",
-        "']'",
-        "'{'",
-        "'}'",
-        "'or'",
-        "'and'",
-        "'where'",
-        void 0,
-        "'('",
-        "')'",
-        "':'",
-        "'/'",
-        "'@'",
-        "'-'",
-        "'='"
-      ];
-    }
-    static {
-      this._SYMBOLIC_NAMES = [
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        void 0,
-        "OR",
-        "AND",
-        "WHERE",
-        "FUNCTION",
-        "PAREN_BEGIN",
-        "PAREN_END",
-        "COLON",
-        "SLASH",
-        "AT",
-        "MINUS",
-        "EQUALS",
-        "NUMBER",
-        "STRING",
-        "WORD",
-        "LINE_COMMENT",
-        "BLOCK_COMMENT",
-        "WS"
-      ];
-    }
-    static {
-      this.VOCABULARY = new import_VocabularyImpl2.VocabularyImpl(_SalParser._LITERAL_NAMES, _SalParser._SYMBOLIC_NAMES, []);
-    }
+    static T__0 = 1;
+    static T__1 = 2;
+    static T__2 = 3;
+    static T__3 = 4;
+    static T__4 = 5;
+    static OR = 6;
+    static AND = 7;
+    static WHERE = 8;
+    static FUNCTION = 9;
+    static PAREN_BEGIN = 10;
+    static PAREN_END = 11;
+    static COLON = 12;
+    static SLASH = 13;
+    static AT = 14;
+    static MINUS = 15;
+    static EQUALS = 16;
+    static NUMBER = 17;
+    static STRING = 18;
+    static WORD = 19;
+    static LINE_COMMENT = 20;
+    static BLOCK_COMMENT = 21;
+    static WS = 22;
+    static RULE_sourceFile = 0;
+    static RULE_word = 1;
+    static RULE_parameter = 2;
+    static RULE_entry = 3;
+    static RULE_expression = 4;
+    // tslint:disable:no-trailing-whitespace
+    static ruleNames = [
+      "sourceFile",
+      "word",
+      "parameter",
+      "entry",
+      "expression"
+    ];
+    static _LITERAL_NAMES = [
+      void 0,
+      "'['",
+      "','",
+      "']'",
+      "'{'",
+      "'}'",
+      "'or'",
+      "'and'",
+      "'where'",
+      void 0,
+      "'('",
+      "')'",
+      "':'",
+      "'/'",
+      "'@'",
+      "'-'",
+      "'='"
+    ];
+    static _SYMBOLIC_NAMES = [
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      void 0,
+      "OR",
+      "AND",
+      "WHERE",
+      "FUNCTION",
+      "PAREN_BEGIN",
+      "PAREN_END",
+      "COLON",
+      "SLASH",
+      "AT",
+      "MINUS",
+      "EQUALS",
+      "NUMBER",
+      "STRING",
+      "WORD",
+      "LINE_COMMENT",
+      "BLOCK_COMMENT",
+      "WS"
+    ];
+    static VOCABULARY = new import_VocabularyImpl2.VocabularyImpl(_SalParser._LITERAL_NAMES, _SalParser._SYMBOLIC_NAMES, []);
     // @Override
     // @NotNull
     get vocabulary() {
@@ -24983,9 +24860,8 @@
       }
       return true;
     }
-    static {
-      this._serializedATN = "\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241|					\n\n\x1B\n&\n\r'.\n2\n\x07<\n\f?\vA\nD\n\x07K\n\fN\vP\nS\nZ\np\n\rq\x07w\n\fz\v\n\x07\b\n\n\v\x91\r\b\nY\f\n\r\f\r\x07	\x07\x07\x1B\x1B\x07\x1B\x07\n	 \b !\x07!Z\n\"#\x07#%\x07\v$&%$&''%'(())*\x07*+\n\n+Z,.\x07-,-..//Z\x0702\x071012233Z\x0745\x075Z6Z7@\x078=\n9:\x07:<\n;9<?=;=>>A?=@8@AACBD\x07CBCDDEEZ\x07FO\x07GL\bHI\x07IK\bJHKNLJLMMPNLOGOPPRQS\x07RQRSSTTZ\x07\x07UV\x07\fVW\nWX\x07\rXZYY\"Y-Y1Y4Y6Y7YFYUZx[\\\f\\]\x07]w\n^_\f_w\n`a\fab\x07\bbw\ncd\f\rde\x07	ew\nfg\f\fgh\x07hiij\n\rjwkl\f\vlm\x07mo\x07\nnponpqqoqrrsst\x07tu\n\fuwv[v^v`vcvfvkwzxvxyy\vzx\r'-1=@CLORYqvx";
-    }
+    static _serializedATN = "\uC91D\uCABA\u058D\uAFBA\u4F53\u0607\uEA8B\uC241|					\n\n\x1B\n&\n\r'.\n2\n\x07<\n\f?\vA\nD\n\x07K\n\fN\vP\nS\nZ\np\n\rq\x07w\n\fz\v\n\x07\b\n\n\v\x91\r\b\nY\f\n\r\f\r\x07	\x07\x07\x1B\x1B\x07\x1B\x07\n	 \b !\x07!Z\n\"#\x07#%\x07\v$&%$&''%'(())*\x07*+\n\n+Z,.\x07-,-..//Z\x0702\x071012233Z\x0745\x075Z6Z7@\x078=\n9:\x07:<\n;9<?=;=>>A?=@8@AACBD\x07CBCDDEEZ\x07FO\x07GL\bHI\x07IK\bJHKNLJLMMPNLOGOPPRQS\x07RQRSSTTZ\x07\x07UV\x07\fVW\nWX\x07\rXZYY\"Y-Y1Y4Y6Y7YFYUZx[\\\f\\]\x07]w\n^_\f_w\n`a\fab\x07\bbw\ncd\f\rde\x07	ew\nfg\f\fgh\x07hiij\n\rjwkl\f\vlm\x07mo\x07\nnponpqqoqrrsst\x07tu\n\fuwv[v^v`vcvfvkwzxvxyy\vzx\r'-1=@CLORYqvx";
+    static __ATN;
     static get _ATN() {
       if (!_SalParser.__ATN) {
         _SalParser.__ATN = new import_ATNDeserializer2.ATNDeserializer().deserialize(Utils2.toCharArray(_SalParser._serializedATN));
@@ -25155,6 +25031,8 @@
     }
   };
   var ApplyExpressionContext = class extends ExpressionContext {
+    _left;
+    _right;
     COLON() {
       return this.getToken(SalParser.COLON, 0);
     }
@@ -25223,6 +25101,8 @@
     }
   };
   var SequenceExpressionContext = class extends ExpressionContext {
+    _left;
+    _right;
     expression(i) {
       if (i === void 0) {
         return this.getRuleContexts(ExpressionContext);
@@ -25256,6 +25136,8 @@
     }
   };
   var OrExpressionContext = class extends ExpressionContext {
+    _left;
+    _right;
     OR() {
       return this.getToken(SalParser.OR, 0);
     }
@@ -25292,6 +25174,8 @@
     }
   };
   var AndExpressionContext = class extends ExpressionContext {
+    _left;
+    _right;
     AND() {
       return this.getToken(SalParser.AND, 0);
     }
@@ -25328,6 +25212,8 @@
     }
   };
   var BinaryExpressionContext = class extends ExpressionContext {
+    _left;
+    _right;
     SLASH() {
       return this.getToken(SalParser.SLASH, 0);
     }
@@ -25367,6 +25253,8 @@
     }
   };
   var WhereExpressionContext = class extends ExpressionContext {
+    _scope;
+    _value;
     AT() {
       return this.getToken(SalParser.AT, 0);
     }
@@ -25692,16 +25580,52 @@
   var import_ErrorNode = __toESM(require_ErrorNode());
   var import_ParseTree = __toESM(require_ParseTree());
   var import_RuleNode = __toESM(require_RuleNode());
-  var unreachable = (node) => {
-    if (node instanceof import_TerminalNode.TerminalNode) {
-      const symbol = node.symbol;
-      const position = {
-        line: symbol.line,
-        column: symbol.charPositionInLine
-      };
-      return raise`unreachable: ${JSON.stringify(position)}, ${node.toString()}`;
+  var SalEvaluationError = class extends Error {
+    static {
+      this.prototype.name = "SalEvaluationError";
     }
-    return raise`unreachable: ${node.toStringTree()}`;
+    range;
+    constructor(message, options) {
+      super(message, options);
+      this.range = options?.range;
+    }
+  };
+  function raiseEvaluationError(message, options) {
+    throw new SalEvaluationError(message, options);
+  }
+  function getNodeRange(node) {
+    let start;
+    let stop;
+    if (node instanceof import_antlr4ts.ParserRuleContext) {
+      start = node.start;
+      stop = node.stop ?? node.start;
+    } else {
+      start = node.symbol;
+      stop = node.symbol;
+    }
+    return {
+      start: {
+        line: start.line,
+        column: start.charPositionInLine,
+        index: start.startIndex
+      },
+      stop: {
+        line: stop.line,
+        column: stop.charPositionInLine + (stop.text?.length ?? 0),
+        index: stop.stopIndex
+      }
+    };
+  }
+  function raiseWith(message, location2) {
+    return raiseEvaluationError(message, { range: getNodeRange(location2) });
+  }
+  var unreachable = (node) => {
+    if (node instanceof import_TerminalNode.TerminalNode || node instanceof import_antlr4ts.ParserRuleContext) {
+      return raiseWith(`unreachable: ${node.toString()}`, node);
+    }
+    return raiseEvaluationError(
+      `unreachable: ${node.toStringTree()}`
+    );
   };
   function getNumberValue(v) {
     return JSON.parse(v.text);
@@ -25730,60 +25654,81 @@
       return createNestedFunctionOrValue(scope, ps, body);
     });
   }
-  function forceAsFunction(x) {
-    if (typeof x !== "function") return raise`${x} is not function`;
+  function forceAsFunction(x, location2) {
+    if (typeof x !== "function") {
+      return raiseWith(`${x} is not function`, location2);
+    }
     return x;
+  }
+  function* callWithLocation(f, value, location2) {
+    try {
+      return yield* f(value);
+    } catch (e) {
+      if (e instanceof SalEvaluationError) throw e;
+      const message = e instanceof Error ? e.message : "sal function call error";
+      return raiseEvaluationError(message, {
+        range: getNodeRange(location2),
+        cause: e
+      });
+    }
+  }
+  function* callWithLocation2(f, x1, l1, x2, l2) {
+    return yield* callWithLocation(yield* callWithLocation(f, x1, l1), x2, l2);
+  }
+  function* callWithLocation3(f, x1, l1, x2, l2, x3, l3) {
+    return yield* callWithLocation(
+      yield* callWithLocation(yield* callWithLocation(f, x1, l1), x2, l2),
+      x3,
+      l3
+    );
   }
   var SalEvaluationVisitor = class _SalEvaluationVisitor {
     constructor(tryResolveParentVariable) {
       this.tryResolveParentVariable = tryResolveParentVariable;
-      this.visit = unreachable;
-      this.visitChildren = unreachable;
-      this.visitTerminal = unreachable;
-      this.visitErrorNode = unreachable;
-      this.environment = /* @__PURE__ */ new Map();
       this.tryResolveVariable = (k) => {
         const v = this.environment.get(k);
         return v === void 0 ? tryResolveParentVariable(k) : v;
       };
     }
-    resolveVariable(name2) {
+    visit = unreachable;
+    visitChildren = unreachable;
+    visitTerminal = unreachable;
+    visitErrorNode = unreachable;
+    environment = /* @__PURE__ */ new Map();
+    tryResolveVariable;
+    resolveVariable(name2, location2) {
       const v = this.tryResolveVariable(name2);
-      if (v === void 0) throw new Error(`undefined variable: ${name2}`);
+      if (v === void 0)
+        return raiseWith(`undefined variable: ${name2}`, location2);
       return v;
     }
-    *evaluateBinaryLikeExpression(left, opName, right) {
+    resolveVariableAsFunction(name2, location2) {
+      return forceAsFunction(
+        this.resolveVariable(name2, location2),
+        location2
+      );
+    }
+    *evaluateBinaryLikeExpression(left, opName, op, right) {
       const l = yield* this.visitExpression(left);
-      const f = forceAsFunction(
-        this.resolveVariable(opName)
+      const f = this.resolveVariableAsFunction(
+        opName,
+        op
       );
       const r = yield* this.visitExpression(right);
-      return yield* (yield* f(l))(r);
+      return yield* callWithLocation2(f, l, left, r, right);
     }
     *visitExpression(e) {
       if (e.exception) {
-        const fromVoid = forceAsFunction(
-          this.resolveVariable("fromMissing")
-        );
-        return yield* fromVoid(null);
+        const fromVoid = this.resolveVariableAsFunction("fromMissing", e);
+        return yield* callWithLocation(fromVoid, null, e);
       }
-      try {
-        return yield* e.accept(this);
-      } catch (error) {
-        let showPosition2 = function({ line, charPositionInLine }) {
-          return `${line}:${charPositionInLine}`;
-        };
-        var showPosition = showPosition2;
-        const start = showPosition2(e.start);
-        const stop = e.stop ? `,${showPosition2(e.stop)}` : "";
-        return raise`[${start}${stop}]: ${error}`;
-      }
+      return yield* e.accept(this);
     }
     visitSourceFile(e) {
       const body = e.expression();
       if (body == null) {
-        const fromEmpty = forceAsFunction(this.resolveVariable("fromVoid"));
-        return fromEmpty(null);
+        const fromEmpty = this.resolveVariableAsFunction("fromVoid", e);
+        return callWithLocation(fromEmpty, null, e);
       }
       return this.visitExpression(body);
     }
@@ -25794,31 +25739,47 @@
       return createNestedFunctionOrValue(newScope, ps, body);
     }
     *visitNotExpression(e) {
-      const not2 = forceAsFunction(this.resolveVariable("not_"));
-      const v = yield* this.visitExpression(e.expression());
-      return yield* not2(v);
+      const not2 = this.resolveVariableAsFunction("not_", e.MINUS());
+      const operand = e.expression();
+      const v = yield* this.visitExpression(operand);
+      return yield* callWithLocation(not2, v, operand);
     }
     *visitApplyExpression(e) {
-      const f = forceAsFunction(yield* this.visitExpression(e._left));
+      const f = forceAsFunction(
+        yield* this.visitExpression(e._left),
+        e._left
+      );
       const x = yield* this.visitExpression(e._right);
-      return yield* f(x);
+      return yield* callWithLocation(f, x, e._right);
     }
     visitSequenceExpression(e) {
-      return this.evaluateBinaryLikeExpression(e._left, "_seq_", e._right);
+      return this.evaluateBinaryLikeExpression(e._left, "_seq_", e, e._right);
     }
     visitOrExpression(e) {
-      return this.evaluateBinaryLikeExpression(e._left, "_or_", e._right);
+      return this.evaluateBinaryLikeExpression(
+        e._left,
+        "_or_",
+        e.OR(),
+        e._right
+      );
     }
     visitAndExpression(e) {
-      return this.evaluateBinaryLikeExpression(e._left, "_and_", e._right);
+      return this.evaluateBinaryLikeExpression(
+        e._left,
+        "_and_",
+        e.AND(),
+        e._right
+      );
     }
     *visitBinaryExpression(e) {
       const l = yield* this.visitExpression(e._left);
-      const op = forceAsFunction(
-        this.resolveVariable(getWordValue(e.word()))
+      const f = e.word();
+      const op = this.resolveVariableAsFunction(
+        getWordValue(f),
+        f
       );
       const r = yield* this.visitExpression(e._right);
-      return yield* (yield* op(l))(r);
+      return yield* callWithLocation2(op, l, e._left, r, e._right);
     }
     *visitWhereExpression(e) {
       const newScope = new _SalEvaluationVisitor(this.tryResolveVariable);
@@ -25834,24 +25795,28 @@
       return yield* newScope.visitExpression(e._scope);
     }
     visitNumber(e) {
-      const value = getNumberValue(e.NUMBER());
+      const number3 = e.NUMBER();
+      const value = getNumberValue(number3);
       if (e.AT() != null) return done(value);
-      const fromNumber = forceAsFunction(
-        this.resolveVariable("fromNumber")
+      const fromNumber = this.resolveVariableAsFunction(
+        "fromNumber",
+        e
       );
-      return fromNumber(value);
+      return callWithLocation(fromNumber, value, number3);
     }
     visitString(e) {
-      const value = getStringValue(e.STRING());
+      const string3 = e.STRING();
+      const value = getStringValue(string3);
       if (e.AT() != null) return done(value);
-      const fromString2 = forceAsFunction(
-        this.resolveVariable("fromString")
+      const fromString2 = this.resolveVariableAsFunction(
+        "fromString",
+        e
       );
-      return fromString2(value);
+      return callWithLocation(fromString2, value, string3);
     }
     visitVariable(e) {
       const name2 = getWordValue(e.word());
-      return done(this.resolveVariable(name2));
+      return done(this.resolveVariable(name2, e));
     }
     visitWordExpression(e) {
       return e.word().accept(this);
@@ -25860,10 +25825,11 @@
       const name2 = getWordValue(e);
       const value = this.tryResolveVariable(name2);
       if (value !== void 0) return done(value);
-      const fromWord = forceAsFunction(
-        this.resolveVariable("fromWord")
+      const fromWord = this.resolveVariableAsFunction(
+        "fromWord",
+        e
       );
-      return fromWord(name2);
+      return callWithLocation(fromWord, name2, e);
     }
     visitParenthesizedExpression(e) {
       return this.visitExpression(e.expression());
@@ -25878,33 +25844,41 @@
       return this.visitExpression(e);
     }
     *visitListLiteralExpression(e) {
-      const getEmptyList = forceAsFunction(
-        this.resolveVariable("getEmptyList")
-      );
-      let list = yield* getEmptyList(null);
+      const getEmptyList = this.resolveVariableAsFunction("getEmptyList", e);
+      let list = yield* callWithLocation(getEmptyList, null, e);
       let consList;
       for (const item of e.expression()) {
         const x = yield* this.evaluateExpressionAsLiteral(item);
-        consList ??= forceAsFunction(
-          this.resolveVariable("consList")
+        consList ??= this.resolveVariableAsFunction(
+          "consList",
+          item
         );
-        list = yield* (yield* consList(list))(x);
+        list = yield* callWithLocation2(consList, list, item, x, item);
       }
       return list;
     }
     *visitRecordLiteralExpression(e) {
-      const getEmptyRecord = forceAsFunction(
-        this.resolveVariable("getEmptyRecord")
+      const getEmptyRecord = this.resolveVariableAsFunction(
+        "getEmptyRecord",
+        e
       );
-      let record2 = yield* getEmptyRecord(null);
+      let record2 = yield* callWithLocation(getEmptyRecord, null, e);
       let consRecord;
       for (const entry of e.entry()) {
         const key = getNameOfWordOrString(entry);
         const value = yield* this.evaluateExpressionAsLiteral(
           entry.expression()
         );
-        consRecord ??= forceAsFunction(this.resolveVariable("consRecord"));
-        record2 = yield* (yield* (yield* consRecord(record2))(key))(value);
+        consRecord ??= this.resolveVariableAsFunction("consRecord", entry);
+        record2 = yield* callWithLocation3(
+          consRecord,
+          record2,
+          entry,
+          key,
+          entry,
+          value,
+          entry
+        );
       }
       return record2;
     }
@@ -25962,11 +25936,35 @@
     };
     return new Map(Object.entries(globals));
   }
-  function evaluateExpression(source, resolveGlobal) {
+  function evaluateExpression(source, resolveGlobal, reportError) {
     const chars = import_antlr4ts.CharStreams.fromString(source);
     const lexer = new SalLexer(chars);
     const tokens = new import_antlr4ts.CommonTokenStream(lexer);
     const parser = new SalParser(tokens);
+    if (reportError) {
+      const errorListener = {
+        syntaxError(recognizer, offendingSymbol, _line, _charPositionInLine, message, _exception) {
+          if (typeof offendingSymbol !== "number") {
+            if (offendingSymbol != null) {
+              reportError(
+                message,
+                offendingSymbol.startIndex,
+                offendingSymbol.stopIndex
+              );
+            }
+          } else {
+            if (recognizer.inputStream) {
+              const startIndex = recognizer.inputStream.index;
+              reportError(message, startIndex, startIndex + 1);
+            }
+          }
+        }
+      };
+      lexer.removeErrorListeners();
+      lexer.addErrorListener(errorListener);
+      parser.removeErrorListeners();
+      parser.addErrorListener(errorListener);
+    }
     const tree = parser.sourceFile();
     const globals = createStandardGlobals();
     const tryResolveGlobalVariable = (k) => {
@@ -26059,9 +26057,13 @@
       }
     };
   }
-  async function filterDrafts(records, drafts, source, signal) {
+  async function filterDrafts(records, drafts, source, signal, reportError) {
     const queryGlobals = createStandardQueries();
-    const effective = evaluateExpression(source, (k) => queryGlobals.get(k));
+    const effective = evaluateExpression(
+      source,
+      (k) => queryGlobals.get(k),
+      reportError
+    );
     const filter = await forceAsPromise(effective, signal);
     const queryBuilder = filter;
     const environment = createEnvironment(records, drafts);
@@ -26087,16 +26089,16 @@
   }
 
   // source/drafts-view/query-view/editor.module.css
-  var cssText9 = ".container-b9890281c78f13992891bf6f50993e5ced045365 {\r\n    height: 100%;\r\n    width: 100%;\r\n    overflow: hidden;\r\n}\r\n\r\n.token-keyword-20939785c877fa64a4361505add1d94fb24c272e {\r\n    color: blue;\r\n}\r\n.token-number-52e1ee02f39f35f69c6fa837798f6f7c0de27564 {\r\n    color: darkgreen;\r\n}\r\n.token-special-a8714dea32f576c78338f1d8ca81dec9cb54c530 {\r\n    color: gray;\r\n    font-weight: bold;\r\n}\r\n\r\n.token-tips-28ef57b879940ea5435da806917f23a50b70cfbb {\r\n    position: relative;\r\n    z-index: 0;\r\n\r\n    border-radius: 1em;\r\n    box-shadow: inset 0 0 0 1px var(--border-color-01f7319f2df5bcb64f9385c32313ddafcc411ca1);\r\n}\r\n\r\n.token-tips-comment-c7caa500e96ae04753b981a9bf296e88a7f30c88 {\r\n    color: #244b12;\r\n    background-color: #d5ffef;\r\n    --border-color-01f7319f2df5bcb64f9385c32313ddafcc411ca1: #78fb3c;\r\n}\r\n.token-tips-string-49967700c2794411bf904ab52db8574249877677,\r\n.token-tips-word-0d6ebf6995f6b5614ff2c6aab5ac083b0b1aeb8e {\r\n    color: #412b11;\r\n    background-color: #fff7d5;\r\n    --border-color-01f7319f2df5bcb64f9385c32313ddafcc411ca1: #fba83c;\r\n}\r\n";
+  var cssText9 = ".container-0150cbf6c71c3de81220905f3d071796771ce410 {\r\n    height: 100%;\r\n    width: 100%;\r\n    overflow: hidden;\r\n}\r\n\r\n.token-keyword-e057c8f580ad496616a65fef92d1fad62d5d6010 {\r\n    color: blue;\r\n}\r\n.token-number-d2d207146ee84d5ede2693138ecd3281d6029a78 {\r\n    color: darkgreen;\r\n}\r\n.token-special-9f432b8fb39d63c53eec6d8e7c36a9483d987175 {\r\n    color: gray;\r\n    font-weight: bold;\r\n}\r\n\r\n.token-tips-6857ce64411fe3bcc2f37986f784567d77b1332a {\r\n    position: relative;\r\n    z-index: 0;\r\n\r\n    border-radius: 1em;\r\n    background-color: color-mix(\r\n        in oklch,\r\n        var(--background-color-7042ac1bd09c66bcbde411c57c37211381f93154) 40%,\r\n        transparent\r\n    );\r\n    box-shadow: inset 0 0 0 1px var(--border-color-a1cab52ed9ce0e00d4410aa1d10f302e40541ff0);\r\n}\r\n\r\n.token-tips-comment-04b1925b7efbdb4ce8b8c8b5d3f09af5345511da {\r\n    color: #244b12;\r\n    --background-color-7042ac1bd09c66bcbde411c57c37211381f93154: #d5ffef;\r\n    --border-color-a1cab52ed9ce0e00d4410aa1d10f302e40541ff0: #78fb3c;\r\n}\r\n.token-tips-string-62eee23598f4051da002aa32963513f7a4571d32,\r\n.token-tips-word-c03812cbb787e04edfdf8fcbb7149e24ac112daf {\r\n    color: #412b11;\r\n    --background-color-7042ac1bd09c66bcbde411c57c37211381f93154: #fff7d5;\r\n    --border-color-a1cab52ed9ce0e00d4410aa1d10f302e40541ff0: #fba83c;\r\n}\r\n";
   var editor_default = {
-    container: "container-b9890281c78f13992891bf6f50993e5ced045365",
-    "token-keyword": "token-keyword-20939785c877fa64a4361505add1d94fb24c272e",
-    "token-number": "token-number-52e1ee02f39f35f69c6fa837798f6f7c0de27564",
-    "token-special": "token-special-a8714dea32f576c78338f1d8ca81dec9cb54c530",
-    "token-tips": "token-tips-28ef57b879940ea5435da806917f23a50b70cfbb",
-    "token-tips-comment": "token-tips-comment-c7caa500e96ae04753b981a9bf296e88a7f30c88",
-    "token-tips-string": "token-tips-string-49967700c2794411bf904ab52db8574249877677",
-    "token-tips-word": "token-tips-word-0d6ebf6995f6b5614ff2c6aab5ac083b0b1aeb8e"
+    container: "container-0150cbf6c71c3de81220905f3d071796771ce410",
+    "token-keyword": "token-keyword-e057c8f580ad496616a65fef92d1fad62d5d6010",
+    "token-number": "token-number-d2d207146ee84d5ede2693138ecd3281d6029a78",
+    "token-special": "token-special-9f432b8fb39d63c53eec6d8e7c36a9483d987175",
+    "token-tips": "token-tips-6857ce64411fe3bcc2f37986f784567d77b1332a",
+    "token-tips-comment": "token-tips-comment-04b1925b7efbdb4ce8b8c8b5d3f09af5345511da",
+    "token-tips-string": "token-tips-string-62eee23598f4051da002aa32963513f7a4571d32",
+    "token-tips-word": "token-tips-word-c03812cbb787e04edfdf8fcbb7149e24ac112daf"
   };
 
   // node_modules/@marijn/find-cluster-break/src/index.js
@@ -40132,80 +40134,6 @@
         return false;
     return true;
   }
-  var lineNumberMarkers = /* @__PURE__ */ Facet.define();
-  var lineNumberWidgetMarker = /* @__PURE__ */ Facet.define();
-  var lineNumberConfig = /* @__PURE__ */ Facet.define({
-    combine(values) {
-      return combineConfig(values, { formatNumber: String, domEventHandlers: {} }, {
-        domEventHandlers(a, b) {
-          let result = Object.assign({}, a);
-          for (let event in b) {
-            let exists = result[event], add2 = b[event];
-            result[event] = exists ? (view, line, event2) => exists(view, line, event2) || add2(view, line, event2) : add2;
-          }
-          return result;
-        }
-      });
-    }
-  });
-  var NumberMarker = class extends GutterMarker {
-    constructor(number3) {
-      super();
-      this.number = number3;
-    }
-    eq(other) {
-      return this.number == other.number;
-    }
-    toDOM() {
-      return document.createTextNode(this.number);
-    }
-  };
-  function formatNumber(view, number3) {
-    return view.state.facet(lineNumberConfig).formatNumber(number3, view.state);
-  }
-  var lineNumberGutter = /* @__PURE__ */ activeGutters.compute([lineNumberConfig], (state) => ({
-    class: "cm-lineNumbers",
-    renderEmptyElements: false,
-    markers(view) {
-      return view.state.facet(lineNumberMarkers);
-    },
-    lineMarker(view, line, others) {
-      if (others.some((m) => m.toDOM))
-        return null;
-      return new NumberMarker(formatNumber(view, view.state.doc.lineAt(line.from).number));
-    },
-    widgetMarker: (view, widget, block) => {
-      for (let m of view.state.facet(lineNumberWidgetMarker)) {
-        let result = m(view, widget, block);
-        if (result)
-          return result;
-      }
-      return null;
-    },
-    lineMarkerChange: (update) => update.startState.facet(lineNumberConfig) != update.state.facet(lineNumberConfig),
-    initialSpacer(view) {
-      return new NumberMarker(formatNumber(view, maxLineNumber(view.state.doc.lines)));
-    },
-    updateSpacer(spacer, update) {
-      let max = formatNumber(update.view, maxLineNumber(update.view.state.doc.lines));
-      return max == spacer.number ? spacer : new NumberMarker(max);
-    },
-    domEventHandlers: state.facet(lineNumberConfig).domEventHandlers,
-    side: "before"
-  }));
-  function lineNumbers(config2 = {}) {
-    return [
-      lineNumberConfig.of(config2),
-      gutters(),
-      lineNumberGutter
-    ];
-  }
-  function maxLineNumber(lines) {
-    let last = 9;
-    while (last < lines)
-      last = last * 10 + 9;
-    return last;
-  }
   var activeLineGutterMarker = /* @__PURE__ */ new class extends GutterMarker {
     constructor() {
       super(...arguments);
@@ -43357,15 +43285,6 @@
   }
   var foldEffect = /* @__PURE__ */ StateEffect.define({ map: mapRange });
   var unfoldEffect = /* @__PURE__ */ StateEffect.define({ map: mapRange });
-  function selectedLines(view) {
-    let lines = [];
-    for (let { head } of view.state.selection.ranges) {
-      if (lines.some((l) => l.from <= head && l.to >= head))
-        continue;
-      lines.push(view.lineBlockAt(head));
-    }
-    return lines;
-  }
   var foldState = /* @__PURE__ */ StateField.define({
     create() {
       return Decoration.none;
@@ -43441,65 +43360,6 @@
     });
     return found;
   }
-  function maybeEnable(state, other) {
-    return state.field(foldState, false) ? other : other.concat(StateEffect.appendConfig.of(codeFolding()));
-  }
-  var foldCode = (view) => {
-    for (let line of selectedLines(view)) {
-      let range = foldable(view.state, line.from, line.to);
-      if (range) {
-        view.dispatch({ effects: maybeEnable(view.state, [foldEffect.of(range), announceFold(view, range)]) });
-        return true;
-      }
-    }
-    return false;
-  };
-  var unfoldCode = (view) => {
-    if (!view.state.field(foldState, false))
-      return false;
-    let effects = [];
-    for (let line of selectedLines(view)) {
-      let folded = findFold(view.state, line.from, line.to);
-      if (folded)
-        effects.push(unfoldEffect.of(folded), announceFold(view, folded, false));
-    }
-    if (effects.length)
-      view.dispatch({ effects });
-    return effects.length > 0;
-  };
-  function announceFold(view, range, fold = true) {
-    let lineFrom = view.state.doc.lineAt(range.from).number, lineTo = view.state.doc.lineAt(range.to).number;
-    return EditorView.announce.of(`${view.state.phrase(fold ? "Folded lines" : "Unfolded lines")} ${lineFrom} ${view.state.phrase("to")} ${lineTo}.`);
-  }
-  var foldAll = (view) => {
-    let { state } = view, effects = [];
-    for (let pos = 0; pos < state.doc.length; ) {
-      let line = view.lineBlockAt(pos), range = foldable(state, line.from, line.to);
-      if (range)
-        effects.push(foldEffect.of(range));
-      pos = (range ? view.lineBlockAt(range.to) : line).to + 1;
-    }
-    if (effects.length)
-      view.dispatch({ effects: maybeEnable(view.state, effects) });
-    return !!effects.length;
-  };
-  var unfoldAll = (view) => {
-    let field = view.state.field(foldState, false);
-    if (!field || !field.size)
-      return false;
-    let effects = [];
-    field.between(0, view.state.doc.length, (from, to) => {
-      effects.push(unfoldEffect.of({ from, to }));
-    });
-    view.dispatch({ effects });
-    return true;
-  };
-  var foldKeymap = [
-    { key: "Ctrl-Shift-[", mac: "Cmd-Alt-[", run: foldCode },
-    { key: "Ctrl-Shift-]", mac: "Cmd-Alt-]", run: unfoldCode },
-    { key: "Ctrl-Alt-[", run: foldAll },
-    { key: "Ctrl-Alt-]", run: unfoldAll }
-  ];
   var defaultConfig = {
     placeholderDOM: null,
     preparePlaceholder: null,
@@ -44289,8 +44149,6 @@
   }
   var undo = /* @__PURE__ */ cmd(0, false);
   var redo = /* @__PURE__ */ cmd(1, false);
-  var undoSelection = /* @__PURE__ */ cmd(0, true);
-  var redoSelection = /* @__PURE__ */ cmd(1, true);
   var HistEvent = class _HistEvent {
     constructor(changes, effects, mapped, startSelection, selectionsAfter) {
       this.changes = changes;
@@ -44463,13 +44321,6 @@
     }
   };
   HistoryState.empty = /* @__PURE__ */ new HistoryState(none2, none2);
-  var historyKeymap = [
-    { key: "Mod-z", run: undo, preventDefault: true },
-    { key: "Mod-y", mac: "Mod-Shift-z", run: redo, preventDefault: true },
-    { linux: "Ctrl-Shift-z", run: redo, preventDefault: true },
-    { key: "Mod-u", run: undoSelection, preventDefault: true },
-    { key: "Alt-u", mac: "Mod-Shift-u", run: redoSelection, preventDefault: true }
-  ];
   function updateSel(sel, by) {
     return EditorSelection.create(sel.ranges.map(by), sel.mainIndex);
   }
@@ -45126,1083 +44977,6 @@
     { key: "Ctrl-m", mac: "Shift-Alt-m", run: toggleTabFocusMode }
   ].concat(standardKeymap);
   var indentWithTab = { key: "Tab", run: indentMore, shift: indentLess };
-
-  // node_modules/@codemirror/search/dist/index.js
-  var basicNormalize = typeof String.prototype.normalize == "function" ? (x) => x.normalize("NFKD") : (x) => x;
-  var SearchCursor = class {
-    /**
-    Create a text cursor. The query is the search string, `from` to
-    `to` provides the region to search.
-    
-    When `normalize` is given, it will be called, on both the query
-    string and the content it is matched against, before comparing.
-    You can, for example, create a case-insensitive search by
-    passing `s => s.toLowerCase()`.
-    
-    Text is always normalized with
-    [`.normalize("NFKD")`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/normalize)
-    (when supported).
-    */
-    constructor(text, query, from = 0, to = text.length, normalize, test) {
-      this.test = test;
-      this.value = { from: 0, to: 0 };
-      this.done = false;
-      this.matches = [];
-      this.buffer = "";
-      this.bufferPos = 0;
-      this.iter = text.iterRange(from, to);
-      this.bufferStart = from;
-      this.normalize = normalize ? (x) => normalize(basicNormalize(x)) : basicNormalize;
-      this.query = this.normalize(query);
-    }
-    peek() {
-      if (this.bufferPos == this.buffer.length) {
-        this.bufferStart += this.buffer.length;
-        this.iter.next();
-        if (this.iter.done)
-          return -1;
-        this.bufferPos = 0;
-        this.buffer = this.iter.value;
-      }
-      return codePointAt2(this.buffer, this.bufferPos);
-    }
-    /**
-    Look for the next match. Updates the iterator's
-    [`value`](https://codemirror.net/6/docs/ref/#search.SearchCursor.value) and
-    [`done`](https://codemirror.net/6/docs/ref/#search.SearchCursor.done) properties. Should be called
-    at least once before using the cursor.
-    */
-    next() {
-      while (this.matches.length)
-        this.matches.pop();
-      return this.nextOverlapping();
-    }
-    /**
-    The `next` method will ignore matches that partially overlap a
-    previous match. This method behaves like `next`, but includes
-    such matches.
-    */
-    nextOverlapping() {
-      for (; ; ) {
-        let next = this.peek();
-        if (next < 0) {
-          this.done = true;
-          return this;
-        }
-        let str = fromCodePoint(next), start = this.bufferStart + this.bufferPos;
-        this.bufferPos += codePointSize2(next);
-        let norm = this.normalize(str);
-        if (norm.length)
-          for (let i = 0, pos = start; ; i++) {
-            let code = norm.charCodeAt(i);
-            let match = this.match(code, pos, this.bufferPos + this.bufferStart);
-            if (i == norm.length - 1) {
-              if (match) {
-                this.value = match;
-                return this;
-              }
-              break;
-            }
-            if (pos == start && i < str.length && str.charCodeAt(i) == code)
-              pos++;
-          }
-      }
-    }
-    match(code, pos, end) {
-      let match = null;
-      for (let i = 0; i < this.matches.length; i += 2) {
-        let index = this.matches[i], keep = false;
-        if (this.query.charCodeAt(index) == code) {
-          if (index == this.query.length - 1) {
-            match = { from: this.matches[i + 1], to: end };
-          } else {
-            this.matches[i]++;
-            keep = true;
-          }
-        }
-        if (!keep) {
-          this.matches.splice(i, 2);
-          i -= 2;
-        }
-      }
-      if (this.query.charCodeAt(0) == code) {
-        if (this.query.length == 1)
-          match = { from: pos, to: end };
-        else
-          this.matches.push(1, pos);
-      }
-      if (match && this.test && !this.test(match.from, match.to, this.buffer, this.bufferStart))
-        match = null;
-      return match;
-    }
-  };
-  if (typeof Symbol != "undefined")
-    SearchCursor.prototype[Symbol.iterator] = function() {
-      return this;
-    };
-  var empty = { from: -1, to: -1, match: /* @__PURE__ */ /.*/.exec("") };
-  var baseFlags = "gm" + (/x/.unicode == null ? "" : "u");
-  var RegExpCursor = class {
-    /**
-    Create a cursor that will search the given range in the given
-    document. `query` should be the raw pattern (as you'd pass it to
-    `new RegExp`).
-    */
-    constructor(text, query, options, from = 0, to = text.length) {
-      this.text = text;
-      this.to = to;
-      this.curLine = "";
-      this.done = false;
-      this.value = empty;
-      if (/\\[sWDnr]|\n|\r|\[\^/.test(query))
-        return new MultilineRegExpCursor(text, query, options, from, to);
-      this.re = new RegExp(query, baseFlags + ((options === null || options === void 0 ? void 0 : options.ignoreCase) ? "i" : ""));
-      this.test = options === null || options === void 0 ? void 0 : options.test;
-      this.iter = text.iter();
-      let startLine = text.lineAt(from);
-      this.curLineStart = startLine.from;
-      this.matchPos = toCharEnd(text, from);
-      this.getLine(this.curLineStart);
-    }
-    getLine(skip) {
-      this.iter.next(skip);
-      if (this.iter.lineBreak) {
-        this.curLine = "";
-      } else {
-        this.curLine = this.iter.value;
-        if (this.curLineStart + this.curLine.length > this.to)
-          this.curLine = this.curLine.slice(0, this.to - this.curLineStart);
-        this.iter.next();
-      }
-    }
-    nextLine() {
-      this.curLineStart = this.curLineStart + this.curLine.length + 1;
-      if (this.curLineStart > this.to)
-        this.curLine = "";
-      else
-        this.getLine(0);
-    }
-    /**
-    Move to the next match, if there is one.
-    */
-    next() {
-      for (let off = this.matchPos - this.curLineStart; ; ) {
-        this.re.lastIndex = off;
-        let match = this.matchPos <= this.to && this.re.exec(this.curLine);
-        if (match) {
-          let from = this.curLineStart + match.index, to = from + match[0].length;
-          this.matchPos = toCharEnd(this.text, to + (from == to ? 1 : 0));
-          if (from == this.curLineStart + this.curLine.length)
-            this.nextLine();
-          if ((from < to || from > this.value.to) && (!this.test || this.test(from, to, match))) {
-            this.value = { from, to, match };
-            return this;
-          }
-          off = this.matchPos - this.curLineStart;
-        } else if (this.curLineStart + this.curLine.length < this.to) {
-          this.nextLine();
-          off = 0;
-        } else {
-          this.done = true;
-          return this;
-        }
-      }
-    }
-  };
-  var flattened = /* @__PURE__ */ new WeakMap();
-  var FlattenedDoc = class _FlattenedDoc {
-    constructor(from, text) {
-      this.from = from;
-      this.text = text;
-    }
-    get to() {
-      return this.from + this.text.length;
-    }
-    static get(doc2, from, to) {
-      let cached2 = flattened.get(doc2);
-      if (!cached2 || cached2.from >= to || cached2.to <= from) {
-        let flat = new _FlattenedDoc(from, doc2.sliceString(from, to));
-        flattened.set(doc2, flat);
-        return flat;
-      }
-      if (cached2.from == from && cached2.to == to)
-        return cached2;
-      let { text, from: cachedFrom } = cached2;
-      if (cachedFrom > from) {
-        text = doc2.sliceString(from, cachedFrom) + text;
-        cachedFrom = from;
-      }
-      if (cached2.to < to)
-        text += doc2.sliceString(cached2.to, to);
-      flattened.set(doc2, new _FlattenedDoc(cachedFrom, text));
-      return new _FlattenedDoc(from, text.slice(from - cachedFrom, to - cachedFrom));
-    }
-  };
-  var MultilineRegExpCursor = class {
-    constructor(text, query, options, from, to) {
-      this.text = text;
-      this.to = to;
-      this.done = false;
-      this.value = empty;
-      this.matchPos = toCharEnd(text, from);
-      this.re = new RegExp(query, baseFlags + ((options === null || options === void 0 ? void 0 : options.ignoreCase) ? "i" : ""));
-      this.test = options === null || options === void 0 ? void 0 : options.test;
-      this.flat = FlattenedDoc.get(text, from, this.chunkEnd(
-        from + 5e3
-        /* Chunk.Base */
-      ));
-    }
-    chunkEnd(pos) {
-      return pos >= this.to ? this.to : this.text.lineAt(pos).to;
-    }
-    next() {
-      for (; ; ) {
-        let off = this.re.lastIndex = this.matchPos - this.flat.from;
-        let match = this.re.exec(this.flat.text);
-        if (match && !match[0] && match.index == off) {
-          this.re.lastIndex = off + 1;
-          match = this.re.exec(this.flat.text);
-        }
-        if (match) {
-          let from = this.flat.from + match.index, to = from + match[0].length;
-          if ((this.flat.to >= this.to || match.index + match[0].length <= this.flat.text.length - 10) && (!this.test || this.test(from, to, match))) {
-            this.value = { from, to, match };
-            this.matchPos = toCharEnd(this.text, to + (from == to ? 1 : 0));
-            return this;
-          }
-        }
-        if (this.flat.to == this.to) {
-          this.done = true;
-          return this;
-        }
-        this.flat = FlattenedDoc.get(this.text, this.flat.from, this.chunkEnd(this.flat.from + this.flat.text.length * 2));
-      }
-    }
-  };
-  if (typeof Symbol != "undefined") {
-    RegExpCursor.prototype[Symbol.iterator] = MultilineRegExpCursor.prototype[Symbol.iterator] = function() {
-      return this;
-    };
-  }
-  function validRegExp(source) {
-    try {
-      new RegExp(source, baseFlags);
-      return true;
-    } catch (_a2) {
-      return false;
-    }
-  }
-  function toCharEnd(text, pos) {
-    if (pos >= text.length)
-      return pos;
-    let line = text.lineAt(pos), next;
-    while (pos < line.to && (next = line.text.charCodeAt(pos - line.from)) >= 56320 && next < 57344)
-      pos++;
-    return pos;
-  }
-  var gotoLine = (view) => {
-    let { state } = view;
-    let line = String(state.doc.lineAt(view.state.selection.main.head).number);
-    let { close, result } = showDialog(view, {
-      label: state.phrase("Go to line"),
-      input: { type: "text", name: "line", value: line },
-      focus: true,
-      submitLabel: state.phrase("go")
-    });
-    result.then((form) => {
-      let match = form && /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(form.elements["line"].value);
-      if (!match) {
-        view.dispatch({ effects: close });
-        return;
-      }
-      let startLine = state.doc.lineAt(state.selection.main.head);
-      let [, sign, ln, cl, percent] = match;
-      let col = cl ? +cl.slice(1) : 0;
-      let line2 = ln ? +ln : startLine.number;
-      if (ln && percent) {
-        let pc = line2 / 100;
-        if (sign)
-          pc = pc * (sign == "-" ? -1 : 1) + startLine.number / state.doc.lines;
-        line2 = Math.round(state.doc.lines * pc);
-      } else if (ln && sign) {
-        line2 = line2 * (sign == "-" ? -1 : 1) + startLine.number;
-      }
-      let docLine = state.doc.line(Math.max(1, Math.min(state.doc.lines, line2)));
-      let selection = EditorSelection.cursor(docLine.from + Math.max(0, Math.min(col, docLine.length)));
-      view.dispatch({
-        effects: [close, EditorView.scrollIntoView(selection.from, { y: "center" })],
-        selection
-      });
-    });
-    return true;
-  };
-  var defaultHighlightOptions = {
-    highlightWordAroundCursor: false,
-    minSelectionLength: 1,
-    maxMatches: 100,
-    wholeWords: false
-  };
-  var highlightConfig = /* @__PURE__ */ Facet.define({
-    combine(options) {
-      return combineConfig(options, defaultHighlightOptions, {
-        highlightWordAroundCursor: (a, b) => a || b,
-        minSelectionLength: Math.min,
-        maxMatches: Math.min
-      });
-    }
-  });
-  function highlightSelectionMatches(options) {
-    let ext = [defaultTheme, matchHighlighter];
-    if (options)
-      ext.push(highlightConfig.of(options));
-    return ext;
-  }
-  var matchDeco = /* @__PURE__ */ Decoration.mark({ class: "cm-selectionMatch" });
-  var mainMatchDeco = /* @__PURE__ */ Decoration.mark({ class: "cm-selectionMatch cm-selectionMatch-main" });
-  function insideWordBoundaries(check, state, from, to) {
-    return (from == 0 || check(state.sliceDoc(from - 1, from)) != CharCategory.Word) && (to == state.doc.length || check(state.sliceDoc(to, to + 1)) != CharCategory.Word);
-  }
-  function insideWord(check, state, from, to) {
-    return check(state.sliceDoc(from, from + 1)) == CharCategory.Word && check(state.sliceDoc(to - 1, to)) == CharCategory.Word;
-  }
-  var matchHighlighter = /* @__PURE__ */ ViewPlugin.fromClass(class {
-    constructor(view) {
-      this.decorations = this.getDeco(view);
-    }
-    update(update) {
-      if (update.selectionSet || update.docChanged || update.viewportChanged)
-        this.decorations = this.getDeco(update.view);
-    }
-    getDeco(view) {
-      let conf = view.state.facet(highlightConfig);
-      let { state } = view, sel = state.selection;
-      if (sel.ranges.length > 1)
-        return Decoration.none;
-      let range = sel.main, query, check = null;
-      if (range.empty) {
-        if (!conf.highlightWordAroundCursor)
-          return Decoration.none;
-        let word = state.wordAt(range.head);
-        if (!word)
-          return Decoration.none;
-        check = state.charCategorizer(range.head);
-        query = state.sliceDoc(word.from, word.to);
-      } else {
-        let len = range.to - range.from;
-        if (len < conf.minSelectionLength || len > 200)
-          return Decoration.none;
-        if (conf.wholeWords) {
-          query = state.sliceDoc(range.from, range.to);
-          check = state.charCategorizer(range.head);
-          if (!(insideWordBoundaries(check, state, range.from, range.to) && insideWord(check, state, range.from, range.to)))
-            return Decoration.none;
-        } else {
-          query = state.sliceDoc(range.from, range.to);
-          if (!query)
-            return Decoration.none;
-        }
-      }
-      let deco = [];
-      for (let part of view.visibleRanges) {
-        let cursor = new SearchCursor(state.doc, query, part.from, part.to);
-        while (!cursor.next().done) {
-          let { from, to } = cursor.value;
-          if (!check || insideWordBoundaries(check, state, from, to)) {
-            if (range.empty && from <= range.from && to >= range.to)
-              deco.push(mainMatchDeco.range(from, to));
-            else if (from >= range.to || to <= range.from)
-              deco.push(matchDeco.range(from, to));
-            if (deco.length > conf.maxMatches)
-              return Decoration.none;
-          }
-        }
-      }
-      return Decoration.set(deco);
-    }
-  }, {
-    decorations: (v) => v.decorations
-  });
-  var defaultTheme = /* @__PURE__ */ EditorView.baseTheme({
-    ".cm-selectionMatch": { backgroundColor: "#99ff7780" },
-    ".cm-searchMatch .cm-selectionMatch": { backgroundColor: "transparent" }
-  });
-  var selectWord = ({ state, dispatch }) => {
-    let { selection } = state;
-    let newSel = EditorSelection.create(selection.ranges.map((range) => state.wordAt(range.head) || EditorSelection.cursor(range.head)), selection.mainIndex);
-    if (newSel.eq(selection))
-      return false;
-    dispatch(state.update({ selection: newSel }));
-    return true;
-  };
-  function findNextOccurrence(state, query) {
-    let { main, ranges } = state.selection;
-    let word = state.wordAt(main.head), fullWord = word && word.from == main.from && word.to == main.to;
-    for (let cycled = false, cursor = new SearchCursor(state.doc, query, ranges[ranges.length - 1].to); ; ) {
-      cursor.next();
-      if (cursor.done) {
-        if (cycled)
-          return null;
-        cursor = new SearchCursor(state.doc, query, 0, Math.max(0, ranges[ranges.length - 1].from - 1));
-        cycled = true;
-      } else {
-        if (cycled && ranges.some((r) => r.from == cursor.value.from))
-          continue;
-        if (fullWord) {
-          let word2 = state.wordAt(cursor.value.from);
-          if (!word2 || word2.from != cursor.value.from || word2.to != cursor.value.to)
-            continue;
-        }
-        return cursor.value;
-      }
-    }
-  }
-  var selectNextOccurrence = ({ state, dispatch }) => {
-    let { ranges } = state.selection;
-    if (ranges.some((sel) => sel.from === sel.to))
-      return selectWord({ state, dispatch });
-    let searchedText = state.sliceDoc(ranges[0].from, ranges[0].to);
-    if (state.selection.ranges.some((r) => state.sliceDoc(r.from, r.to) != searchedText))
-      return false;
-    let range = findNextOccurrence(state, searchedText);
-    if (!range)
-      return false;
-    dispatch(state.update({
-      selection: state.selection.addRange(EditorSelection.range(range.from, range.to), false),
-      effects: EditorView.scrollIntoView(range.to)
-    }));
-    return true;
-  };
-  var searchConfigFacet = /* @__PURE__ */ Facet.define({
-    combine(configs) {
-      return combineConfig(configs, {
-        top: false,
-        caseSensitive: false,
-        literal: false,
-        regexp: false,
-        wholeWord: false,
-        createPanel: (view) => new SearchPanel(view),
-        scrollToMatch: (range) => EditorView.scrollIntoView(range)
-      });
-    }
-  });
-  var SearchQuery = class {
-    /**
-    Create a query object.
-    */
-    constructor(config2) {
-      this.search = config2.search;
-      this.caseSensitive = !!config2.caseSensitive;
-      this.literal = !!config2.literal;
-      this.regexp = !!config2.regexp;
-      this.replace = config2.replace || "";
-      this.valid = !!this.search && (!this.regexp || validRegExp(this.search));
-      this.unquoted = this.unquote(this.search);
-      this.wholeWord = !!config2.wholeWord;
-      this.test = config2.test;
-    }
-    /**
-    @internal
-    */
-    unquote(text) {
-      return this.literal ? text : text.replace(/\\([nrt\\])/g, (_, ch) => ch == "n" ? "\n" : ch == "r" ? "\r" : ch == "t" ? "	" : "\\");
-    }
-    /**
-    Compare this query to another query.
-    */
-    eq(other) {
-      return this.search == other.search && this.replace == other.replace && this.caseSensitive == other.caseSensitive && this.regexp == other.regexp && this.wholeWord == other.wholeWord && this.test == other.test;
-    }
-    /**
-    @internal
-    */
-    create() {
-      return this.regexp ? new RegExpQuery(this) : new StringQuery(this);
-    }
-    /**
-    Get a search cursor for this query, searching through the given
-    range in the given state.
-    */
-    getCursor(state, from = 0, to) {
-      let st = state.doc ? state : EditorState.create({ doc: state });
-      if (to == null)
-        to = st.doc.length;
-      return this.regexp ? regexpCursor(this, st, from, to) : stringCursor(this, st, from, to);
-    }
-  };
-  var QueryType2 = class {
-    constructor(spec) {
-      this.spec = spec;
-    }
-  };
-  function wrapStringTest(test, state, inner) {
-    return (from, to, buffer, bufferPos) => {
-      if (inner && !inner(from, to, buffer, bufferPos))
-        return false;
-      let match = from >= bufferPos && to <= bufferPos + buffer.length ? buffer.slice(from - bufferPos, to - bufferPos) : state.doc.sliceString(from, to);
-      return test(match, state, from, to);
-    };
-  }
-  function stringCursor(spec, state, from, to) {
-    let test;
-    if (spec.wholeWord)
-      test = stringWordTest(state.doc, state.charCategorizer(state.selection.main.head));
-    if (spec.test)
-      test = wrapStringTest(spec.test, state, test);
-    return new SearchCursor(state.doc, spec.unquoted, from, to, spec.caseSensitive ? void 0 : (x) => x.toLowerCase(), test);
-  }
-  function stringWordTest(doc2, categorizer) {
-    return (from, to, buf, bufPos) => {
-      if (bufPos > from || bufPos + buf.length < to) {
-        bufPos = Math.max(0, from - 2);
-        buf = doc2.sliceString(bufPos, Math.min(doc2.length, to + 2));
-      }
-      return (categorizer(charBefore(buf, from - bufPos)) != CharCategory.Word || categorizer(charAfter(buf, from - bufPos)) != CharCategory.Word) && (categorizer(charAfter(buf, to - bufPos)) != CharCategory.Word || categorizer(charBefore(buf, to - bufPos)) != CharCategory.Word);
-    };
-  }
-  var StringQuery = class extends QueryType2 {
-    constructor(spec) {
-      super(spec);
-    }
-    nextMatch(state, curFrom, curTo) {
-      let cursor = stringCursor(this.spec, state, curTo, state.doc.length).nextOverlapping();
-      if (cursor.done) {
-        let end = Math.min(state.doc.length, curFrom + this.spec.unquoted.length);
-        cursor = stringCursor(this.spec, state, 0, end).nextOverlapping();
-      }
-      return cursor.done || cursor.value.from == curFrom && cursor.value.to == curTo ? null : cursor.value;
-    }
-    // Searching in reverse is, rather than implementing an inverted search
-    // cursor, done by scanning chunk after chunk forward.
-    prevMatchInRange(state, from, to) {
-      for (let pos = to; ; ) {
-        let start = Math.max(from, pos - 1e4 - this.spec.unquoted.length);
-        let cursor = stringCursor(this.spec, state, start, pos), range = null;
-        while (!cursor.nextOverlapping().done)
-          range = cursor.value;
-        if (range)
-          return range;
-        if (start == from)
-          return null;
-        pos -= 1e4;
-      }
-    }
-    prevMatch(state, curFrom, curTo) {
-      let found = this.prevMatchInRange(state, 0, curFrom);
-      if (!found)
-        found = this.prevMatchInRange(state, Math.max(0, curTo - this.spec.unquoted.length), state.doc.length);
-      return found && (found.from != curFrom || found.to != curTo) ? found : null;
-    }
-    getReplacement(_result) {
-      return this.spec.unquote(this.spec.replace);
-    }
-    matchAll(state, limit) {
-      let cursor = stringCursor(this.spec, state, 0, state.doc.length), ranges = [];
-      while (!cursor.next().done) {
-        if (ranges.length >= limit)
-          return null;
-        ranges.push(cursor.value);
-      }
-      return ranges;
-    }
-    highlight(state, from, to, add2) {
-      let cursor = stringCursor(this.spec, state, Math.max(0, from - this.spec.unquoted.length), Math.min(to + this.spec.unquoted.length, state.doc.length));
-      while (!cursor.next().done)
-        add2(cursor.value.from, cursor.value.to);
-    }
-  };
-  function wrapRegexpTest(test, state, inner) {
-    return (from, to, match) => {
-      return (!inner || inner(from, to, match)) && test(match[0], state, from, to);
-    };
-  }
-  function regexpCursor(spec, state, from, to) {
-    let test;
-    if (spec.wholeWord)
-      test = regexpWordTest(state.charCategorizer(state.selection.main.head));
-    if (spec.test)
-      test = wrapRegexpTest(spec.test, state, test);
-    return new RegExpCursor(state.doc, spec.search, { ignoreCase: !spec.caseSensitive, test }, from, to);
-  }
-  function charBefore(str, index) {
-    return str.slice(findClusterBreak2(str, index, false), index);
-  }
-  function charAfter(str, index) {
-    return str.slice(index, findClusterBreak2(str, index));
-  }
-  function regexpWordTest(categorizer) {
-    return (_from, _to, match) => !match[0].length || (categorizer(charBefore(match.input, match.index)) != CharCategory.Word || categorizer(charAfter(match.input, match.index)) != CharCategory.Word) && (categorizer(charAfter(match.input, match.index + match[0].length)) != CharCategory.Word || categorizer(charBefore(match.input, match.index + match[0].length)) != CharCategory.Word);
-  }
-  var RegExpQuery = class extends QueryType2 {
-    nextMatch(state, curFrom, curTo) {
-      let cursor = regexpCursor(this.spec, state, curTo, state.doc.length).next();
-      if (cursor.done)
-        cursor = regexpCursor(this.spec, state, 0, curFrom).next();
-      return cursor.done ? null : cursor.value;
-    }
-    prevMatchInRange(state, from, to) {
-      for (let size = 1; ; size++) {
-        let start = Math.max(
-          from,
-          to - size * 1e4
-          /* FindPrev.ChunkSize */
-        );
-        let cursor = regexpCursor(this.spec, state, start, to), range = null;
-        while (!cursor.next().done)
-          range = cursor.value;
-        if (range && (start == from || range.from > start + 10))
-          return range;
-        if (start == from)
-          return null;
-      }
-    }
-    prevMatch(state, curFrom, curTo) {
-      return this.prevMatchInRange(state, 0, curFrom) || this.prevMatchInRange(state, curTo, state.doc.length);
-    }
-    getReplacement(result) {
-      return this.spec.unquote(this.spec.replace).replace(/\$([$&]|\d+)/g, (m, i) => {
-        if (i == "&")
-          return result.match[0];
-        if (i == "$")
-          return "$";
-        for (let l = i.length; l > 0; l--) {
-          let n = +i.slice(0, l);
-          if (n > 0 && n < result.match.length)
-            return result.match[n] + i.slice(l);
-        }
-        return m;
-      });
-    }
-    matchAll(state, limit) {
-      let cursor = regexpCursor(this.spec, state, 0, state.doc.length), ranges = [];
-      while (!cursor.next().done) {
-        if (ranges.length >= limit)
-          return null;
-        ranges.push(cursor.value);
-      }
-      return ranges;
-    }
-    highlight(state, from, to, add2) {
-      let cursor = regexpCursor(this.spec, state, Math.max(
-        0,
-        from - 250
-        /* RegExp.HighlightMargin */
-      ), Math.min(to + 250, state.doc.length));
-      while (!cursor.next().done)
-        add2(cursor.value.from, cursor.value.to);
-    }
-  };
-  var setSearchQuery = /* @__PURE__ */ StateEffect.define();
-  var togglePanel = /* @__PURE__ */ StateEffect.define();
-  var searchState = /* @__PURE__ */ StateField.define({
-    create(state) {
-      return new SearchState(defaultQuery(state).create(), null);
-    },
-    update(value, tr) {
-      for (let effect of tr.effects) {
-        if (effect.is(setSearchQuery))
-          value = new SearchState(effect.value.create(), value.panel);
-        else if (effect.is(togglePanel))
-          value = new SearchState(value.query, effect.value ? createSearchPanel : null);
-      }
-      return value;
-    },
-    provide: (f) => showPanel.from(f, (val) => val.panel)
-  });
-  var SearchState = class {
-    constructor(query, panel) {
-      this.query = query;
-      this.panel = panel;
-    }
-  };
-  var matchMark = /* @__PURE__ */ Decoration.mark({ class: "cm-searchMatch" });
-  var selectedMatchMark = /* @__PURE__ */ Decoration.mark({ class: "cm-searchMatch cm-searchMatch-selected" });
-  var searchHighlighter = /* @__PURE__ */ ViewPlugin.fromClass(class {
-    constructor(view) {
-      this.view = view;
-      this.decorations = this.highlight(view.state.field(searchState));
-    }
-    update(update) {
-      let state = update.state.field(searchState);
-      if (state != update.startState.field(searchState) || update.docChanged || update.selectionSet || update.viewportChanged)
-        this.decorations = this.highlight(state);
-    }
-    highlight({ query, panel }) {
-      if (!panel || !query.spec.valid)
-        return Decoration.none;
-      let { view } = this;
-      let builder = new RangeSetBuilder();
-      for (let i = 0, ranges = view.visibleRanges, l = ranges.length; i < l; i++) {
-        let { from, to } = ranges[i];
-        while (i < l - 1 && to > ranges[i + 1].from - 2 * 250)
-          to = ranges[++i].to;
-        query.highlight(view.state, from, to, (from2, to2) => {
-          let selected = view.state.selection.ranges.some((r) => r.from == from2 && r.to == to2);
-          builder.add(from2, to2, selected ? selectedMatchMark : matchMark);
-        });
-      }
-      return builder.finish();
-    }
-  }, {
-    decorations: (v) => v.decorations
-  });
-  function searchCommand(f) {
-    return (view) => {
-      let state = view.state.field(searchState, false);
-      return state && state.query.spec.valid ? f(view, state) : openSearchPanel(view);
-    };
-  }
-  var findNext = /* @__PURE__ */ searchCommand((view, { query }) => {
-    let { to } = view.state.selection.main;
-    let next = query.nextMatch(view.state, to, to);
-    if (!next)
-      return false;
-    let selection = EditorSelection.single(next.from, next.to);
-    let config2 = view.state.facet(searchConfigFacet);
-    view.dispatch({
-      selection,
-      effects: [announceMatch(view, next), config2.scrollToMatch(selection.main, view)],
-      userEvent: "select.search"
-    });
-    selectSearchInput(view);
-    return true;
-  });
-  var findPrevious = /* @__PURE__ */ searchCommand((view, { query }) => {
-    let { state } = view, { from } = state.selection.main;
-    let prev = query.prevMatch(state, from, from);
-    if (!prev)
-      return false;
-    let selection = EditorSelection.single(prev.from, prev.to);
-    let config2 = view.state.facet(searchConfigFacet);
-    view.dispatch({
-      selection,
-      effects: [announceMatch(view, prev), config2.scrollToMatch(selection.main, view)],
-      userEvent: "select.search"
-    });
-    selectSearchInput(view);
-    return true;
-  });
-  var selectMatches = /* @__PURE__ */ searchCommand((view, { query }) => {
-    let ranges = query.matchAll(view.state, 1e3);
-    if (!ranges || !ranges.length)
-      return false;
-    view.dispatch({
-      selection: EditorSelection.create(ranges.map((r) => EditorSelection.range(r.from, r.to))),
-      userEvent: "select.search.matches"
-    });
-    return true;
-  });
-  var selectSelectionMatches = ({ state, dispatch }) => {
-    let sel = state.selection;
-    if (sel.ranges.length > 1 || sel.main.empty)
-      return false;
-    let { from, to } = sel.main;
-    let ranges = [], main = 0;
-    for (let cur2 = new SearchCursor(state.doc, state.sliceDoc(from, to)); !cur2.next().done; ) {
-      if (ranges.length > 1e3)
-        return false;
-      if (cur2.value.from == from)
-        main = ranges.length;
-      ranges.push(EditorSelection.range(cur2.value.from, cur2.value.to));
-    }
-    dispatch(state.update({
-      selection: EditorSelection.create(ranges, main),
-      userEvent: "select.search.matches"
-    }));
-    return true;
-  };
-  var replaceNext = /* @__PURE__ */ searchCommand((view, { query }) => {
-    let { state } = view, { from, to } = state.selection.main;
-    if (state.readOnly)
-      return false;
-    let match = query.nextMatch(state, from, from);
-    if (!match)
-      return false;
-    let next = match;
-    let changes = [], selection, replacement;
-    let effects = [];
-    if (next.from == from && next.to == to) {
-      replacement = state.toText(query.getReplacement(next));
-      changes.push({ from: next.from, to: next.to, insert: replacement });
-      next = query.nextMatch(state, next.from, next.to);
-      effects.push(EditorView.announce.of(state.phrase("replaced match on line $", state.doc.lineAt(from).number) + "."));
-    }
-    let changeSet = view.state.changes(changes);
-    if (next) {
-      selection = EditorSelection.single(next.from, next.to).map(changeSet);
-      effects.push(announceMatch(view, next));
-      effects.push(state.facet(searchConfigFacet).scrollToMatch(selection.main, view));
-    }
-    view.dispatch({
-      changes: changeSet,
-      selection,
-      effects,
-      userEvent: "input.replace"
-    });
-    return true;
-  });
-  var replaceAll = /* @__PURE__ */ searchCommand((view, { query }) => {
-    if (view.state.readOnly)
-      return false;
-    let changes = query.matchAll(view.state, 1e9).map((match) => {
-      let { from, to } = match;
-      return { from, to, insert: query.getReplacement(match) };
-    });
-    if (!changes.length)
-      return false;
-    let announceText = view.state.phrase("replaced $ matches", changes.length) + ".";
-    view.dispatch({
-      changes,
-      effects: EditorView.announce.of(announceText),
-      userEvent: "input.replace.all"
-    });
-    return true;
-  });
-  function createSearchPanel(view) {
-    return view.state.facet(searchConfigFacet).createPanel(view);
-  }
-  function defaultQuery(state, fallback) {
-    var _a2, _b, _c, _d, _e;
-    let sel = state.selection.main;
-    let selText = sel.empty || sel.to > sel.from + 100 ? "" : state.sliceDoc(sel.from, sel.to);
-    if (fallback && !selText)
-      return fallback;
-    let config2 = state.facet(searchConfigFacet);
-    return new SearchQuery({
-      search: ((_a2 = fallback === null || fallback === void 0 ? void 0 : fallback.literal) !== null && _a2 !== void 0 ? _a2 : config2.literal) ? selText : selText.replace(/\n/g, "\\n"),
-      caseSensitive: (_b = fallback === null || fallback === void 0 ? void 0 : fallback.caseSensitive) !== null && _b !== void 0 ? _b : config2.caseSensitive,
-      literal: (_c = fallback === null || fallback === void 0 ? void 0 : fallback.literal) !== null && _c !== void 0 ? _c : config2.literal,
-      regexp: (_d = fallback === null || fallback === void 0 ? void 0 : fallback.regexp) !== null && _d !== void 0 ? _d : config2.regexp,
-      wholeWord: (_e = fallback === null || fallback === void 0 ? void 0 : fallback.wholeWord) !== null && _e !== void 0 ? _e : config2.wholeWord
-    });
-  }
-  function getSearchInput(view) {
-    let panel = getPanel(view, createSearchPanel);
-    return panel && panel.dom.querySelector("[main-field]");
-  }
-  function selectSearchInput(view) {
-    let input = getSearchInput(view);
-    if (input && input == view.root.activeElement)
-      input.select();
-  }
-  var openSearchPanel = (view) => {
-    let state = view.state.field(searchState, false);
-    if (state && state.panel) {
-      let searchInput = getSearchInput(view);
-      if (searchInput && searchInput != view.root.activeElement) {
-        let query = defaultQuery(view.state, state.query.spec);
-        if (query.valid)
-          view.dispatch({ effects: setSearchQuery.of(query) });
-        searchInput.focus();
-        searchInput.select();
-      }
-    } else {
-      view.dispatch({ effects: [
-        togglePanel.of(true),
-        state ? setSearchQuery.of(defaultQuery(view.state, state.query.spec)) : StateEffect.appendConfig.of(searchExtensions)
-      ] });
-    }
-    return true;
-  };
-  var closeSearchPanel = (view) => {
-    let state = view.state.field(searchState, false);
-    if (!state || !state.panel)
-      return false;
-    let panel = getPanel(view, createSearchPanel);
-    if (panel && panel.dom.contains(view.root.activeElement))
-      view.focus();
-    view.dispatch({ effects: togglePanel.of(false) });
-    return true;
-  };
-  var searchKeymap = [
-    { key: "Mod-f", run: openSearchPanel, scope: "editor search-panel" },
-    { key: "F3", run: findNext, shift: findPrevious, scope: "editor search-panel", preventDefault: true },
-    { key: "Mod-g", run: findNext, shift: findPrevious, scope: "editor search-panel", preventDefault: true },
-    { key: "Escape", run: closeSearchPanel, scope: "editor search-panel" },
-    { key: "Mod-Shift-l", run: selectSelectionMatches },
-    { key: "Mod-Alt-g", run: gotoLine },
-    { key: "Mod-d", run: selectNextOccurrence, preventDefault: true }
-  ];
-  var SearchPanel = class {
-    constructor(view) {
-      this.view = view;
-      let query = this.query = view.state.field(searchState).query.spec;
-      this.commit = this.commit.bind(this);
-      this.searchField = crelt("input", {
-        value: query.search,
-        placeholder: phrase(view, "Find"),
-        "aria-label": phrase(view, "Find"),
-        class: "cm-textfield",
-        name: "search",
-        form: "",
-        "main-field": "true",
-        onchange: this.commit,
-        onkeyup: this.commit
-      });
-      this.replaceField = crelt("input", {
-        value: query.replace,
-        placeholder: phrase(view, "Replace"),
-        "aria-label": phrase(view, "Replace"),
-        class: "cm-textfield",
-        name: "replace",
-        form: "",
-        onchange: this.commit,
-        onkeyup: this.commit
-      });
-      this.caseField = crelt("input", {
-        type: "checkbox",
-        name: "case",
-        form: "",
-        checked: query.caseSensitive,
-        onchange: this.commit
-      });
-      this.reField = crelt("input", {
-        type: "checkbox",
-        name: "re",
-        form: "",
-        checked: query.regexp,
-        onchange: this.commit
-      });
-      this.wordField = crelt("input", {
-        type: "checkbox",
-        name: "word",
-        form: "",
-        checked: query.wholeWord,
-        onchange: this.commit
-      });
-      function button(name2, onclick, content2) {
-        return crelt("button", { class: "cm-button", name: name2, onclick, type: "button" }, content2);
-      }
-      this.dom = crelt("div", { onkeydown: (e) => this.keydown(e), class: "cm-search" }, [
-        this.searchField,
-        button("next", () => findNext(view), [phrase(view, "next")]),
-        button("prev", () => findPrevious(view), [phrase(view, "previous")]),
-        button("select", () => selectMatches(view), [phrase(view, "all")]),
-        crelt("label", null, [this.caseField, phrase(view, "match case")]),
-        crelt("label", null, [this.reField, phrase(view, "regexp")]),
-        crelt("label", null, [this.wordField, phrase(view, "by word")]),
-        ...view.state.readOnly ? [] : [
-          crelt("br"),
-          this.replaceField,
-          button("replace", () => replaceNext(view), [phrase(view, "replace")]),
-          button("replaceAll", () => replaceAll(view), [phrase(view, "replace all")])
-        ],
-        crelt("button", {
-          name: "close",
-          onclick: () => closeSearchPanel(view),
-          "aria-label": phrase(view, "close"),
-          type: "button"
-        }, ["\xD7"])
-      ]);
-    }
-    commit() {
-      let query = new SearchQuery({
-        search: this.searchField.value,
-        caseSensitive: this.caseField.checked,
-        regexp: this.reField.checked,
-        wholeWord: this.wordField.checked,
-        replace: this.replaceField.value
-      });
-      if (!query.eq(this.query)) {
-        this.query = query;
-        this.view.dispatch({ effects: setSearchQuery.of(query) });
-      }
-    }
-    keydown(e) {
-      if (runScopeHandlers(this.view, e, "search-panel")) {
-        e.preventDefault();
-      } else if (e.keyCode == 13 && e.target == this.searchField) {
-        e.preventDefault();
-        (e.shiftKey ? findPrevious : findNext)(this.view);
-      } else if (e.keyCode == 13 && e.target == this.replaceField) {
-        e.preventDefault();
-        replaceNext(this.view);
-      }
-    }
-    update(update) {
-      for (let tr of update.transactions)
-        for (let effect of tr.effects) {
-          if (effect.is(setSearchQuery) && !effect.value.eq(this.query))
-            this.setQuery(effect.value);
-        }
-    }
-    setQuery(query) {
-      this.query = query;
-      this.searchField.value = query.search;
-      this.replaceField.value = query.replace;
-      this.caseField.checked = query.caseSensitive;
-      this.reField.checked = query.regexp;
-      this.wordField.checked = query.wholeWord;
-    }
-    mount() {
-      this.searchField.select();
-    }
-    get pos() {
-      return 80;
-    }
-    get top() {
-      return this.view.state.facet(searchConfigFacet).top;
-    }
-  };
-  function phrase(view, phrase2) {
-    return view.state.phrase(phrase2);
-  }
-  var AnnounceMargin = 30;
-  var Break = /[\s\.,:;?!]/;
-  function announceMatch(view, { from, to }) {
-    let line = view.state.doc.lineAt(from), lineEnd = view.state.doc.lineAt(to).to;
-    let start = Math.max(line.from, from - AnnounceMargin), end = Math.min(lineEnd, to + AnnounceMargin);
-    let text = view.state.sliceDoc(start, end);
-    if (start != line.from) {
-      for (let i = 0; i < AnnounceMargin; i++)
-        if (!Break.test(text[i + 1]) && Break.test(text[i])) {
-          text = text.slice(i);
-          break;
-        }
-    }
-    if (end != lineEnd) {
-      for (let i = text.length - 1; i > text.length - AnnounceMargin; i--)
-        if (!Break.test(text[i - 1]) && Break.test(text[i])) {
-          text = text.slice(0, i);
-          break;
-        }
-    }
-    return EditorView.announce.of(`${view.state.phrase("current match")}. ${text} ${view.state.phrase("on line")} ${line.number}.`);
-  }
-  var baseTheme3 = /* @__PURE__ */ EditorView.baseTheme({
-    ".cm-panel.cm-search": {
-      padding: "2px 6px 4px",
-      position: "relative",
-      "& [name=close]": {
-        position: "absolute",
-        top: "0",
-        right: "4px",
-        backgroundColor: "inherit",
-        border: "none",
-        font: "inherit",
-        padding: 0,
-        margin: 0
-      },
-      "& input, & button, & label": {
-        margin: ".2em .6em .2em 0"
-      },
-      "& input[type=checkbox]": {
-        marginRight: ".2em"
-      },
-      "& label": {
-        fontSize: "80%",
-        whiteSpace: "pre"
-      }
-    },
-    "&light .cm-searchMatch": { backgroundColor: "#ffff0054" },
-    "&dark .cm-searchMatch": { backgroundColor: "#00ffff8a" },
-    "&light .cm-searchMatch-selected": { backgroundColor: "#ff6a0054" },
-    "&dark .cm-searchMatch-selected": { backgroundColor: "#ff00ff8a" }
-  });
-  var searchExtensions = [
-    searchState,
-    /* @__PURE__ */ Prec.low(searchHighlighter),
-    baseTheme3
-  ];
 
   // node_modules/@codemirror/autocomplete/dist/index.js
   var CompletionContext = class {
@@ -47414,7 +46188,7 @@
       return false;
     }
   }));
-  var baseTheme4 = /* @__PURE__ */ EditorView.baseTheme({
+  var baseTheme3 = /* @__PURE__ */ EditorView.baseTheme({
     ".cm-tooltip.cm-tooltip-autocomplete": {
       "& > ul": {
         fontFamily: "monospace",
@@ -47595,31 +46369,6 @@
     view.dispatch(tr);
     return true;
   });
-  var deleteBracketPair = ({ state, dispatch }) => {
-    if (state.readOnly)
-      return false;
-    let conf = config(state, state.selection.main.head);
-    let tokens = conf.brackets || defaults2.brackets;
-    let dont = null, changes = state.changeByRange((range) => {
-      if (range.empty) {
-        let before = prevChar(state.doc, range.head);
-        for (let token of tokens) {
-          if (token == before && nextChar(state.doc, range.head) == closing(codePointAt2(token, 0)))
-            return {
-              changes: { from: range.head - token.length, to: range.head + token.length },
-              range: EditorSelection.cursor(range.head - token.length)
-            };
-        }
-      }
-      return { range: dont = range };
-    });
-    if (!dont)
-      dispatch(state.update(changes, { scrollIntoView: true, userEvent: "delete.backward" }));
-    return !dont;
-  };
-  var closeBracketsKeymap = [
-    { key: "Backspace", run: deleteBracketPair }
-  ];
   function insertBracket(state, bracket2) {
     let conf = config(state, state.selection.main.head);
     let tokens = conf.brackets || defaults2.brackets;
@@ -47643,10 +46392,6 @@
   function nextChar(doc2, pos) {
     let next = doc2.sliceString(pos, pos + 2);
     return next.slice(0, codePointSize2(codePointAt2(next, 0)));
-  }
-  function prevChar(doc2, pos) {
-    let prev = doc2.sliceString(pos - 2, pos);
-    return codePointSize2(codePointAt2(prev, 0)) == prev.length ? prev : prev.slice(1);
   }
   function handleOpen(state, open, close, closeBefore) {
     let dont = null, changes = state.changeByRange((range) => {
@@ -47774,7 +46519,7 @@
       completionConfig.of(config2),
       completionPlugin,
       completionKeymapExt,
-      baseTheme4
+      baseTheme3
     ];
   }
   var completionKeymap = [
@@ -47789,6 +46534,1083 @@
     { key: "Enter", run: acceptCompletion }
   ];
   var completionKeymapExt = /* @__PURE__ */ Prec.highest(/* @__PURE__ */ keymap.computeN([completionConfig], (state) => state.facet(completionConfig).defaultKeymap ? [completionKeymap] : []));
+
+  // node_modules/@codemirror/search/dist/index.js
+  var basicNormalize = typeof String.prototype.normalize == "function" ? (x) => x.normalize("NFKD") : (x) => x;
+  var SearchCursor = class {
+    /**
+    Create a text cursor. The query is the search string, `from` to
+    `to` provides the region to search.
+    
+    When `normalize` is given, it will be called, on both the query
+    string and the content it is matched against, before comparing.
+    You can, for example, create a case-insensitive search by
+    passing `s => s.toLowerCase()`.
+    
+    Text is always normalized with
+    [`.normalize("NFKD")`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/normalize)
+    (when supported).
+    */
+    constructor(text, query, from = 0, to = text.length, normalize, test) {
+      this.test = test;
+      this.value = { from: 0, to: 0 };
+      this.done = false;
+      this.matches = [];
+      this.buffer = "";
+      this.bufferPos = 0;
+      this.iter = text.iterRange(from, to);
+      this.bufferStart = from;
+      this.normalize = normalize ? (x) => normalize(basicNormalize(x)) : basicNormalize;
+      this.query = this.normalize(query);
+    }
+    peek() {
+      if (this.bufferPos == this.buffer.length) {
+        this.bufferStart += this.buffer.length;
+        this.iter.next();
+        if (this.iter.done)
+          return -1;
+        this.bufferPos = 0;
+        this.buffer = this.iter.value;
+      }
+      return codePointAt2(this.buffer, this.bufferPos);
+    }
+    /**
+    Look for the next match. Updates the iterator's
+    [`value`](https://codemirror.net/6/docs/ref/#search.SearchCursor.value) and
+    [`done`](https://codemirror.net/6/docs/ref/#search.SearchCursor.done) properties. Should be called
+    at least once before using the cursor.
+    */
+    next() {
+      while (this.matches.length)
+        this.matches.pop();
+      return this.nextOverlapping();
+    }
+    /**
+    The `next` method will ignore matches that partially overlap a
+    previous match. This method behaves like `next`, but includes
+    such matches.
+    */
+    nextOverlapping() {
+      for (; ; ) {
+        let next = this.peek();
+        if (next < 0) {
+          this.done = true;
+          return this;
+        }
+        let str = fromCodePoint(next), start = this.bufferStart + this.bufferPos;
+        this.bufferPos += codePointSize2(next);
+        let norm = this.normalize(str);
+        if (norm.length)
+          for (let i = 0, pos = start; ; i++) {
+            let code = norm.charCodeAt(i);
+            let match = this.match(code, pos, this.bufferPos + this.bufferStart);
+            if (i == norm.length - 1) {
+              if (match) {
+                this.value = match;
+                return this;
+              }
+              break;
+            }
+            if (pos == start && i < str.length && str.charCodeAt(i) == code)
+              pos++;
+          }
+      }
+    }
+    match(code, pos, end) {
+      let match = null;
+      for (let i = 0; i < this.matches.length; i += 2) {
+        let index = this.matches[i], keep = false;
+        if (this.query.charCodeAt(index) == code) {
+          if (index == this.query.length - 1) {
+            match = { from: this.matches[i + 1], to: end };
+          } else {
+            this.matches[i]++;
+            keep = true;
+          }
+        }
+        if (!keep) {
+          this.matches.splice(i, 2);
+          i -= 2;
+        }
+      }
+      if (this.query.charCodeAt(0) == code) {
+        if (this.query.length == 1)
+          match = { from: pos, to: end };
+        else
+          this.matches.push(1, pos);
+      }
+      if (match && this.test && !this.test(match.from, match.to, this.buffer, this.bufferStart))
+        match = null;
+      return match;
+    }
+  };
+  if (typeof Symbol != "undefined")
+    SearchCursor.prototype[Symbol.iterator] = function() {
+      return this;
+    };
+  var empty = { from: -1, to: -1, match: /* @__PURE__ */ /.*/.exec("") };
+  var baseFlags = "gm" + (/x/.unicode == null ? "" : "u");
+  var RegExpCursor = class {
+    /**
+    Create a cursor that will search the given range in the given
+    document. `query` should be the raw pattern (as you'd pass it to
+    `new RegExp`).
+    */
+    constructor(text, query, options, from = 0, to = text.length) {
+      this.text = text;
+      this.to = to;
+      this.curLine = "";
+      this.done = false;
+      this.value = empty;
+      if (/\\[sWDnr]|\n|\r|\[\^/.test(query))
+        return new MultilineRegExpCursor(text, query, options, from, to);
+      this.re = new RegExp(query, baseFlags + ((options === null || options === void 0 ? void 0 : options.ignoreCase) ? "i" : ""));
+      this.test = options === null || options === void 0 ? void 0 : options.test;
+      this.iter = text.iter();
+      let startLine = text.lineAt(from);
+      this.curLineStart = startLine.from;
+      this.matchPos = toCharEnd(text, from);
+      this.getLine(this.curLineStart);
+    }
+    getLine(skip) {
+      this.iter.next(skip);
+      if (this.iter.lineBreak) {
+        this.curLine = "";
+      } else {
+        this.curLine = this.iter.value;
+        if (this.curLineStart + this.curLine.length > this.to)
+          this.curLine = this.curLine.slice(0, this.to - this.curLineStart);
+        this.iter.next();
+      }
+    }
+    nextLine() {
+      this.curLineStart = this.curLineStart + this.curLine.length + 1;
+      if (this.curLineStart > this.to)
+        this.curLine = "";
+      else
+        this.getLine(0);
+    }
+    /**
+    Move to the next match, if there is one.
+    */
+    next() {
+      for (let off = this.matchPos - this.curLineStart; ; ) {
+        this.re.lastIndex = off;
+        let match = this.matchPos <= this.to && this.re.exec(this.curLine);
+        if (match) {
+          let from = this.curLineStart + match.index, to = from + match[0].length;
+          this.matchPos = toCharEnd(this.text, to + (from == to ? 1 : 0));
+          if (from == this.curLineStart + this.curLine.length)
+            this.nextLine();
+          if ((from < to || from > this.value.to) && (!this.test || this.test(from, to, match))) {
+            this.value = { from, to, match };
+            return this;
+          }
+          off = this.matchPos - this.curLineStart;
+        } else if (this.curLineStart + this.curLine.length < this.to) {
+          this.nextLine();
+          off = 0;
+        } else {
+          this.done = true;
+          return this;
+        }
+      }
+    }
+  };
+  var flattened = /* @__PURE__ */ new WeakMap();
+  var FlattenedDoc = class _FlattenedDoc {
+    constructor(from, text) {
+      this.from = from;
+      this.text = text;
+    }
+    get to() {
+      return this.from + this.text.length;
+    }
+    static get(doc2, from, to) {
+      let cached2 = flattened.get(doc2);
+      if (!cached2 || cached2.from >= to || cached2.to <= from) {
+        let flat = new _FlattenedDoc(from, doc2.sliceString(from, to));
+        flattened.set(doc2, flat);
+        return flat;
+      }
+      if (cached2.from == from && cached2.to == to)
+        return cached2;
+      let { text, from: cachedFrom } = cached2;
+      if (cachedFrom > from) {
+        text = doc2.sliceString(from, cachedFrom) + text;
+        cachedFrom = from;
+      }
+      if (cached2.to < to)
+        text += doc2.sliceString(cached2.to, to);
+      flattened.set(doc2, new _FlattenedDoc(cachedFrom, text));
+      return new _FlattenedDoc(from, text.slice(from - cachedFrom, to - cachedFrom));
+    }
+  };
+  var MultilineRegExpCursor = class {
+    constructor(text, query, options, from, to) {
+      this.text = text;
+      this.to = to;
+      this.done = false;
+      this.value = empty;
+      this.matchPos = toCharEnd(text, from);
+      this.re = new RegExp(query, baseFlags + ((options === null || options === void 0 ? void 0 : options.ignoreCase) ? "i" : ""));
+      this.test = options === null || options === void 0 ? void 0 : options.test;
+      this.flat = FlattenedDoc.get(text, from, this.chunkEnd(
+        from + 5e3
+        /* Chunk.Base */
+      ));
+    }
+    chunkEnd(pos) {
+      return pos >= this.to ? this.to : this.text.lineAt(pos).to;
+    }
+    next() {
+      for (; ; ) {
+        let off = this.re.lastIndex = this.matchPos - this.flat.from;
+        let match = this.re.exec(this.flat.text);
+        if (match && !match[0] && match.index == off) {
+          this.re.lastIndex = off + 1;
+          match = this.re.exec(this.flat.text);
+        }
+        if (match) {
+          let from = this.flat.from + match.index, to = from + match[0].length;
+          if ((this.flat.to >= this.to || match.index + match[0].length <= this.flat.text.length - 10) && (!this.test || this.test(from, to, match))) {
+            this.value = { from, to, match };
+            this.matchPos = toCharEnd(this.text, to + (from == to ? 1 : 0));
+            return this;
+          }
+        }
+        if (this.flat.to == this.to) {
+          this.done = true;
+          return this;
+        }
+        this.flat = FlattenedDoc.get(this.text, this.flat.from, this.chunkEnd(this.flat.from + this.flat.text.length * 2));
+      }
+    }
+  };
+  if (typeof Symbol != "undefined") {
+    RegExpCursor.prototype[Symbol.iterator] = MultilineRegExpCursor.prototype[Symbol.iterator] = function() {
+      return this;
+    };
+  }
+  function validRegExp(source) {
+    try {
+      new RegExp(source, baseFlags);
+      return true;
+    } catch (_a2) {
+      return false;
+    }
+  }
+  function toCharEnd(text, pos) {
+    if (pos >= text.length)
+      return pos;
+    let line = text.lineAt(pos), next;
+    while (pos < line.to && (next = line.text.charCodeAt(pos - line.from)) >= 56320 && next < 57344)
+      pos++;
+    return pos;
+  }
+  var gotoLine = (view) => {
+    let { state } = view;
+    let line = String(state.doc.lineAt(view.state.selection.main.head).number);
+    let { close, result } = showDialog(view, {
+      label: state.phrase("Go to line"),
+      input: { type: "text", name: "line", value: line },
+      focus: true,
+      submitLabel: state.phrase("go")
+    });
+    result.then((form) => {
+      let match = form && /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(form.elements["line"].value);
+      if (!match) {
+        view.dispatch({ effects: close });
+        return;
+      }
+      let startLine = state.doc.lineAt(state.selection.main.head);
+      let [, sign, ln, cl, percent] = match;
+      let col = cl ? +cl.slice(1) : 0;
+      let line2 = ln ? +ln : startLine.number;
+      if (ln && percent) {
+        let pc = line2 / 100;
+        if (sign)
+          pc = pc * (sign == "-" ? -1 : 1) + startLine.number / state.doc.lines;
+        line2 = Math.round(state.doc.lines * pc);
+      } else if (ln && sign) {
+        line2 = line2 * (sign == "-" ? -1 : 1) + startLine.number;
+      }
+      let docLine = state.doc.line(Math.max(1, Math.min(state.doc.lines, line2)));
+      let selection = EditorSelection.cursor(docLine.from + Math.max(0, Math.min(col, docLine.length)));
+      view.dispatch({
+        effects: [close, EditorView.scrollIntoView(selection.from, { y: "center" })],
+        selection
+      });
+    });
+    return true;
+  };
+  var defaultHighlightOptions = {
+    highlightWordAroundCursor: false,
+    minSelectionLength: 1,
+    maxMatches: 100,
+    wholeWords: false
+  };
+  var highlightConfig = /* @__PURE__ */ Facet.define({
+    combine(options) {
+      return combineConfig(options, defaultHighlightOptions, {
+        highlightWordAroundCursor: (a, b) => a || b,
+        minSelectionLength: Math.min,
+        maxMatches: Math.min
+      });
+    }
+  });
+  function highlightSelectionMatches(options) {
+    let ext = [defaultTheme, matchHighlighter];
+    if (options)
+      ext.push(highlightConfig.of(options));
+    return ext;
+  }
+  var matchDeco = /* @__PURE__ */ Decoration.mark({ class: "cm-selectionMatch" });
+  var mainMatchDeco = /* @__PURE__ */ Decoration.mark({ class: "cm-selectionMatch cm-selectionMatch-main" });
+  function insideWordBoundaries(check, state, from, to) {
+    return (from == 0 || check(state.sliceDoc(from - 1, from)) != CharCategory.Word) && (to == state.doc.length || check(state.sliceDoc(to, to + 1)) != CharCategory.Word);
+  }
+  function insideWord(check, state, from, to) {
+    return check(state.sliceDoc(from, from + 1)) == CharCategory.Word && check(state.sliceDoc(to - 1, to)) == CharCategory.Word;
+  }
+  var matchHighlighter = /* @__PURE__ */ ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = this.getDeco(view);
+    }
+    update(update) {
+      if (update.selectionSet || update.docChanged || update.viewportChanged)
+        this.decorations = this.getDeco(update.view);
+    }
+    getDeco(view) {
+      let conf = view.state.facet(highlightConfig);
+      let { state } = view, sel = state.selection;
+      if (sel.ranges.length > 1)
+        return Decoration.none;
+      let range = sel.main, query, check = null;
+      if (range.empty) {
+        if (!conf.highlightWordAroundCursor)
+          return Decoration.none;
+        let word = state.wordAt(range.head);
+        if (!word)
+          return Decoration.none;
+        check = state.charCategorizer(range.head);
+        query = state.sliceDoc(word.from, word.to);
+      } else {
+        let len = range.to - range.from;
+        if (len < conf.minSelectionLength || len > 200)
+          return Decoration.none;
+        if (conf.wholeWords) {
+          query = state.sliceDoc(range.from, range.to);
+          check = state.charCategorizer(range.head);
+          if (!(insideWordBoundaries(check, state, range.from, range.to) && insideWord(check, state, range.from, range.to)))
+            return Decoration.none;
+        } else {
+          query = state.sliceDoc(range.from, range.to);
+          if (!query)
+            return Decoration.none;
+        }
+      }
+      let deco = [];
+      for (let part of view.visibleRanges) {
+        let cursor = new SearchCursor(state.doc, query, part.from, part.to);
+        while (!cursor.next().done) {
+          let { from, to } = cursor.value;
+          if (!check || insideWordBoundaries(check, state, from, to)) {
+            if (range.empty && from <= range.from && to >= range.to)
+              deco.push(mainMatchDeco.range(from, to));
+            else if (from >= range.to || to <= range.from)
+              deco.push(matchDeco.range(from, to));
+            if (deco.length > conf.maxMatches)
+              return Decoration.none;
+          }
+        }
+      }
+      return Decoration.set(deco);
+    }
+  }, {
+    decorations: (v) => v.decorations
+  });
+  var defaultTheme = /* @__PURE__ */ EditorView.baseTheme({
+    ".cm-selectionMatch": { backgroundColor: "#99ff7780" },
+    ".cm-searchMatch .cm-selectionMatch": { backgroundColor: "transparent" }
+  });
+  var selectWord = ({ state, dispatch }) => {
+    let { selection } = state;
+    let newSel = EditorSelection.create(selection.ranges.map((range) => state.wordAt(range.head) || EditorSelection.cursor(range.head)), selection.mainIndex);
+    if (newSel.eq(selection))
+      return false;
+    dispatch(state.update({ selection: newSel }));
+    return true;
+  };
+  function findNextOccurrence(state, query) {
+    let { main, ranges } = state.selection;
+    let word = state.wordAt(main.head), fullWord = word && word.from == main.from && word.to == main.to;
+    for (let cycled = false, cursor = new SearchCursor(state.doc, query, ranges[ranges.length - 1].to); ; ) {
+      cursor.next();
+      if (cursor.done) {
+        if (cycled)
+          return null;
+        cursor = new SearchCursor(state.doc, query, 0, Math.max(0, ranges[ranges.length - 1].from - 1));
+        cycled = true;
+      } else {
+        if (cycled && ranges.some((r) => r.from == cursor.value.from))
+          continue;
+        if (fullWord) {
+          let word2 = state.wordAt(cursor.value.from);
+          if (!word2 || word2.from != cursor.value.from || word2.to != cursor.value.to)
+            continue;
+        }
+        return cursor.value;
+      }
+    }
+  }
+  var selectNextOccurrence = ({ state, dispatch }) => {
+    let { ranges } = state.selection;
+    if (ranges.some((sel) => sel.from === sel.to))
+      return selectWord({ state, dispatch });
+    let searchedText = state.sliceDoc(ranges[0].from, ranges[0].to);
+    if (state.selection.ranges.some((r) => state.sliceDoc(r.from, r.to) != searchedText))
+      return false;
+    let range = findNextOccurrence(state, searchedText);
+    if (!range)
+      return false;
+    dispatch(state.update({
+      selection: state.selection.addRange(EditorSelection.range(range.from, range.to), false),
+      effects: EditorView.scrollIntoView(range.to)
+    }));
+    return true;
+  };
+  var searchConfigFacet = /* @__PURE__ */ Facet.define({
+    combine(configs) {
+      return combineConfig(configs, {
+        top: false,
+        caseSensitive: false,
+        literal: false,
+        regexp: false,
+        wholeWord: false,
+        createPanel: (view) => new SearchPanel(view),
+        scrollToMatch: (range) => EditorView.scrollIntoView(range)
+      });
+    }
+  });
+  var SearchQuery = class {
+    /**
+    Create a query object.
+    */
+    constructor(config2) {
+      this.search = config2.search;
+      this.caseSensitive = !!config2.caseSensitive;
+      this.literal = !!config2.literal;
+      this.regexp = !!config2.regexp;
+      this.replace = config2.replace || "";
+      this.valid = !!this.search && (!this.regexp || validRegExp(this.search));
+      this.unquoted = this.unquote(this.search);
+      this.wholeWord = !!config2.wholeWord;
+      this.test = config2.test;
+    }
+    /**
+    @internal
+    */
+    unquote(text) {
+      return this.literal ? text : text.replace(/\\([nrt\\])/g, (_, ch) => ch == "n" ? "\n" : ch == "r" ? "\r" : ch == "t" ? "	" : "\\");
+    }
+    /**
+    Compare this query to another query.
+    */
+    eq(other) {
+      return this.search == other.search && this.replace == other.replace && this.caseSensitive == other.caseSensitive && this.regexp == other.regexp && this.wholeWord == other.wholeWord && this.test == other.test;
+    }
+    /**
+    @internal
+    */
+    create() {
+      return this.regexp ? new RegExpQuery(this) : new StringQuery(this);
+    }
+    /**
+    Get a search cursor for this query, searching through the given
+    range in the given state.
+    */
+    getCursor(state, from = 0, to) {
+      let st = state.doc ? state : EditorState.create({ doc: state });
+      if (to == null)
+        to = st.doc.length;
+      return this.regexp ? regexpCursor(this, st, from, to) : stringCursor(this, st, from, to);
+    }
+  };
+  var QueryType2 = class {
+    constructor(spec) {
+      this.spec = spec;
+    }
+  };
+  function wrapStringTest(test, state, inner) {
+    return (from, to, buffer, bufferPos) => {
+      if (inner && !inner(from, to, buffer, bufferPos))
+        return false;
+      let match = from >= bufferPos && to <= bufferPos + buffer.length ? buffer.slice(from - bufferPos, to - bufferPos) : state.doc.sliceString(from, to);
+      return test(match, state, from, to);
+    };
+  }
+  function stringCursor(spec, state, from, to) {
+    let test;
+    if (spec.wholeWord)
+      test = stringWordTest(state.doc, state.charCategorizer(state.selection.main.head));
+    if (spec.test)
+      test = wrapStringTest(spec.test, state, test);
+    return new SearchCursor(state.doc, spec.unquoted, from, to, spec.caseSensitive ? void 0 : (x) => x.toLowerCase(), test);
+  }
+  function stringWordTest(doc2, categorizer) {
+    return (from, to, buf, bufPos) => {
+      if (bufPos > from || bufPos + buf.length < to) {
+        bufPos = Math.max(0, from - 2);
+        buf = doc2.sliceString(bufPos, Math.min(doc2.length, to + 2));
+      }
+      return (categorizer(charBefore(buf, from - bufPos)) != CharCategory.Word || categorizer(charAfter(buf, from - bufPos)) != CharCategory.Word) && (categorizer(charAfter(buf, to - bufPos)) != CharCategory.Word || categorizer(charBefore(buf, to - bufPos)) != CharCategory.Word);
+    };
+  }
+  var StringQuery = class extends QueryType2 {
+    constructor(spec) {
+      super(spec);
+    }
+    nextMatch(state, curFrom, curTo) {
+      let cursor = stringCursor(this.spec, state, curTo, state.doc.length).nextOverlapping();
+      if (cursor.done) {
+        let end = Math.min(state.doc.length, curFrom + this.spec.unquoted.length);
+        cursor = stringCursor(this.spec, state, 0, end).nextOverlapping();
+      }
+      return cursor.done || cursor.value.from == curFrom && cursor.value.to == curTo ? null : cursor.value;
+    }
+    // Searching in reverse is, rather than implementing an inverted search
+    // cursor, done by scanning chunk after chunk forward.
+    prevMatchInRange(state, from, to) {
+      for (let pos = to; ; ) {
+        let start = Math.max(from, pos - 1e4 - this.spec.unquoted.length);
+        let cursor = stringCursor(this.spec, state, start, pos), range = null;
+        while (!cursor.nextOverlapping().done)
+          range = cursor.value;
+        if (range)
+          return range;
+        if (start == from)
+          return null;
+        pos -= 1e4;
+      }
+    }
+    prevMatch(state, curFrom, curTo) {
+      let found = this.prevMatchInRange(state, 0, curFrom);
+      if (!found)
+        found = this.prevMatchInRange(state, Math.max(0, curTo - this.spec.unquoted.length), state.doc.length);
+      return found && (found.from != curFrom || found.to != curTo) ? found : null;
+    }
+    getReplacement(_result) {
+      return this.spec.unquote(this.spec.replace);
+    }
+    matchAll(state, limit) {
+      let cursor = stringCursor(this.spec, state, 0, state.doc.length), ranges = [];
+      while (!cursor.next().done) {
+        if (ranges.length >= limit)
+          return null;
+        ranges.push(cursor.value);
+      }
+      return ranges;
+    }
+    highlight(state, from, to, add2) {
+      let cursor = stringCursor(this.spec, state, Math.max(0, from - this.spec.unquoted.length), Math.min(to + this.spec.unquoted.length, state.doc.length));
+      while (!cursor.next().done)
+        add2(cursor.value.from, cursor.value.to);
+    }
+  };
+  function wrapRegexpTest(test, state, inner) {
+    return (from, to, match) => {
+      return (!inner || inner(from, to, match)) && test(match[0], state, from, to);
+    };
+  }
+  function regexpCursor(spec, state, from, to) {
+    let test;
+    if (spec.wholeWord)
+      test = regexpWordTest(state.charCategorizer(state.selection.main.head));
+    if (spec.test)
+      test = wrapRegexpTest(spec.test, state, test);
+    return new RegExpCursor(state.doc, spec.search, { ignoreCase: !spec.caseSensitive, test }, from, to);
+  }
+  function charBefore(str, index) {
+    return str.slice(findClusterBreak2(str, index, false), index);
+  }
+  function charAfter(str, index) {
+    return str.slice(index, findClusterBreak2(str, index));
+  }
+  function regexpWordTest(categorizer) {
+    return (_from, _to, match) => !match[0].length || (categorizer(charBefore(match.input, match.index)) != CharCategory.Word || categorizer(charAfter(match.input, match.index)) != CharCategory.Word) && (categorizer(charAfter(match.input, match.index + match[0].length)) != CharCategory.Word || categorizer(charBefore(match.input, match.index + match[0].length)) != CharCategory.Word);
+  }
+  var RegExpQuery = class extends QueryType2 {
+    nextMatch(state, curFrom, curTo) {
+      let cursor = regexpCursor(this.spec, state, curTo, state.doc.length).next();
+      if (cursor.done)
+        cursor = regexpCursor(this.spec, state, 0, curFrom).next();
+      return cursor.done ? null : cursor.value;
+    }
+    prevMatchInRange(state, from, to) {
+      for (let size = 1; ; size++) {
+        let start = Math.max(
+          from,
+          to - size * 1e4
+          /* FindPrev.ChunkSize */
+        );
+        let cursor = regexpCursor(this.spec, state, start, to), range = null;
+        while (!cursor.next().done)
+          range = cursor.value;
+        if (range && (start == from || range.from > start + 10))
+          return range;
+        if (start == from)
+          return null;
+      }
+    }
+    prevMatch(state, curFrom, curTo) {
+      return this.prevMatchInRange(state, 0, curFrom) || this.prevMatchInRange(state, curTo, state.doc.length);
+    }
+    getReplacement(result) {
+      return this.spec.unquote(this.spec.replace).replace(/\$([$&]|\d+)/g, (m, i) => {
+        if (i == "&")
+          return result.match[0];
+        if (i == "$")
+          return "$";
+        for (let l = i.length; l > 0; l--) {
+          let n = +i.slice(0, l);
+          if (n > 0 && n < result.match.length)
+            return result.match[n] + i.slice(l);
+        }
+        return m;
+      });
+    }
+    matchAll(state, limit) {
+      let cursor = regexpCursor(this.spec, state, 0, state.doc.length), ranges = [];
+      while (!cursor.next().done) {
+        if (ranges.length >= limit)
+          return null;
+        ranges.push(cursor.value);
+      }
+      return ranges;
+    }
+    highlight(state, from, to, add2) {
+      let cursor = regexpCursor(this.spec, state, Math.max(
+        0,
+        from - 250
+        /* RegExp.HighlightMargin */
+      ), Math.min(to + 250, state.doc.length));
+      while (!cursor.next().done)
+        add2(cursor.value.from, cursor.value.to);
+    }
+  };
+  var setSearchQuery = /* @__PURE__ */ StateEffect.define();
+  var togglePanel = /* @__PURE__ */ StateEffect.define();
+  var searchState = /* @__PURE__ */ StateField.define({
+    create(state) {
+      return new SearchState(defaultQuery(state).create(), null);
+    },
+    update(value, tr) {
+      for (let effect of tr.effects) {
+        if (effect.is(setSearchQuery))
+          value = new SearchState(effect.value.create(), value.panel);
+        else if (effect.is(togglePanel))
+          value = new SearchState(value.query, effect.value ? createSearchPanel : null);
+      }
+      return value;
+    },
+    provide: (f) => showPanel.from(f, (val) => val.panel)
+  });
+  var SearchState = class {
+    constructor(query, panel) {
+      this.query = query;
+      this.panel = panel;
+    }
+  };
+  var matchMark = /* @__PURE__ */ Decoration.mark({ class: "cm-searchMatch" });
+  var selectedMatchMark = /* @__PURE__ */ Decoration.mark({ class: "cm-searchMatch cm-searchMatch-selected" });
+  var searchHighlighter = /* @__PURE__ */ ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.view = view;
+      this.decorations = this.highlight(view.state.field(searchState));
+    }
+    update(update) {
+      let state = update.state.field(searchState);
+      if (state != update.startState.field(searchState) || update.docChanged || update.selectionSet || update.viewportChanged)
+        this.decorations = this.highlight(state);
+    }
+    highlight({ query, panel }) {
+      if (!panel || !query.spec.valid)
+        return Decoration.none;
+      let { view } = this;
+      let builder = new RangeSetBuilder();
+      for (let i = 0, ranges = view.visibleRanges, l = ranges.length; i < l; i++) {
+        let { from, to } = ranges[i];
+        while (i < l - 1 && to > ranges[i + 1].from - 2 * 250)
+          to = ranges[++i].to;
+        query.highlight(view.state, from, to, (from2, to2) => {
+          let selected = view.state.selection.ranges.some((r) => r.from == from2 && r.to == to2);
+          builder.add(from2, to2, selected ? selectedMatchMark : matchMark);
+        });
+      }
+      return builder.finish();
+    }
+  }, {
+    decorations: (v) => v.decorations
+  });
+  function searchCommand(f) {
+    return (view) => {
+      let state = view.state.field(searchState, false);
+      return state && state.query.spec.valid ? f(view, state) : openSearchPanel(view);
+    };
+  }
+  var findNext = /* @__PURE__ */ searchCommand((view, { query }) => {
+    let { to } = view.state.selection.main;
+    let next = query.nextMatch(view.state, to, to);
+    if (!next)
+      return false;
+    let selection = EditorSelection.single(next.from, next.to);
+    let config2 = view.state.facet(searchConfigFacet);
+    view.dispatch({
+      selection,
+      effects: [announceMatch(view, next), config2.scrollToMatch(selection.main, view)],
+      userEvent: "select.search"
+    });
+    selectSearchInput(view);
+    return true;
+  });
+  var findPrevious = /* @__PURE__ */ searchCommand((view, { query }) => {
+    let { state } = view, { from } = state.selection.main;
+    let prev = query.prevMatch(state, from, from);
+    if (!prev)
+      return false;
+    let selection = EditorSelection.single(prev.from, prev.to);
+    let config2 = view.state.facet(searchConfigFacet);
+    view.dispatch({
+      selection,
+      effects: [announceMatch(view, prev), config2.scrollToMatch(selection.main, view)],
+      userEvent: "select.search"
+    });
+    selectSearchInput(view);
+    return true;
+  });
+  var selectMatches = /* @__PURE__ */ searchCommand((view, { query }) => {
+    let ranges = query.matchAll(view.state, 1e3);
+    if (!ranges || !ranges.length)
+      return false;
+    view.dispatch({
+      selection: EditorSelection.create(ranges.map((r) => EditorSelection.range(r.from, r.to))),
+      userEvent: "select.search.matches"
+    });
+    return true;
+  });
+  var selectSelectionMatches = ({ state, dispatch }) => {
+    let sel = state.selection;
+    if (sel.ranges.length > 1 || sel.main.empty)
+      return false;
+    let { from, to } = sel.main;
+    let ranges = [], main = 0;
+    for (let cur2 = new SearchCursor(state.doc, state.sliceDoc(from, to)); !cur2.next().done; ) {
+      if (ranges.length > 1e3)
+        return false;
+      if (cur2.value.from == from)
+        main = ranges.length;
+      ranges.push(EditorSelection.range(cur2.value.from, cur2.value.to));
+    }
+    dispatch(state.update({
+      selection: EditorSelection.create(ranges, main),
+      userEvent: "select.search.matches"
+    }));
+    return true;
+  };
+  var replaceNext = /* @__PURE__ */ searchCommand((view, { query }) => {
+    let { state } = view, { from, to } = state.selection.main;
+    if (state.readOnly)
+      return false;
+    let match = query.nextMatch(state, from, from);
+    if (!match)
+      return false;
+    let next = match;
+    let changes = [], selection, replacement;
+    let effects = [];
+    if (next.from == from && next.to == to) {
+      replacement = state.toText(query.getReplacement(next));
+      changes.push({ from: next.from, to: next.to, insert: replacement });
+      next = query.nextMatch(state, next.from, next.to);
+      effects.push(EditorView.announce.of(state.phrase("replaced match on line $", state.doc.lineAt(from).number) + "."));
+    }
+    let changeSet = view.state.changes(changes);
+    if (next) {
+      selection = EditorSelection.single(next.from, next.to).map(changeSet);
+      effects.push(announceMatch(view, next));
+      effects.push(state.facet(searchConfigFacet).scrollToMatch(selection.main, view));
+    }
+    view.dispatch({
+      changes: changeSet,
+      selection,
+      effects,
+      userEvent: "input.replace"
+    });
+    return true;
+  });
+  var replaceAll = /* @__PURE__ */ searchCommand((view, { query }) => {
+    if (view.state.readOnly)
+      return false;
+    let changes = query.matchAll(view.state, 1e9).map((match) => {
+      let { from, to } = match;
+      return { from, to, insert: query.getReplacement(match) };
+    });
+    if (!changes.length)
+      return false;
+    let announceText = view.state.phrase("replaced $ matches", changes.length) + ".";
+    view.dispatch({
+      changes,
+      effects: EditorView.announce.of(announceText),
+      userEvent: "input.replace.all"
+    });
+    return true;
+  });
+  function createSearchPanel(view) {
+    return view.state.facet(searchConfigFacet).createPanel(view);
+  }
+  function defaultQuery(state, fallback) {
+    var _a2, _b, _c, _d, _e;
+    let sel = state.selection.main;
+    let selText = sel.empty || sel.to > sel.from + 100 ? "" : state.sliceDoc(sel.from, sel.to);
+    if (fallback && !selText)
+      return fallback;
+    let config2 = state.facet(searchConfigFacet);
+    return new SearchQuery({
+      search: ((_a2 = fallback === null || fallback === void 0 ? void 0 : fallback.literal) !== null && _a2 !== void 0 ? _a2 : config2.literal) ? selText : selText.replace(/\n/g, "\\n"),
+      caseSensitive: (_b = fallback === null || fallback === void 0 ? void 0 : fallback.caseSensitive) !== null && _b !== void 0 ? _b : config2.caseSensitive,
+      literal: (_c = fallback === null || fallback === void 0 ? void 0 : fallback.literal) !== null && _c !== void 0 ? _c : config2.literal,
+      regexp: (_d = fallback === null || fallback === void 0 ? void 0 : fallback.regexp) !== null && _d !== void 0 ? _d : config2.regexp,
+      wholeWord: (_e = fallback === null || fallback === void 0 ? void 0 : fallback.wholeWord) !== null && _e !== void 0 ? _e : config2.wholeWord
+    });
+  }
+  function getSearchInput(view) {
+    let panel = getPanel(view, createSearchPanel);
+    return panel && panel.dom.querySelector("[main-field]");
+  }
+  function selectSearchInput(view) {
+    let input = getSearchInput(view);
+    if (input && input == view.root.activeElement)
+      input.select();
+  }
+  var openSearchPanel = (view) => {
+    let state = view.state.field(searchState, false);
+    if (state && state.panel) {
+      let searchInput = getSearchInput(view);
+      if (searchInput && searchInput != view.root.activeElement) {
+        let query = defaultQuery(view.state, state.query.spec);
+        if (query.valid)
+          view.dispatch({ effects: setSearchQuery.of(query) });
+        searchInput.focus();
+        searchInput.select();
+      }
+    } else {
+      view.dispatch({ effects: [
+        togglePanel.of(true),
+        state ? setSearchQuery.of(defaultQuery(view.state, state.query.spec)) : StateEffect.appendConfig.of(searchExtensions)
+      ] });
+    }
+    return true;
+  };
+  var closeSearchPanel = (view) => {
+    let state = view.state.field(searchState, false);
+    if (!state || !state.panel)
+      return false;
+    let panel = getPanel(view, createSearchPanel);
+    if (panel && panel.dom.contains(view.root.activeElement))
+      view.focus();
+    view.dispatch({ effects: togglePanel.of(false) });
+    return true;
+  };
+  var searchKeymap = [
+    { key: "Mod-f", run: openSearchPanel, scope: "editor search-panel" },
+    { key: "F3", run: findNext, shift: findPrevious, scope: "editor search-panel", preventDefault: true },
+    { key: "Mod-g", run: findNext, shift: findPrevious, scope: "editor search-panel", preventDefault: true },
+    { key: "Escape", run: closeSearchPanel, scope: "editor search-panel" },
+    { key: "Mod-Shift-l", run: selectSelectionMatches },
+    { key: "Mod-Alt-g", run: gotoLine },
+    { key: "Mod-d", run: selectNextOccurrence, preventDefault: true }
+  ];
+  var SearchPanel = class {
+    constructor(view) {
+      this.view = view;
+      let query = this.query = view.state.field(searchState).query.spec;
+      this.commit = this.commit.bind(this);
+      this.searchField = crelt("input", {
+        value: query.search,
+        placeholder: phrase(view, "Find"),
+        "aria-label": phrase(view, "Find"),
+        class: "cm-textfield",
+        name: "search",
+        form: "",
+        "main-field": "true",
+        onchange: this.commit,
+        onkeyup: this.commit
+      });
+      this.replaceField = crelt("input", {
+        value: query.replace,
+        placeholder: phrase(view, "Replace"),
+        "aria-label": phrase(view, "Replace"),
+        class: "cm-textfield",
+        name: "replace",
+        form: "",
+        onchange: this.commit,
+        onkeyup: this.commit
+      });
+      this.caseField = crelt("input", {
+        type: "checkbox",
+        name: "case",
+        form: "",
+        checked: query.caseSensitive,
+        onchange: this.commit
+      });
+      this.reField = crelt("input", {
+        type: "checkbox",
+        name: "re",
+        form: "",
+        checked: query.regexp,
+        onchange: this.commit
+      });
+      this.wordField = crelt("input", {
+        type: "checkbox",
+        name: "word",
+        form: "",
+        checked: query.wholeWord,
+        onchange: this.commit
+      });
+      function button(name2, onclick, content2) {
+        return crelt("button", { class: "cm-button", name: name2, onclick, type: "button" }, content2);
+      }
+      this.dom = crelt("div", { onkeydown: (e) => this.keydown(e), class: "cm-search" }, [
+        this.searchField,
+        button("next", () => findNext(view), [phrase(view, "next")]),
+        button("prev", () => findPrevious(view), [phrase(view, "previous")]),
+        button("select", () => selectMatches(view), [phrase(view, "all")]),
+        crelt("label", null, [this.caseField, phrase(view, "match case")]),
+        crelt("label", null, [this.reField, phrase(view, "regexp")]),
+        crelt("label", null, [this.wordField, phrase(view, "by word")]),
+        ...view.state.readOnly ? [] : [
+          crelt("br"),
+          this.replaceField,
+          button("replace", () => replaceNext(view), [phrase(view, "replace")]),
+          button("replaceAll", () => replaceAll(view), [phrase(view, "replace all")])
+        ],
+        crelt("button", {
+          name: "close",
+          onclick: () => closeSearchPanel(view),
+          "aria-label": phrase(view, "close"),
+          type: "button"
+        }, ["\xD7"])
+      ]);
+    }
+    commit() {
+      let query = new SearchQuery({
+        search: this.searchField.value,
+        caseSensitive: this.caseField.checked,
+        regexp: this.reField.checked,
+        wholeWord: this.wordField.checked,
+        replace: this.replaceField.value
+      });
+      if (!query.eq(this.query)) {
+        this.query = query;
+        this.view.dispatch({ effects: setSearchQuery.of(query) });
+      }
+    }
+    keydown(e) {
+      if (runScopeHandlers(this.view, e, "search-panel")) {
+        e.preventDefault();
+      } else if (e.keyCode == 13 && e.target == this.searchField) {
+        e.preventDefault();
+        (e.shiftKey ? findPrevious : findNext)(this.view);
+      } else if (e.keyCode == 13 && e.target == this.replaceField) {
+        e.preventDefault();
+        replaceNext(this.view);
+      }
+    }
+    update(update) {
+      for (let tr of update.transactions)
+        for (let effect of tr.effects) {
+          if (effect.is(setSearchQuery) && !effect.value.eq(this.query))
+            this.setQuery(effect.value);
+        }
+    }
+    setQuery(query) {
+      this.query = query;
+      this.searchField.value = query.search;
+      this.replaceField.value = query.replace;
+      this.caseField.checked = query.caseSensitive;
+      this.reField.checked = query.regexp;
+      this.wordField.checked = query.wholeWord;
+    }
+    mount() {
+      this.searchField.select();
+    }
+    get pos() {
+      return 80;
+    }
+    get top() {
+      return this.view.state.facet(searchConfigFacet).top;
+    }
+  };
+  function phrase(view, phrase2) {
+    return view.state.phrase(phrase2);
+  }
+  var AnnounceMargin = 30;
+  var Break = /[\s\.,:;?!]/;
+  function announceMatch(view, { from, to }) {
+    let line = view.state.doc.lineAt(from), lineEnd = view.state.doc.lineAt(to).to;
+    let start = Math.max(line.from, from - AnnounceMargin), end = Math.min(lineEnd, to + AnnounceMargin);
+    let text = view.state.sliceDoc(start, end);
+    if (start != line.from) {
+      for (let i = 0; i < AnnounceMargin; i++)
+        if (!Break.test(text[i + 1]) && Break.test(text[i])) {
+          text = text.slice(i);
+          break;
+        }
+    }
+    if (end != lineEnd) {
+      for (let i = text.length - 1; i > text.length - AnnounceMargin; i--)
+        if (!Break.test(text[i - 1]) && Break.test(text[i])) {
+          text = text.slice(0, i);
+          break;
+        }
+    }
+    return EditorView.announce.of(`${view.state.phrase("current match")}. ${text} ${view.state.phrase("on line")} ${line.number}.`);
+  }
+  var baseTheme4 = /* @__PURE__ */ EditorView.baseTheme({
+    ".cm-panel.cm-search": {
+      padding: "2px 6px 4px",
+      position: "relative",
+      "& [name=close]": {
+        position: "absolute",
+        top: "0",
+        right: "4px",
+        backgroundColor: "inherit",
+        border: "none",
+        font: "inherit",
+        padding: 0,
+        margin: 0
+      },
+      "& input, & button, & label": {
+        margin: ".2em .6em .2em 0"
+      },
+      "& input[type=checkbox]": {
+        marginRight: ".2em"
+      },
+      "& label": {
+        fontSize: "80%",
+        whiteSpace: "pre"
+      }
+    },
+    "&light .cm-searchMatch": { backgroundColor: "#ffff0054" },
+    "&dark .cm-searchMatch": { backgroundColor: "#00ffff8a" },
+    "&light .cm-searchMatch-selected": { backgroundColor: "#ff6a0054" },
+    "&dark .cm-searchMatch-selected": { backgroundColor: "#ff00ff8a" }
+  });
+  var searchExtensions = [
+    searchState,
+    /* @__PURE__ */ Prec.low(searchHighlighter),
+    baseTheme4
+  ];
 
   // node_modules/@codemirror/lint/dist/index.js
   var SelectedDiagnostic = class {
@@ -47911,6 +47733,11 @@
   function maybeEnableLint(state, effects) {
     return state.field(lintState, false) ? effects : effects.concat(StateEffect.appendConfig.of(lintExtensions));
   }
+  function setDiagnostics(state, diagnostics) {
+    return {
+      effects: maybeEnableLint(state, [setDiagnosticsEffect.of(diagnostics)])
+    };
+  }
   var setDiagnosticsEffect = /* @__PURE__ */ StateEffect.define();
   var togglePanel2 = /* @__PURE__ */ StateEffect.define();
   var movePanelSelection = /* @__PURE__ */ StateEffect.define();
@@ -48008,6 +47835,65 @@
     { key: "Mod-Shift-m", run: openLintPanel, preventDefault: true },
     { key: "F8", run: nextDiagnostic }
   ];
+  var lintPlugin = /* @__PURE__ */ ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.view = view;
+      this.timeout = -1;
+      this.set = true;
+      let { delay } = view.state.facet(lintConfig);
+      this.lintTime = Date.now() + delay;
+      this.run = this.run.bind(this);
+      this.timeout = setTimeout(this.run, delay);
+    }
+    run() {
+      clearTimeout(this.timeout);
+      let now = Date.now();
+      if (now < this.lintTime - 10) {
+        this.timeout = setTimeout(this.run, this.lintTime - now);
+      } else {
+        this.set = false;
+        let { state } = this.view, { sources } = state.facet(lintConfig);
+        if (sources.length)
+          batchResults(sources.map((s) => Promise.resolve(s(this.view))), (annotations) => {
+            if (this.view.state.doc == state.doc)
+              this.view.dispatch(setDiagnostics(this.view.state, annotations.reduce((a, b) => a.concat(b))));
+          }, (error) => {
+            logException(this.view.state, error);
+          });
+      }
+    }
+    update(update) {
+      let config2 = update.state.facet(lintConfig);
+      if (update.docChanged || config2 != update.startState.facet(lintConfig) || config2.needsRefresh && config2.needsRefresh(update)) {
+        this.lintTime = Date.now() + config2.delay;
+        if (!this.set) {
+          this.set = true;
+          this.timeout = setTimeout(this.run, config2.delay);
+        }
+      }
+    }
+    force() {
+      if (this.set) {
+        this.lintTime = Date.now();
+        this.run();
+      }
+    }
+    destroy() {
+      clearTimeout(this.timeout);
+    }
+  });
+  function batchResults(promises, sink, error) {
+    let collected = [], timeout = -1;
+    for (let p of promises)
+      p.then((value) => {
+        collected.push(value);
+        clearTimeout(timeout);
+        if (collected.length == promises.length)
+          sink(collected);
+        else
+          timeout = setTimeout(() => sink(collected), 200);
+      }, error);
+  }
   var lintConfig = /* @__PURE__ */ Facet.define({
     combine(input) {
       return {
@@ -48031,6 +47917,13 @@
   });
   function combineFilter(a, b) {
     return !a ? b : !b ? a : (d, s) => b(a(d, s), s);
+  }
+  function linter(source, config2 = {}) {
+    return [
+      lintConfig.of({ source, config: config2 }),
+      lintPlugin,
+      lintExtensions
+    ];
   }
   function assignKeys(actions) {
     let assigned = [];
@@ -48394,36 +48287,6 @@
     baseTheme5
   ];
 
-  // node_modules/codemirror/dist/index.js
-  var basicSetup = /* @__PURE__ */ (() => [
-    lineNumbers(),
-    highlightActiveLineGutter(),
-    highlightSpecialChars(),
-    history2(),
-    foldGutter(),
-    drawSelection(),
-    dropCursor(),
-    EditorState.allowMultipleSelections.of(true),
-    indentOnInput(),
-    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-    bracketMatching(),
-    closeBrackets(),
-    autocompletion(),
-    rectangularSelection(),
-    crosshairCursor(),
-    highlightActiveLine(),
-    highlightSelectionMatches(),
-    keymap.of([
-      ...closeBracketsKeymap,
-      ...defaultKeymap,
-      ...searchKeymap,
-      ...historyKeymap,
-      ...foldKeymap,
-      ...completionKeymap,
-      ...lintKeymap
-    ])
-  ])();
-
   // source/drafts-view/query-view/editor.tsx
   var import_antlr4ts2 = __toESM(require_antlr4ts());
   var setStyle9 = styleSetter(cssText9);
@@ -48493,6 +48356,7 @@
     constructor(_docString) {
       this._docString = _docString;
     }
+    _diffs;
     toCodeUnit(codePointPos) {
       this._diffs ??= createDiffs(this._docString);
       if (this._diffs.length === 0) return codePointPos;
@@ -48511,9 +48375,10 @@
     }
   };
   var SalTokenizerPlugin = class {
+    lexer = new SalLexer(import_antlr4ts2.CharStreams.fromString(""));
+    styles = createStyles();
+    decorations;
     constructor(view) {
-      this.lexer = new SalLexer(import_antlr4ts2.CharStreams.fromString(""));
-      this.styles = createStyles();
       this.decorations = this.tokenize(view);
     }
     // ドキュメントが変更されたら再解析する
@@ -48530,7 +48395,7 @@
         const text = doc2.sliceString(from, to);
         const slicePositionMap = new PosConverter(text);
         lexer.inputStream = import_antlr4ts2.CharStreams.fromString(text);
-        for (const token of lexer.getAllTokens()) {
+        for (let token = lexer.nextToken(); token.type !== import_antlr4ts2.Token.EOF; token = lexer.nextToken()) {
           const decoration = tokenTypeToDecoration(token, styles);
           if (decoration) {
             const relativeTokenFrom = slicePositionMap.toCodeUnit(
@@ -48558,11 +48423,32 @@
     initialText
   }) {
     setStyle9();
+    const fileErrors = /* @__PURE__ */ new Map();
+    let currentFileName = initialFileName;
+    const errorLinter = linter((view2) => {
+      const errors = fileErrors.get(currentFileName) ?? [];
+      const diagnostics = [];
+      const text = view2.state.doc.toString();
+      const slicePositionMap = new PosConverter(text);
+      for (const error of errors) {
+        const from = slicePositionMap.toCodeUnit(error.start);
+        const to = slicePositionMap.toCodeUnit(error.stop + 1);
+        diagnostics.push({
+          severity: "error",
+          from,
+          to,
+          message: error.message,
+          source: error.source
+        });
+      }
+      return diagnostics;
+    });
     const events = createTypedEventTarget();
     let isDispatching = false;
     const notifyInputPlugin = EditorView.updateListener.of((update) => {
       if (isDispatching) return;
       if (update.docChanged) {
+        fileErrors.delete(currentFileName);
         try {
           isDispatching = true;
           events.dispatchEvent(
@@ -48576,24 +48462,63 @@
         }
       }
     });
+    const basicSetup = [
+      keymap.of(defaultKeymap),
+      // lineNumbers()
+      highlightSpecialChars(),
+      history2(),
+      foldGutter(),
+      drawSelection(),
+      dropCursor(),
+      EditorState.allowMultipleSelections.of(true),
+      indentOnInput(),
+      syntaxHighlighting(defaultHighlightStyle),
+      bracketMatching(),
+      closeBrackets(),
+      autocompletion(),
+      rectangularSelection(),
+      crosshairCursor(),
+      highlightActiveLine(),
+      highlightActiveLineGutter(),
+      highlightSelectionMatches(),
+      keymap.of(searchKeymap),
+      keymap.of(lintKeymap)
+    ];
     const extensions = [
       basicSetup,
       // シンタックスハイライト
       createSalTokenHighlighter(),
+      // エラーに波線
+      errorLinter,
       // 行折り返し
       EditorView.lineWrapping,
       // Tabで2スペースインデント
       keymap.of([indentWithTab]),
       indentUnit.of("  "),
-      EditorView.theme({
-        "&": { height: "100%" },
-        // モバイルでのズーム防止
-        ".cm-content": { fontSize: "16px" },
-        ".cm-lintRange-error": {
-          backgroundImage: "none",
-          textDecoration: "underline wavy #e74c3c"
-        }
-      }),
+      EditorView.theme(
+        {
+          "&": { height: "100%" },
+          // モバイルでのズーム防止
+          ".cm-content": {
+            fontSize: "16px",
+            fontFamily: `font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDGothic", "Segoe UI Mono", "Roboto Mono", monospace;
+`
+          },
+          // 選択色
+          ".cm-selectionBackground": {
+            backgroundColor: "#1890ff !important"
+          },
+          // 行番号
+          ".cm-gutters": {
+            fontFamily: "inherit"
+          },
+          ".cm-lintRange-error": {
+            backgroundImage: "none",
+            textDecoration: "underline wavy #e74c3c"
+          }
+        },
+        { dark: false }
+      ),
       // 優先順位を確実にするためのベーステーマ設定
       EditorView.baseTheme({
         ".cm-lintRange-error": {
@@ -48608,12 +48533,24 @@
       extensions,
       parent: element
     });
-    let currentFileName = initialFileName;
     const fileStates = /* @__PURE__ */ new Map();
     function switchFile(newFileName, newContent) {
-      const status = fileStates.get(newFileName);
-      if (status != null) {
-        view.setState(status);
+      const cachedState = fileStates.get(newFileName);
+      if (cachedState != null) {
+        if (cachedState.doc.toString() === newContent) {
+          view.setState(cachedState);
+          return;
+        }
+        const transaction = cachedState.update({
+          changes: {
+            from: 0,
+            to: cachedState.doc.length,
+            insert: newContent
+          }
+        });
+        const updatedState = transaction.state;
+        fileStates.set(newFileName, updatedState);
+        view.setState(updatedState);
         return;
       }
       const newState = EditorState.create({
@@ -48637,10 +48574,14 @@
       currentFileName = fileName;
       switchFile(fileName, value);
     }
+    function setErrors(fileName, diagnostics) {
+      fileErrors.set(fileName, diagnostics);
+    }
     return {
       element,
       events,
-      setSource
+      setSource,
+      setErrors
     };
   }
 
@@ -49108,20 +49049,55 @@
       }
     };
     updateDetailPane();
+    function errorToDiagnostic(e) {
+      let start = 0;
+      let stop = 0;
+      if (e instanceof SalEvaluationError && e.range) {
+        start = e.range.start.index;
+        stop = e.range.stop.index;
+      }
+      return {
+        start,
+        stop,
+        message: e.message,
+        severity: "error",
+        source: "evaluator"
+      };
+    }
     const applyFilterCancelScope = createAsyncCancelScope(handleAsyncError2);
     const requestFilterUpdate = () => applyFilterCancelScope(async (signal) => {
       await sleep(500, { signal });
+      const queryId = getSelectedSourceId() ?? "";
       const query = getSelectedSource() ?? "";
       events.dispatchEvent(
         createTypedCustomEvent("filter-start", void 0)
       );
+      const diagnostics = [];
       try {
         filteredDrafts = await filterDrafts(
           records,
           allDrafts,
           query,
-          signal
+          signal,
+          (message, start, stop) => {
+            diagnostics.push({
+              severity: "error",
+              start,
+              stop,
+              message,
+              source: "parser"
+            });
+          }
         );
+        editor.setErrors(queryId, diagnostics);
+      } catch (e) {
+        if (e instanceof Error) {
+          editor.setErrors(queryId, [
+            ...diagnostics,
+            errorToDiagnostic(e)
+          ]);
+        }
+        throw e;
       } finally {
         events.dispatchEvent(
           createTypedCustomEvent("filter-end", void 0)
