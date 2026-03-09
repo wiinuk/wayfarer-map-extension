@@ -23,6 +23,7 @@ import { filterDrafts } from "./draft-filter";
 import { createAsyncCancelScope, sleep } from "../standard-extensions";
 import { createEditor } from "./query-view/editor";
 import type { PoiRecords } from "../poi-records";
+import { SalEvaluationError } from "../sal/evaluator";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
@@ -643,6 +644,14 @@ export async function createDraftList({
                     query,
                     signal,
                 );
+            } catch (e) {
+                const id = getSelectedSourceId();
+                if (id && e instanceof Error) {
+                    const range =
+                        e instanceof SalEvaluationError ? e.range : undefined;
+                    editor.setError(id, e.message, range);
+                }
+                throw e;
             } finally {
                 events.dispatchEvent(
                     createTypedCustomEvent("filter-end", undefined),

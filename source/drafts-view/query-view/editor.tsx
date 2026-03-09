@@ -1,4 +1,4 @@
-//spell:words antlr keymap
+//spell:words antlr keymap Kaku
 import { styleSetter } from "../../dom-extensions";
 import {
     createTypedCustomEvent,
@@ -11,7 +11,6 @@ import {
     ViewPlugin,
     ViewUpdate,
     keymap,
-    lineNumbers,
     highlightSpecialChars,
     drawSelection,
     dropCursor,
@@ -40,6 +39,7 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { lintKeymap } from "@codemirror/lint";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams, Token } from "antlr4ts";
+import type { SourceRange } from "../../sal/evaluator";
 
 const setStyle = styleSetter(cssText);
 
@@ -335,9 +335,17 @@ export async function createEditor({
         currentFileName = fileName;
         switchFile(fileName, value);
     }
+    function setError(
+        fileName: string,
+        message: string,
+        range: SourceRange | undefined,
+    ) {
+        // TODO:
+    }
     return {
         element,
         events,
         setSource,
+        setError,
     };
 }
