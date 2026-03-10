@@ -39,7 +39,6 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams, Token } from "antlr4ts";
-import type { SourceRange } from "../../sal/evaluator";
 
 const setStyle = styleSetter(cssText);
 
