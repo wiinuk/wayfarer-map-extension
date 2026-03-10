@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
+// @version      0.5.3
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -23918,6 +23918,13 @@
     }
     return stat17;
   }
+  function* getFreshStat14(e, d) {
+    const minFetchDate = yield* e.getMinFreshDate();
+    const stat14 = yield* e.getCell14Stat(d);
+    if (stat14 == null || stat14.maxLastFetchDate == null || stat14.maxLastFetchDate < minFetchDate)
+      return;
+    return stat14;
+  }
   function builderOfCellPredicate(predicate) {
     return {
       isIgnorable: false,
@@ -23926,7 +23933,7 @@
           *isVisible(d) {
             const stat17 = yield* getFreshCell17(e, d);
             if (stat17 == null) return true;
-            const stat14 = yield* e.getCell14Stat(d);
+            const stat14 = yield* getFreshStat14(e, d);
             if (stat14 == null) return true;
             return predicate(stat14, stat17, d);
           }
@@ -23964,7 +23971,7 @@
   }
   function stopsForNextGym(expectedCount) {
     return builderOfPredicate(function* (e, d) {
-      const stat14 = yield* e.getCell14Stat(d);
+      const stat14 = yield* getFreshStat14(e, d);
       if (stat14 == null) return true;
       const gymCount = stat14.kindToPois.get("GYM")?.length ?? 0;
       const pokestopCount = stat14.kindToPois.get("POKESTOP")?.length ?? 0;
