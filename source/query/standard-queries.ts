@@ -211,6 +211,17 @@ function* getFreshCell17(e: QueryEnvironment, d: Draft) {
     }
     return stat17;
 }
+function* getFreshStat14(e: QueryEnvironment, d: Draft) {
+    const minFetchDate = yield* e.getMinFreshDate();
+    const stat14 = yield* e.getCell14Stat(d);
+    if (
+        stat14 == null ||
+        stat14.maxLastFetchDate == null ||
+        stat14.maxLastFetchDate < minFetchDate
+    )
+        return;
+    return stat14;
+}
 function builderOfCellPredicate(
     predicate: (
         stat14: Cell14Statistics,
@@ -228,7 +239,7 @@ function builderOfCellPredicate(
                     // セル情報が取得されていないか古いなら検索にヒットさせる
                     if (stat17 == null) return true;
 
-                    const stat14 = yield* e.getCell14Stat(d);
+                    const stat14 = yield* getFreshStat14(e, d);
                     if (stat14 == null) return true;
 
                     return predicate(stat14, stat17, d);
@@ -274,7 +285,7 @@ export function getPokestopCountForNextGym(current: number) {
 
 function stopsForNextGym(expectedCount: number): DraftQueryBuilder {
     return builderOfPredicate(function* (e, d) {
-        const stat14 = yield* e.getCell14Stat(d);
+        const stat14 = yield* getFreshStat14(e, d);
         if (stat14 == null) return true;
 
         const gymCount = stat14.kindToPois.get("GYM")?.length ?? 0;
