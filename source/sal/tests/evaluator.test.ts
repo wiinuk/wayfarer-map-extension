@@ -26,6 +26,8 @@ const createStandardLibrary = () => {
     lib.set("fromNumber", (x) => done(x));
     lib.set("fromString", (x) => done(x));
     lib.set("fromWord", (x) => done(x));
+
+    lib.set("id", (x) => done(x));
     lib.set(
         "add",
         binary((a, b) => a + b),
@@ -229,6 +231,33 @@ describe("Evaluator", () => {
                 @where x = 10
             `;
             expect(await evaluate(code)).toBe(21);
+        });
+    });
+
+    describe("Implicit apply", () => {
+        it("should call fromNumber when a numeric literal is encountered in the source", async () => {
+            const globals = new Map<string, Value>([
+                ["fromNumber", (x) => done({ fromNumber: x })],
+            ]);
+            expect(await evaluate("42", globals)).toStrictEqual({
+                fromNumber: 42,
+            });
+        });
+        it("should suppress implicit conversions for literals within function applies.", async () => {
+            const globals = new Map<string, Value>([
+                ["fromNumber", (x) => done({ fromNumber: x })],
+                ["fromString", (x) => done({ fromString: x })],
+            ]);
+            expect(await evaluate("id:42", globals)).toBe(42);
+            expect(await evaluate(`id:"ABC"`, globals)).toBe("ABC");
+
+            // 暗黙関数を適用したいときは ( ) で囲む
+            expect(await evaluate("id:(42)", globals)).toStrictEqual({
+                fromNumber: 42,
+            });
+            expect(await evaluate(`id:("ABC")`, globals)).toStrictEqual({
+                fromString: "ABC",
+            });
         });
     });
 

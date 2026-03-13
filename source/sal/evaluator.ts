@@ -299,7 +299,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
             yield* this.visitExpression(e._left),
             e._left,
         );
-        const x = yield* this.visitExpression(e._right);
+        const x = yield* this.evaluateExpressionAsLiteral(e._right);
         return yield* callWithLocation(f, x, e._right);
     }
     visitSequenceExpression(e: SequenceExpressionContext): Effective<Value> {
