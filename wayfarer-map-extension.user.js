@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.3
+// @version      0.5.4
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -25756,7 +25756,7 @@
         yield* this.visitExpression(e._left),
         e._left
       );
-      const x = yield* this.visitExpression(e._right);
+      const x = yield* this.evaluateExpressionAsLiteral(e._right);
       return yield* callWithLocation(f, x, e._right);
     }
     visitSequenceExpression(e) {
