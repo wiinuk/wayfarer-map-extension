@@ -1,21 +1,27 @@
 import { done, type Effective } from "../sal/effective";
 
-interface CopyCommand {
+interface Command {
+    readonly type: string;
+}
+interface CopyCommand extends Command {
     readonly type: "copy";
     readonly text: string;
 }
-interface OpenMapCommand {
+interface OpenMapCommand extends Command {
     readonly type: "open-map";
     readonly lat: number;
     readonly lng: number;
     readonly title: string;
 }
-interface OpenLinkCommand {
+interface OpenLinkCommand extends Command {
     readonly type: "open-link";
     readonly url: string;
 }
 export type ActionCommand = CopyCommand | OpenMapCommand | OpenLinkCommand;
-export type Action = (text: string) => Effective<ActionCommand>;
+export interface Action {
+    execute(text: string): Effective<ActionCommand>;
+    readonly description: string;
+}
 
 export interface ActionMatch {
     readonly index: number;
@@ -56,13 +62,19 @@ export function withLocation(
     };
 }
 
+export function createCopyCommand(text: string): CopyCommand {
+    return {
+        type: "copy",
+        text,
+    };
+}
 function createCopyMatch(index: number, length: number): ActionMatch {
     return {
-        action(text) {
-            return done({
-                type: "copy",
-                text,
-            });
+        action: {
+            description: "copy text to clipboard",
+            execute(text) {
+                return done(createCopyCommand(text));
+            },
         },
         index,
         length,

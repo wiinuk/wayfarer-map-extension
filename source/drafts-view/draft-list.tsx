@@ -49,6 +49,7 @@ export interface QuerySource {
 export interface SourcesWithSelection {
     readonly sources: readonly [QuerySource, ...QuerySource[]];
     readonly selectedIndex: number | null;
+    readonly activeSalActionSourceId?: string | null;
 }
 
 function newFreshId(baseName: string, definedIds: readonly string[]) {
@@ -142,6 +143,14 @@ export async function createDraftList({
         sources: [{ id: "source0", contents: "" }],
     };
 
+    const defaultSalSource = `pattern:("https://" many1:(not-space)) /to open`;
+
+    let activeRuleSourceId: string | null =
+        currentSources.activeSalActionSourceId ?? null;
+    let activeRuleSource =
+        currentSources.sources.find((s) => s.id === activeRuleSourceId)
+            ?.contents ?? defaultSalSource;
+
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
         title: "検索一覧",
@@ -150,6 +159,7 @@ export async function createDraftList({
     const editor = await createEditor({
         initialFileName: getSelectedSourceId() ?? "",
         initialText: getSelectedSource() ?? "",
+        initialActiveSalActionSourceId: activeRuleSourceId,
     });
     const editorDialog = createDialog(editor.element, {
         title: "検索ワードを編集",
@@ -219,6 +229,30 @@ export async function createDraftList({
     editor.events.addEventListener("input", ({ detail: value }) => {
         setSelectedSourceAndNotify(value, false);
     });
+
+    editor.events.addEventListener(
+        "sal-action-source-changed",
+        ({ detail }) => {
+            activeRuleSourceId = detail.sourceId;
+            currentSources = {
+                ...currentSources,
+                activeSalActionSourceId: activeRuleSourceId,
+            };
+            local.setConfig({ ...local.getConfig(), sources: currentSources });
+
+            if (activeRuleSourceId == null) {
+                activeRuleSource = defaultSalSource;
+            } else {
+                const source = currentSources.sources.find(
+                    (s) => s.id === activeRuleSourceId,
+                );
+                activeRuleSource = source?.contents ?? defaultSalSource;
+            }
+            descriptionEditor.updateRuleSource(activeRuleSource);
+            noteEditor.updateRuleSource(activeRuleSource);
+        },
+    );
+
     function setCurrentSourcesAndNotify(
         newSources: typeof currentSources,
         updateEditor = true,
@@ -343,27 +377,29 @@ export async function createDraftList({
         />
     ) as HTMLInputElement;
 
-    const descriptionEditor = createSimpleEditor(
-        "",
-        (value) => {
+    const descriptionEditor = createSimpleEditor({
+        initialDoc: "",
+        onUpdate: (value) => {
             if (!selectedDraft) return;
             selectedDraft.description = value;
             saveDraftChanges(selectedDraft);
         },
-        "description",
+        location: "description",
         handleAsyncError,
-    );
+        ruleSource: activeRuleSource,
+    });
 
-    const noteEditor = createSimpleEditor(
-        "",
-        (value) => {
+    const noteEditor = createSimpleEditor({
+        initialDoc: "",
+        onUpdate: (value) => {
             if (!selectedDraft) return;
             selectedDraft.note = value;
             saveDraftChanges(selectedDraft);
         },
-        "note",
+        location: "note",
         handleAsyncError,
-    );
+        ruleSource: activeRuleSource,
+    });
 
     const detailCoordinates = (
         <input

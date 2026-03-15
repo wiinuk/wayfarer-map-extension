@@ -26,6 +26,7 @@ export async function createConfigAccessor(key: string) {
                 .tuple([QuerySourceSchema])
                 .rest(QuerySourceSchema)
                 .readonly(),
+            activeSalActionSourceId: zod.string().nullable().optional(),
         })
         .readonly();
 

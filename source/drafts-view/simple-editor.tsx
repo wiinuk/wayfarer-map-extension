@@ -34,6 +34,7 @@ import {
     type Action,
     type ActionLocation,
     type ActionCommand,
+    createCopyCommand,
 } from "./simple-editor-actions";
 
 function openUrlAction(text: string): Effective<ActionCommand> {
@@ -45,10 +46,7 @@ function openUrlAction(text: string): Effective<ActionCommand> {
 
 function searchPhotos(text: string): Effective<ActionCommand> {
     const url = `https://photos.google.com/search/${encodeURIComponent(text)}`;
-    return done({
-        type: "open-link",
-        url,
-    });
+    return openUrlAction(url);
 }
 
 function searchMap(text: string): Effective<ActionCommand> {
@@ -60,10 +58,7 @@ function searchMap(text: string): Effective<ActionCommand> {
 }
 
 function copyAction(text: string): Effective<ActionCommand> {
-    return done({
-        type: "copy",
-        text,
-    });
+    return done(createCopyCommand(text));
 }
 
 function ruleAsValue(x: ActionRule) {
@@ -101,7 +96,10 @@ export function createSalGlobals() {
         repeat: binary((pattern, count) =>
             done(`(${pattern as string}){${count as number}`),
         ),
+        chars: (x) => done(`[${escapeRegExp(x as string)}]`),
         number: "-?\\d+(\\.\\d+)?",
+        word: "\\w",
+        space: "\\s",
         spaces: "\\s*",
         "not-space": "\\S",
         many0: (x) => done(`(?:${x})*`),
@@ -109,10 +107,22 @@ export function createSalGlobals() {
 
         pattern: (x) => done(ruleAsValue(pattern(x as string))),
 
-        "search-photos": actionAsValue(searchPhotos),
-        "search-map": actionAsValue(searchMap),
-        copy: actionAsValue(copyAction),
-        open: actionAsValue(openUrlAction),
+        "search-photos": actionAsValue({
+            execute: searchPhotos,
+            description: "search in Google Photos",
+        }),
+        "search-map": actionAsValue({
+            execute: searchMap,
+            description: "search on Google Maps",
+        }),
+        copy: actionAsValue({
+            execute: copyAction,
+            description: "copy text to clipboard",
+        }),
+        open: actionAsValue({
+            execute: openUrlAction,
+            description: "open URL in browser",
+        }),
 
         to: binary((x, y) =>
             done(ruleAsValue(bindAction(valueAsRule(x), valueAsAction(y)))),
@@ -152,29 +162,21 @@ async function createDecorations(
     state: EditorState,
     location: ActionLocation,
     signal: AbortSignal,
+    ruleSource: string,
 ): Promise<DecorationSet> {
     const builder = new RangeSetBuilder<Decoration>();
     const resolveGlobal = createSalGlobals();
 
-    // TODO:
-    const salSource = `
-        date and coords and url
-
-        @where date = pattern:(digits "-" digits "-" digits) /to search-photos
-        @where coords = pattern:(number spaces "," spaces number) /to search-map
-        @where url = pattern:("https://" many1:(not-space)) /to open
-    `;
-
     const r = await forceAsPromise(
-        evaluateExpression(salSource, resolveGlobal),
+        evaluateExpression(ruleSource, resolveGlobal),
         signal,
     );
     const rule = valueAsRule(r);
     const text = state.doc.toString();
-    const matches = await forceAsPromise(
-        rule.match({ text, location }),
-        signal,
-    );
+    const matches = [
+        ...(await forceAsPromise(rule.match({ text, location }), signal)),
+    ];
+    matches.sort((a, b) => a.index - b.index);
     for (const { action, index: start, length } of matches) {
         if (length === 0) continue;
 
@@ -185,7 +187,10 @@ async function createDecorations(
             end,
             Decoration.mark({
                 class: classNames["action-link"],
-                attributes: { "data-action-text": matchedText },
+                attributes: {
+                    title: action.description,
+                    "data-action-text": matchedText,
+                },
                 spec: {
                     action,
                     text: matchedText,
@@ -229,33 +234,39 @@ async function executeCommand(command: ActionCommand) {
 }
 async function executeAction(action: Action, matchedText: string) {
     const command = await forceAsPromise(
-        action(matchedText),
+        action.execute(matchedText),
         new AbortController().signal,
     );
     await executeCommand(command);
 }
 
-export function createSimpleEditor(
-    initialDoc: string,
-    onUpdate: (doc: string) => void,
-    location: ActionLocation,
-    handleAsyncError: (reason: unknown) => void,
-) {
+export interface SimpleEditorOptions {
+    initialDoc: string;
+    onUpdate: (doc: string) => void;
+    location: ActionLocation;
+    handleAsyncError: (reason: unknown) => void;
+    ruleSource: string;
+}
+
+export function createSimpleEditor(options: SimpleEditorOptions) {
     const actionLinkPlugin = ViewPlugin.fromClass(
         class ActionLinkDecorator {
             decorations: DecorationSet;
-            cancelScope = createAsyncCancelScope(handleAsyncError);
+            cancelScope = createAsyncCancelScope(options.handleAsyncError);
+            ruleSource: string;
 
             constructor(view: EditorView) {
                 this.decorations = RangeSet.empty;
+                this.ruleSource = options.ruleSource;
                 this.notifyDecorationsUpdated(view.state);
             }
             notifyDecorationsUpdated(state: EditorState) {
                 this.cancelScope(async (signal) => {
                     this.decorations = await createDecorations(
                         state,
-                        location,
+                        options.location,
                         signal,
+                        this.ruleSource,
                     );
                 });
             }
@@ -282,7 +293,7 @@ export function createSimpleEditor(
                 plugin.decorations.between(pos, pos, (from, to, value) => {
                     const found: ActionDecorationSpec = value.spec.spec;
                     executeAction(found.action, found.text).catch(
-                        handleAsyncError,
+                        options.handleAsyncError,
                     );
                 });
             }
@@ -295,7 +306,7 @@ export function createSimpleEditor(
         keymap.of([...defaultKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
-                onUpdate(update.state.doc.toString());
+                options.onUpdate(update.state.doc.toString());
             }
         }),
         actionLinkPlugin,
@@ -303,7 +314,7 @@ export function createSimpleEditor(
     ];
 
     const editor = new EditorView({
-        state: EditorState.create({ doc: initialDoc, extensions }),
+        state: EditorState.create({ doc: options.initialDoc, extensions }),
     });
 
     editor.dom.classList.add(
@@ -325,5 +336,11 @@ export function createSimpleEditor(
             return editor.dom;
         },
         dispatchSource,
+        updateRuleSource(newRuleSource: string) {
+            const plugin = editor.plugin(actionLinkPlugin);
+            if (!plugin) return;
+            plugin.ruleSource = newRuleSource;
+            plugin.notifyDecorationsUpdated(editor.state);
+        },
     };
 }

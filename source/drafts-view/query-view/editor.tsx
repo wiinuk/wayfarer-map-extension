@@ -208,9 +208,11 @@ export interface SalDiagnostic {
 export async function createEditor({
     initialFileName,
     initialText,
+    initialActiveSalActionSourceId,
 }: {
     initialFileName: string;
     initialText: string;
+    initialActiveSalActionSourceId: string | null;
 }) {
     setStyle();
     const fileErrors = new Map<string, readonly SalDiagnostic[]>();
@@ -260,7 +262,7 @@ export async function createEditor({
         }
     });
 
-    let activeSalActionSource: string | null = null;
+    let activeSalActionSource: string | null = initialActiveSalActionSourceId;
 
     function updateSalActionButton() {
         const isActive = currentFileName === activeSalActionSource;
