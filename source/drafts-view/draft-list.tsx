@@ -24,6 +24,7 @@ import { createAsyncCancelScope, sleep } from "../standard-extensions";
 import { createEditor, type SalDiagnostic } from "./query-view/editor";
 import type { PoiRecords } from "../poi-records";
 import { SalEvaluationError } from "../sal/evaluator";
+import { createSimpleEditor } from "./simple-editor";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
@@ -342,36 +343,27 @@ export async function createDraftList({
         />
     ) as HTMLInputElement;
 
-    const detailDescription = (
-        <textarea
-            value=""
-            classList={[
-                classNames["detail-description"],
-                classNames["input-field"],
-            ]}
-            oninput={(event: Event) => {
-                if (!selectedDraft) return;
-                selectedDraft.description = (
-                    event.target as HTMLTextAreaElement
-                ).value;
-                saveDraftChanges(selectedDraft);
-            }}
-        ></textarea>
-    ) as HTMLTextAreaElement;
+    const descriptionEditor = createSimpleEditor(
+        "",
+        (value) => {
+            if (!selectedDraft) return;
+            selectedDraft.description = value;
+            saveDraftChanges(selectedDraft);
+        },
+        "description",
+        handleAsyncError,
+    );
 
-    const detailNote = (
-        <textarea
-            classList={[classNames["detail-note"], classNames["input-field"]]}
-            value=""
-            oninput={(event) => {
-                if (!selectedDraft) return;
-                selectedDraft.note = (
-                    event.target as HTMLTextAreaElement
-                ).value;
-                saveDraftChanges(selectedDraft);
-            }}
-        ></textarea>
-    ) as HTMLTextAreaElement;
+    const noteEditor = createSimpleEditor(
+        "",
+        (value) => {
+            if (!selectedDraft) return;
+            selectedDraft.note = value;
+            saveDraftChanges(selectedDraft);
+        },
+        "note",
+        handleAsyncError,
+    );
 
     const detailCoordinates = (
         <input
@@ -520,8 +512,8 @@ export async function createDraftList({
                     {detailName}
                 </summary>
                 <div class={classNames["detail-content-wrapper"]}>
-                    {detailDescription}
-                    {detailNote}
+                    {descriptionEditor.dom}
+                    {noteEditor.dom}
                     <div class={classNames["coordinates-container"]}>
                         {detailCoordinates}
                         {openMapButton}
@@ -595,8 +587,20 @@ export async function createDraftList({
     const updateDetailPane = () => {
         if (selectedDraft) {
             detailName.value = selectedDraft.name;
-            detailDescription.value = selectedDraft.description;
-            detailNote.value = selectedDraft.note;
+            descriptionEditor.dispatch({
+                changes: {
+                    from: 0,
+                    to: descriptionEditor.state.doc.length,
+                    insert: selectedDraft.description,
+                },
+            });
+            noteEditor.dispatch({
+                changes: {
+                    from: 0,
+                    to: noteEditor.state.doc.length,
+                    insert: selectedDraft.note,
+                },
+            });
             detailCoordinates.value = coordinatesToString(
                 selectedDraft.coordinates,
             );
@@ -616,8 +620,20 @@ export async function createDraftList({
             }
         } else {
             detailName.value = "";
-            detailDescription.value = "";
-            detailNote.value = "";
+            descriptionEditor.dispatch({
+                changes: {
+                    from: 0,
+                    to: descriptionEditor.state.doc.length,
+                    insert: "",
+                },
+            });
+            noteEditor.dispatch({
+                changes: {
+                    from: 0,
+                    to: noteEditor.state.doc.length,
+                    insert: "",
+                },
+            });
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";

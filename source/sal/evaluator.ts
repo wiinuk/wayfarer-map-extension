@@ -456,7 +456,7 @@ class SalEvaluationVisitor implements SalVisitor<Effective<Value>> {
     }
 }
 
-function createStandardGlobals() {
+export function createStandardGlobals() {
     const globals: Readonly<Record<string, Value>> = {
         fromVoid(_) {
             return done("fromVoid");

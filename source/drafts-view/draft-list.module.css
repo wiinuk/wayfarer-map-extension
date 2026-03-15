@@ -204,6 +204,12 @@
     background-color: #218838;
 }
 
+.action-link {
+    color: blue;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .input-error {
     border: 1px solid red;
     background-color: #c82333;

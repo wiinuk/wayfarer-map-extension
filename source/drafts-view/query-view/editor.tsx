@@ -236,7 +236,10 @@ export async function createEditor({
         return diagnostics;
     });
 
-    const events = createTypedEventTarget<{ input: string }>();
+    const events = createTypedEventTarget<{
+        input: string;
+        "sal-action-source-changed": { sourceId: string | null };
+    }>();
 
     let isDispatching = false;
     const notifyInputPlugin = EditorView.updateListener.of((update) => {
@@ -256,6 +259,41 @@ export async function createEditor({
             }
         }
     });
+
+    let activeSalActionSource: string | null = null;
+
+    function updateSalActionButton() {
+        const isActive = currentFileName === activeSalActionSource;
+        salActionButton.classList.toggle(
+            classNames["active-sal-action-button"],
+            isActive,
+        );
+    }
+
+    const salActionButton = (
+        <button
+            class={classNames["sal-action-button"]}
+            onclick={() => {
+                if (activeSalActionSource === currentFileName) {
+                    activeSalActionSource = null;
+                } else {
+                    activeSalActionSource = currentFileName;
+                }
+                updateSalActionButton();
+
+                events.dispatchEvent(
+                    createTypedCustomEvent("sal-action-source-changed", {
+                        sourceId: activeSalActionSource,
+                    }),
+                );
+            }}
+        >
+            アクション化指定
+        </button>
+    );
+
+    const toolbar = <div class={classNames.toolbar}>{salActionButton}</div>;
+    // --- end of plan 2.1 implementation ---
 
     const basicSetup: Extension = [
         keymap.of(defaultKeymap),
@@ -331,12 +369,20 @@ export async function createEditor({
         notifyInputPlugin,
     ];
 
-    const element = <div class={classNames.container}></div>;
+    const editorHost = <div class={classNames["editor-host"]}></div>;
+    const element = (
+        <div class={`${classNames.container} ${classNames["flex-container"]}`}>
+            {toolbar}
+            {editorHost}
+        </div>
+    );
+
     const view = new EditorView({
         doc: initialText,
         extensions,
-        parent: element,
+        parent: editorHost,
     });
+    updateSalActionButton();
 
     const fileStates = new Map<string, EditorState>();
     function switchFile(newFileName: string, newContent: string) {
@@ -381,6 +427,7 @@ export async function createEditor({
         }
         currentFileName = fileName;
         switchFile(fileName, value);
+        updateSalActionButton();
     }
     function setErrors(
         fileName: string,

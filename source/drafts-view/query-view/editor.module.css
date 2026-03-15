@@ -39,3 +39,41 @@
     --background-color: #fff7d5;
     --border-color: #fba83c;
 }
+
+.toolbar {
+    display: flex;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--background-color);
+    gap: 8px;
+}
+
+.sal-action-button {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #fff;
+    color: #000;
+    transition:
+        background-color 0.2s,
+        color 0.2s,
+        border-color 0.2s;
+}
+
+.active-sal-action-button {
+    background-color: #1890ff;
+    color: white;
+    border-color: #1890ff;
+}
+
+.editor-host {
+    flex: 1;
+    min-height: 0;
+}
+
+.flex-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
