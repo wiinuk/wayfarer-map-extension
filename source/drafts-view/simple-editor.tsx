@@ -310,5 +310,20 @@ export function createSimpleEditor(
         classNames["detail-description"],
         classNames["input-field"],
     );
-    return editor;
+    function dispatchSource(source: string) {
+        editor.dispatch({
+            changes: {
+                from: 0,
+                to: editor.state.doc.length,
+                insert: source,
+            },
+        });
+    }
+    return {
+        editor,
+        get element() {
+            return editor.dom;
+        },
+        dispatchSource,
+    };
 }

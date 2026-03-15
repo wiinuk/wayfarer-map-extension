@@ -512,8 +512,8 @@ export async function createDraftList({
                     {detailName}
                 </summary>
                 <div class={classNames["detail-content-wrapper"]}>
-                    {descriptionEditor.dom}
-                    {noteEditor.dom}
+                    {descriptionEditor.element}
+                    {noteEditor.element}
                     <div class={classNames["coordinates-container"]}>
                         {detailCoordinates}
                         {openMapButton}
@@ -587,20 +587,8 @@ export async function createDraftList({
     const updateDetailPane = () => {
         if (selectedDraft) {
             detailName.value = selectedDraft.name;
-            descriptionEditor.dispatch({
-                changes: {
-                    from: 0,
-                    to: descriptionEditor.state.doc.length,
-                    insert: selectedDraft.description,
-                },
-            });
-            noteEditor.dispatch({
-                changes: {
-                    from: 0,
-                    to: noteEditor.state.doc.length,
-                    insert: selectedDraft.note,
-                },
-            });
+            descriptionEditor.dispatchSource(selectedDraft.description);
+            noteEditor.dispatchSource(selectedDraft.note);
             detailCoordinates.value = coordinatesToString(
                 selectedDraft.coordinates,
             );
@@ -620,20 +608,8 @@ export async function createDraftList({
             }
         } else {
             detailName.value = "";
-            descriptionEditor.dispatch({
-                changes: {
-                    from: 0,
-                    to: descriptionEditor.state.doc.length,
-                    insert: "",
-                },
-            });
-            noteEditor.dispatch({
-                changes: {
-                    from: 0,
-                    to: noteEditor.state.doc.length,
-                    insert: "",
-                },
-            });
+            descriptionEditor.dispatchSource("");
+            noteEditor.dispatchSource("");
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
