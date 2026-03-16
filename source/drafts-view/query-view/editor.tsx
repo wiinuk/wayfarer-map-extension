@@ -25,7 +25,12 @@ import {
     RangeSetBuilder,
     type Extension,
 } from "@codemirror/state";
-import { defaultKeymap, indentWithTab, history } from "@codemirror/commands";
+import {
+    defaultKeymap,
+    indentWithTab,
+    history,
+    historyKeymap,
+} from "@codemirror/commands";
 import {
     bracketMatching,
     defaultHighlightStyle,
@@ -298,7 +303,6 @@ export async function createEditor({
     // --- end of plan 2.1 implementation ---
 
     const basicSetup: Extension = [
-        keymap.of(defaultKeymap),
         // lineNumbers()
         highlightSpecialChars(),
         history(),
@@ -316,8 +320,12 @@ export async function createEditor({
         highlightActiveLine(),
         highlightActiveLineGutter(),
         highlightSelectionMatches(),
+
+        // 上が優先される
+        keymap.of(historyKeymap),
         keymap.of(searchKeymap),
         keymap.of(lintKeymap),
+        keymap.of(defaultKeymap),
     ];
     const extensions = [
         basicSetup,
