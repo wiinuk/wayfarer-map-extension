@@ -104,6 +104,8 @@ export function createSalGlobals() {
         "not-space": "\\S",
         many0: (x) => done(`(?:${x})*`),
         many1: (x) => done(`(?:${x})+`),
+        lookahead: (x) => done(`(?<=${x})`),
+        lookbehind: (x) => done(`(?=${x})`),
 
         pattern: (x) => done(ruleAsValue(pattern(x as string))),
 
