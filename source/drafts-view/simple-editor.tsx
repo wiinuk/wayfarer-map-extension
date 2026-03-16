@@ -309,7 +309,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     );
 
     const actionClickHandler = EditorView.domEventHandlers({
-        mousedown: (event, view) => {
+        click: (event, view) => {
             const target = event.target as HTMLElement;
             if (target.classList.contains(classNames["action-link"])) {
                 event.preventDefault();
