@@ -242,14 +242,14 @@ async function executeAction(action: Action, matchedText: string) {
 
 export interface SimpleEditorOptions {
     initialDoc: string;
-    onUpdate: (doc: string) => void;
+    onInput: (doc: string) => void;
     location: ActionLocation;
     handleAsyncError: (reason: unknown) => void;
     ruleSource: string;
 }
 
 export function createSimpleEditor(options: SimpleEditorOptions) {
-    const actionLinkPlugin = ViewPlugin.fromClass(
+    const actionLinkDecorator = ViewPlugin.fromClass(
         class ActionLinkDecorator {
             decorations: DecorationSet;
             cancelScope = createAsyncCancelScope(options.handleAsyncError);
@@ -287,15 +287,16 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
             if (target.classList.contains(classNames["action-link"])) {
                 event.preventDefault();
                 const pos = view.posAtDOM(target);
-                const plugin = view.plugin(actionLinkPlugin);
+                const plugin = view.plugin(actionLinkDecorator);
                 if (!plugin) return;
 
+                const foundSpecs: ActionDecorationSpec[] = [];
                 plugin.decorations.between(pos, pos, (from, to, value) => {
-                    const found: ActionDecorationSpec = value.spec.spec;
-                    executeAction(found.action, found.text).catch(
-                        options.handleAsyncError,
-                    );
+                    foundSpecs.push(value.spec.spec);
                 });
+                for (const { action, text } of foundSpecs) {
+                    executeAction(action, text).catch(options.handleAsyncError);
+                }
             }
         },
     });
@@ -305,11 +306,14 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         history(),
         keymap.of([...defaultKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-                options.onUpdate(update.state.doc.toString());
+            if (
+                update.docChanged &&
+                update.transactions.some((t) => t.isUserEvent("input"))
+            ) {
+                options.onInput(update.state.doc.toString());
             }
         }),
-        actionLinkPlugin,
+        actionLinkDecorator,
         actionClickHandler,
     ];
 
@@ -337,7 +341,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         },
         dispatchSource,
         updateRuleSource(newRuleSource: string) {
-            const plugin = editor.plugin(actionLinkPlugin);
+            const plugin = editor.plugin(actionLinkDecorator);
             if (!plugin) return;
             plugin.ruleSource = newRuleSource;
             plugin.notifyDecorationsUpdated(editor.state);

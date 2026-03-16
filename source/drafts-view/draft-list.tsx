@@ -379,7 +379,7 @@ export async function createDraftList({
 
     const descriptionEditor = createSimpleEditor({
         initialDoc: "",
-        onUpdate: (value) => {
+        onInput(value) {
             if (!selectedDraft) return;
             selectedDraft.description = value;
             saveDraftChanges(selectedDraft);
@@ -391,7 +391,7 @@ export async function createDraftList({
 
     const noteEditor = createSimpleEditor({
         initialDoc: "",
-        onUpdate: (value) => {
+        onInput(value) {
             if (!selectedDraft) return;
             selectedDraft.note = value;
             saveDraftChanges(selectedDraft);
