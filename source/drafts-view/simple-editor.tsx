@@ -17,7 +17,7 @@ import {
     RangeSetBuilder,
     EditorState,
     type Extension,
-    RangeSet,
+    StateEffect,
 } from "@codemirror/state";
 import { defaultKeymap, history, indentWithTab } from "@codemirror/commands";
 import type { LatLng } from "../s2";
@@ -250,28 +250,40 @@ export interface SimpleEditorOptions {
 }
 
 export function createSimpleEditor(options: SimpleEditorOptions) {
-    const actionLinkDecorator = ViewPlugin.fromClass(
-        class ActionLinkDecorator {
-            decorations: DecorationSet;
-            cancelScope = createAsyncCancelScope(options.handleAsyncError);
-            ruleSource: string;
+    const setActionDecorationsEffect = StateEffect.define<DecorationSet>();
+    const actionDecorator = ViewPlugin.fromClass(
+        class ActionDecorator {
+            decorations = Decoration.none;
+            ruleSource = options.ruleSource;
+            readonly cancelScope = createAsyncCancelScope(
+                options.handleAsyncError,
+            );
 
-            constructor(view: EditorView) {
-                this.decorations = RangeSet.empty;
-                this.ruleSource = options.ruleSource;
+            constructor(readonly view: EditorView) {
                 this.notifyDecorationsUpdated(view.state);
             }
             notifyDecorationsUpdated(state: EditorState) {
+                this.decorations = Decoration.none;
                 this.cancelScope(async (signal) => {
-                    this.decorations = await createDecorations(
+                    const decorations = await createDecorations(
                         state,
                         options.location,
                         signal,
                         this.ruleSource,
                     );
+                    this.view.dispatch({
+                        effects: setActionDecorationsEffect.of(decorations),
+                    });
                 });
             }
             update(update: ViewUpdate) {
+                for (const { effects } of update.transactions) {
+                    for (const effect of effects) {
+                        if (effect.is(setActionDecorationsEffect)) {
+                            this.decorations = effect.value;
+                        }
+                    }
+                }
                 if (update.docChanged) {
                     this.notifyDecorationsUpdated(update.state);
                 }
@@ -288,7 +300,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
             if (target.classList.contains(classNames["action-link"])) {
                 event.preventDefault();
                 const pos = view.posAtDOM(target);
-                const plugin = view.plugin(actionLinkDecorator);
+                const plugin = view.plugin(actionDecorator);
                 if (!plugin) return;
 
                 const foundSpecs: ActionDecorationSpec[] = [];
@@ -318,7 +330,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
                 options.onInput(update.state.doc.toString());
             }
         }),
-        actionLinkDecorator,
+        actionDecorator,
         actionClickHandler,
         CustomClassName,
     ];
@@ -343,7 +355,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         },
         dispatchSource,
         updateRuleSource(newRuleSource: string) {
-            const plugin = editor.plugin(actionLinkDecorator);
+            const plugin = editor.plugin(actionDecorator);
             if (!plugin) return;
             plugin.ruleSource = newRuleSource;
             plugin.notifyDecorationsUpdated(editor.state);
