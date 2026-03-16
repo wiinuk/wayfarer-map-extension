@@ -18,8 +18,14 @@ import {
     EditorState,
     type Extension,
     StateEffect,
+    Transaction,
 } from "@codemirror/state";
-import { defaultKeymap, history, indentWithTab } from "@codemirror/commands";
+import {
+    defaultKeymap,
+    history,
+    historyKeymap,
+    indentWithTab,
+} from "@codemirror/commands";
 import type { LatLng } from "../s2";
 import { parseCoordinates } from "../geometry";
 import classNames from "./draft-list.module.css";
@@ -251,6 +257,12 @@ export interface SimpleEditorOptions {
     classNames?: string[];
 }
 
+function hasUserChange(update: ViewUpdate) {
+    return update.transactions.some(
+        (t) => t.annotation(Transaction.userEvent) !== undefined,
+    );
+}
+
 export function createSimpleEditor(options: SimpleEditorOptions) {
     const setActionDecorationsEffect = StateEffect.define<DecorationSet>();
     const actionDecorator = ViewPlugin.fromClass(
@@ -323,12 +335,9 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     const extensions: Extension[] = [
         EditorView.lineWrapping,
         history(),
-        keymap.of([...defaultKeymap, indentWithTab]),
+        keymap.of([...defaultKeymap, indentWithTab, ...historyKeymap]),
         EditorView.updateListener.of((update) => {
-            if (
-                update.docChanged &&
-                update.transactions.some((t) => t.isUserEvent("input"))
-            ) {
+            if (update.docChanged && hasUserChange(update)) {
                 options.onInput(update.state.doc.toString());
             }
         }),
