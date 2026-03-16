@@ -102,7 +102,9 @@ export function createSalGlobals() {
         repeat: binary((pattern, count) =>
             done(`(${pattern as string}){${count as number}`),
         ),
+        opt: (x) => done(`(?:${x})?`),
         chars: (x) => done(`[${escapeRegExp(x as string)}]`),
+        "not-chars": (x) => done(`[^${escapeRegExp(x as string)}]`),
         number: "-?\\d+(\\.\\d+)?",
         word: "\\w",
         space: "\\s",
@@ -112,6 +114,8 @@ export function createSalGlobals() {
         many1: (x) => done(`(?:${x})+`),
         lookahead: (x) => done(`(?<=${x})`),
         lookbehind: (x) => done(`(?=${x})`),
+        case: (x) => done(`(?i:${x})`),
+        "ignore-case": (x) => done(`(?-i:${x})`),
 
         pattern: (x) => done(ruleAsValue(pattern(x as string))),
 
