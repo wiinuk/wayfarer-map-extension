@@ -21,10 +21,11 @@
     outline: none;
 }
 
-.input-field:focus {
+.input-field[class~="cm-focused"] {
     background-color: #ffffff;
     border-color: #cbd5e1;
     box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);
+    outline: none;
 }
 
 .input-error {

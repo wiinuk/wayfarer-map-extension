@@ -387,6 +387,7 @@ export async function createDraftList({
         location: "description",
         handleAsyncError,
         ruleSource: activeRuleSource,
+        classNames: [classNames["detail-description"], classNames["input-field"]],
     });
 
     const noteEditor = createSimpleEditor({
@@ -399,6 +400,7 @@ export async function createDraftList({
         location: "note",
         handleAsyncError,
         ruleSource: activeRuleSource,
+        classNames: [classNames["detail-note"], classNames["input-field"]],
     });
 
     const detailCoordinates = (

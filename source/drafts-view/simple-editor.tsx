@@ -246,6 +246,7 @@ export interface SimpleEditorOptions {
     location: ActionLocation;
     handleAsyncError: (reason: unknown) => void;
     ruleSource: string;
+    classNames?: string[];
 }
 
 export function createSimpleEditor(options: SimpleEditorOptions) {
@@ -301,6 +302,10 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         },
     });
 
+    const CustomClassName = EditorView.editorAttributes.of({
+        class: options.classNames?.join(" ") ?? "",
+    });
+
     const extensions: Extension[] = [
         EditorView.lineWrapping,
         history(),
@@ -315,16 +320,13 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         }),
         actionLinkDecorator,
         actionClickHandler,
+        CustomClassName,
     ];
 
     const editor = new EditorView({
         state: EditorState.create({ doc: options.initialDoc, extensions }),
     });
 
-    editor.dom.classList.add(
-        classNames["detail-description"],
-        classNames["input-field"],
-    );
     function dispatchSource(source: string) {
         editor.dispatch({
             changes: {
