@@ -82,7 +82,7 @@ function createCopyMatch(index: number, length: number): ActionMatch {
 }
 
 export function pattern(pattern: string): ActionRule {
-    const regex = new RegExp(pattern, "g");
+    const regex = new RegExp(pattern, "gi");
     return {
         match({ text }: ActionSource) {
             const matches: ActionMatch[] = [];
