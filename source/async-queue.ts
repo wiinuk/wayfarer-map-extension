@@ -4,34 +4,34 @@ export interface AsyncQueue<T> {
 }
 interface CreateAsyncQueueOptions {
     batchSize?: number;
+    delayMilliseconds?: number;
 }
 export function createAsyncQueue<T>(
     consume: (items: T[]) => Promise<void>,
     handleAsyncError: (reason: unknown) => void,
-    { batchSize = 10 }: CreateAsyncQueueOptions = {},
+    { batchSize = 10, delayMilliseconds = 1000 }: CreateAsyncQueueOptions = {},
 ): AsyncQueue<T> {
     const queue: T[] = [];
 
     let processing = false;
-    let scheduled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     function push(item: T) {
         queue.push(item);
+        if (timeoutId !== null) clearTimeout(timeoutId);
         schedule();
     }
     function schedule() {
-        if (scheduled) return;
-        scheduled = true;
+        if (processing) return;
 
-        queueMicrotask(() => {
-            scheduled = false;
+        timeoutId = setTimeout(() => {
+            timeoutId = null;
             void flush().catch(handleAsyncError);
-        });
+        }, delayMilliseconds);
     }
 
     async function flush() {
-        if (processing) return;
-        if (queue.length === 0) return;
+        if (processing || queue.length === 0) return;
 
         processing = true;
         const batch = queue.splice(0, batchSize);
@@ -41,13 +41,14 @@ export function createAsyncQueue<T>(
         } finally {
             processing = false;
 
-            // まだあれば次のtickで続き
-            if (queue.length) {
-                schedule();
-            }
+            if (queue.length > 0) schedule();
         }
     }
     function close() {
+        if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
         queue.length = 0;
     }
     return { push, close };

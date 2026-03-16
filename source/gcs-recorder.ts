@@ -83,13 +83,17 @@ export async function createGcsHandler(
     handleAsyncError: (reason: unknown) => void,
 ) {
     const records = await openRecords();
-    const gcsQueue: AsyncQueue<GcsLog> = createAsyncQueue(async (items) => {
-        const { signal } = new AbortController();
-        const scheduler = createScheduler(signal);
+    const gcsQueue: AsyncQueue<GcsLog> = createAsyncQueue(
+        async (items) => {
+            const { signal } = new AbortController();
+            const scheduler = createScheduler(signal);
 
-        const receivedPois = await parseGcsLogs(schemas, items, scheduler);
-        await processGcsRequests(records, events, receivedPois, signal);
-    }, handleAsyncError);
+            const receivedPois = await parseGcsLogs(schemas, items, scheduler);
+            await processGcsRequests(records, events, receivedPois, signal);
+        },
+        handleAsyncError,
+        { delayMilliseconds: 0 },
+    );
 
     return (url: URL, responseText: string) => {
         gcsQueue.push({
