@@ -120,13 +120,19 @@ async function setupDraftManagerDialog(page: PageResource) {
     draftList.events.addEventListener("count-changed", (e) => {
         title.setCounts(e.detail);
     });
-    draftList.events.addEventListener("filter-start", () => title.pushIsBusy());
-    draftList.events.addEventListener("filter-end", () => title.popIsBusy());
-
-    page.remote.events.addEventListener("fetch-start", () =>
-        title.pushIsBusy(),
+    draftList.events.addEventListener("filter-start", () =>
+        title.markAsBusy(draftList),
     );
-    page.remote.events.addEventListener("fetch-end", () => title.popIsBusy());
+    draftList.events.addEventListener("filter-end", () =>
+        title.remarkAsBusy(draftList),
+    );
+
+    page.remote.events.addEventListener("fetch-ready", () =>
+        title.markAsBusy(page.remote),
+    );
+    page.remote.events.addEventListener("fetch-done", () =>
+        title.remarkAsBusy(page.remote),
+    );
 
     page.drafts.events.addEventListener("drafts-updated", (e) =>
         draftList.setDrafts(e.detail),
@@ -145,7 +151,7 @@ async function asyncSetup(signal: AbortSignal) {
     const scheduler = createScheduler(signal);
     const page: PageResource = {
         records: await openRecords(),
-        remote: createRemote(handleAsyncError, 2000),
+        remote: createRemote(handleAsyncError, 1000),
         styleElement: document.createElement("style"),
         map,
         defaultAsyncErrorHandler: handleAsyncError,

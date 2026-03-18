@@ -153,8 +153,8 @@ type SetParameter = z.infer<typeof interfaces.setRoute.parameter>;
 type DeleteParameter = z.infer<typeof interfaces.deleteRoute.parameter>;
 
 export interface RemoteEventMap {
-    "fetch-start": undefined;
-    "fetch-end": undefined;
+    "fetch-ready": undefined;
+    "fetch-done": undefined;
 }
 export interface Remote {
     events: TypedEventTarget<RemoteEventMap>;
@@ -185,9 +185,6 @@ export function createRemote(
                 const id = command.parameter["route-id"];
                 map.set(id, command);
             }
-            events.dispatchEvent(
-                createTypedCustomEvent("fetch-start", undefined),
-            );
             try {
                 for (const command of map.values()) {
                     const { type, parameter, rootUrl } = command;
@@ -207,19 +204,25 @@ export function createRemote(
                 }
             } finally {
                 events.dispatchEvent(
-                    createTypedCustomEvent("fetch-end", undefined),
+                    createTypedCustomEvent("fetch-done", undefined),
                 );
             }
         },
         handleAsyncError,
-        { batchSize: 100 },
+        { batchSize: 100, delayMilliseconds: intervalMs },
     );
     return {
         events,
         set(parameter, rootUrl) {
+            events.dispatchEvent(
+                createTypedCustomEvent("fetch-ready", undefined),
+            );
             queue.push({ type: "set", parameter, rootUrl });
         },
         delete(parameter, rootUrl) {
+            events.dispatchEvent(
+                createTypedCustomEvent("fetch-ready", undefined),
+            );
             queue.push({ type: "delete", parameter, rootUrl });
         },
     };
