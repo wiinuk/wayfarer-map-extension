@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.5-dev
+// @version      0.5.6-dev
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -22365,9 +22365,6 @@
           const id2 = command2.parameter["route-id"];
           map.set(id2, command2);
         }
-        events.dispatchEvent(
-          createTypedCustomEvent("fetch-start", void 0)
-        );
         try {
           for (const command2 of map.values()) {
             const { type, parameter, rootUrl } = command2;
@@ -22387,19 +22384,25 @@
           }
         } finally {
           events.dispatchEvent(
-            createTypedCustomEvent("fetch-end", void 0)
+            createTypedCustomEvent("fetch-done", void 0)
           );
         }
       },
       handleAsyncError2,
-      { batchSize: 100 }
+      { batchSize: 100, delayMilliseconds: intervalMs }
     );
     return {
       events,
       set(parameter, rootUrl) {
+        events.dispatchEvent(
+          createTypedCustomEvent("fetch-ready", void 0)
+        );
         queue.push({ type: "set", parameter, rootUrl });
       },
       delete(parameter, rootUrl) {
+        events.dispatchEvent(
+          createTypedCustomEvent("fetch-ready", void 0)
+        );
         queue.push({ type: "delete", parameter, rootUrl });
       }
     };
@@ -49604,13 +49607,13 @@
   };
 
   // source/drafts-view/drafts-dialog-title.module.css
-  var cssText10 = ":root {\n    --text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907: #333;\n    --secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5: #666;\n    --primary-color-85c1441dbfb39319542140435119ee442e85721a: #007bff;\n    --background-color-light-d3c1d427ed49fb706d5d27ecc2e2bf2144145b42: #f8f9fa;\n    --border-color-0c4d1205af0f0747deb181610984f634e079550a: #dee2e6;\n}\n\n.container-3a7a3702be125e4c680a49a5f6b48a0685a89213 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-0c4d1205af0f0747deb181610984f634e079550a);\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    gap: 10px;\n}\n\n.main-title-af45008e5a094765ba2506a66e549cf852ebcfe3 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-b5fcef7c2e75eaff3726c619b44d741fa4d5c907);\n    flex-grow: 1;\n}\n\n.counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96 {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-688b6add60d632c00d21958cec42f53996ebfce5);\n    white-space: nowrap;\n}\n\n.saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-85c1441dbfb39319542140435119ee442e85721a);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-63a9f84c54405daf885a836d67ad7091a22f7475 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
+  var cssText10 = ":root {\n    --text-color-72891e27c4be96d14189e116d63164b3c124d0b2: #333;\n    --secondary-text-color-7a91c249f033f30ca5e3373ba8d5a5be5e513950: #666;\n    --primary-color-f4da39ae472836e726e801fdbd2584a794d587a2: #007bff;\n    --background-color-light-f5e238dfa9f227867c9df67d418b78b06dcdeb49: #f8f9fa;\n    --border-color-99c66e679200c4a76de7eda8cbe6df51f84107ed: #dee2e6;\n}\n\n.container-0b5ad8d458d21aa7e8a2e928d1b2f56e1df7b006 {\n    display: flex;\n    align-items: center;\n    border-bottom: 1px solid var(--border-color-99c66e679200c4a76de7eda8cbe6df51f84107ed);\n    color: var(--text-color-72891e27c4be96d14189e116d63164b3c124d0b2);\n    gap: 10px;\n}\n\n.main-title-2f738babb8b7d6ea8af9098181dec007ee90c452 {\n    font-size: 1.2em;\n    font-weight: bold;\n    color: var(--text-color-72891e27c4be96d14189e116d63164b3c124d0b2);\n    flex-grow: 1;\n}\n\n.count-label-fac7b8318dbe14e4c2d9a5a236326ec2ab6bbc7b {\n    font-size: 0.9em;\n    color: var(--secondary-text-color-7a91c249f033f30ca5e3373ba8d5a5be5e513950);\n    white-space: nowrap;\n}\n\n.saving-indicator-ab7ecf6f3626eaff554fc7a11e1e57398573df70 {\n    display: none;\n    font-size: 0.85em;\n    color: var(--primary-color-f4da39ae472836e726e801fdbd2584a794d587a2);\n    margin-left: auto;\n    white-space: nowrap;\n}\n\n.saving-feb79cfa8af42072af0400fd1986141450e84314 {\n    display: unset;\n    animation: blink 0.7s infinite steps(1);\n}\n\n@keyframes blink {\n    0% {\n        opacity: 0;\n    }\n\n    50% {\n        opacity: 1;\n    }\n\n    100% {\n        opacity: 0;\n    }\n}\n";
   var drafts_dialog_title_default = {
-    container: "container-3a7a3702be125e4c680a49a5f6b48a0685a89213",
-    "main-title": "main-title-af45008e5a094765ba2506a66e549cf852ebcfe3",
-    "counts-element": "counts-element-a73b5f2718d6c70b187f8e1f493bdd0805dd7a96",
-    "saving-indicator": "saving-indicator-ff5b78079ff0b8a9d57fab5841cd61fa1bbc9865",
-    saving: "saving-63a9f84c54405daf885a836d67ad7091a22f7475"
+    container: "container-0b5ad8d458d21aa7e8a2e928d1b2f56e1df7b006",
+    "main-title": "main-title-2f738babb8b7d6ea8af9098181dec007ee90c452",
+    "count-label": "count-label-fac7b8318dbe14e4c2d9a5a236326ec2ab6bbc7b",
+    "saving-indicator": "saving-indicator-ab7ecf6f3626eaff554fc7a11e1e57398573df70",
+    saving: "saving-feb79cfa8af42072af0400fd1986141450e84314"
   };
 
   // source/drafts-view/indicator.module.css
@@ -49699,18 +49702,18 @@
   var setStyle12 = styleSetter(cssText10);
   function createDraftsDialogTitle({ title }) {
     setStyle12();
-    const mainTitleElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["main-title"], children: title });
-    const countsElement = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["counts-element"] });
+    const mainTitle = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["main-title"], children: title });
+    const countLabel = /* @__PURE__ */ jsx("div", { class: drafts_dialog_title_default["count-label"] });
     const indicator = createIndicator();
     const element = /* @__PURE__ */ jsxs("div", { class: drafts_dialog_title_default.container, children: [
-      mainTitleElement,
-      countsElement,
+      mainTitle,
+      countLabel,
       indicator.element
     ] });
-    let busyCount = 0;
+    const taskIds = /* @__PURE__ */ new Set();
     let currentIsBusy;
-    function changeIsBusy() {
-      const isBusy = 0 < busyCount;
+    function updateIndicator() {
+      const isBusy = 0 < taskIds.size;
       if (currentIsBusy !== isBusy) {
         if (isBusy) {
           indicator.start();
@@ -49727,18 +49730,18 @@
         filteredCount
       }) {
         if (filteredCount !== totalCount) {
-          countsElement.innerText = `${filteredCount}/${totalCount}\u4EF6`;
+          countLabel.innerText = `${filteredCount}/${totalCount}\u4EF6`;
         } else {
-          countsElement.innerText = `${totalCount}\u4EF6`;
+          countLabel.innerText = `${totalCount}\u4EF6`;
         }
       },
-      pushIsBusy() {
-        busyCount++;
-        changeIsBusy();
+      markAsBusy(key) {
+        taskIds.add(key);
+        updateIndicator();
       },
-      popIsBusy() {
-        busyCount--;
-        changeIsBusy();
+      remarkAsBusy(key) {
+        taskIds.delete(key);
+        updateIndicator();
       }
     };
   }
@@ -49797,13 +49800,22 @@
     draftList.events.addEventListener("count-changed", (e) => {
       title.setCounts(e.detail);
     });
-    draftList.events.addEventListener("filter-start", () => title.pushIsBusy());
-    draftList.events.addEventListener("filter-end", () => title.popIsBusy());
-    page.remote.events.addEventListener(
-      "fetch-start",
-      () => title.pushIsBusy()
+    draftList.events.addEventListener(
+      "filter-start",
+      () => title.markAsBusy(draftList)
     );
-    page.remote.events.addEventListener("fetch-end", () => title.popIsBusy());
+    draftList.events.addEventListener(
+      "filter-end",
+      () => title.remarkAsBusy(draftList)
+    );
+    page.remote.events.addEventListener(
+      "fetch-ready",
+      () => title.markAsBusy(page.remote)
+    );
+    page.remote.events.addEventListener(
+      "fetch-done",
+      () => title.remarkAsBusy(page.remote)
+    );
     page.drafts.events.addEventListener(
       "drafts-updated",
       (e) => draftList.setDrafts(e.detail)
@@ -49822,7 +49834,7 @@
     const scheduler = createScheduler(signal);
     const page = {
       records: await openRecords(),
-      remote: createRemote(handleAsyncError, 2e3),
+      remote: createRemote(handleAsyncError, 1e3),
       styleElement: document.createElement("style"),
       map,
       defaultAsyncErrorHandler: handleAsyncError,
