@@ -5,22 +5,20 @@ const setStyle = styleSetter(cssText);
 
 export function createDraftsDialogTitle({ title }: { title: string }) {
     setStyle();
-    const mainTitleElement = (
-        <div class={classNames["main-title"]}>{title}</div>
-    );
-    const countsElement = <div class={classNames["counts-element"]}></div>;
+    const mainTitle = <div class={classNames["main-title"]}>{title}</div>;
+    const countLabel = <div class={classNames["count-label"]}></div>;
     const indicator = createIndicator();
     const element = (
         <div class={classNames.container}>
-            {mainTitleElement}
-            {countsElement}
+            {mainTitle}
+            {countLabel}
             {indicator.element}
         </div>
     );
-    let busyCount = 0;
+    const taskIds = new Set<unknown>();
     let currentIsBusy: boolean | undefined;
-    function changeIsBusy() {
-        const isBusy = 0 < busyCount;
+    function updateIndicator() {
+        const isBusy = 0 < taskIds.size;
         if (currentIsBusy !== isBusy) {
             if (isBusy) {
                 indicator.start();
@@ -40,18 +38,18 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
             filteredCount: number;
         }) {
             if (filteredCount !== totalCount) {
-                countsElement.innerText = `${filteredCount}/${totalCount}件`;
+                countLabel.innerText = `${filteredCount}/${totalCount}件`;
             } else {
-                countsElement.innerText = `${totalCount}件`;
+                countLabel.innerText = `${totalCount}件`;
             }
         },
-        pushIsBusy() {
-            busyCount++;
-            changeIsBusy();
+        markAsBusy(key: unknown) {
+            taskIds.add(key);
+            updateIndicator();
         },
-        popIsBusy() {
-            busyCount--;
-            changeIsBusy();
+        remarkAsBusy(key: unknown) {
+            taskIds.delete(key);
+            updateIndicator();
         },
     };
 }

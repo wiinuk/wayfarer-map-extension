@@ -21,7 +21,7 @@
     flex-grow: 1;
 }
 
-.counts-element {
+.count-label {
     font-size: 0.9em;
     color: var(--secondary-text-color);
     white-space: nowrap;
