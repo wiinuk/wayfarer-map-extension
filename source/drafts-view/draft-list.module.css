@@ -192,30 +192,17 @@
     background-color: var(--primary-color-dark);
 }
 
-.map-button,
-.create-button,
-.delete-button,
-.template-button,
-.config-button {
+.button {
     margin-top: 8px;
     padding: 8px 12px;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-}
-
-.map-button,
-.create-button,
-.template-button,
-.config-button {
     background-color: var(--primary-color);
 }
 
-.map-button:hover,
-.create-button:hover,
-.template-button:hover,
-.config-button:hover {
+.button:hover {
     background-color: var(--primary-color-dark);
 }
 

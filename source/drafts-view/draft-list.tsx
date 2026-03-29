@@ -387,7 +387,10 @@ export async function createDraftList({
         location: "description",
         handleAsyncError,
         ruleSource: activeRuleSource,
-        classNames: [classNames["detail-description"], classNames["input-field"]],
+        classNames: [
+            classNames["detail-description"],
+            classNames["input-field"],
+        ],
     });
 
     const noteEditor = createSimpleEditor({
@@ -440,7 +443,7 @@ export async function createDraftList({
 
     const openMapButton = (
         <button
-            class={classNames["open-map-button"]}
+            classList={[classNames.button, classNames["open-map-button"]]}
             onclick={() => {
                 if (selectedDraft) {
                     const coord = selectedDraft.coordinates[0];
@@ -454,7 +457,7 @@ export async function createDraftList({
 
     const deleteButton = (
         <button
-            class={classNames["delete-button"]}
+            classList={[classNames.button, classNames["delete-button"]]}
             onclick={() => {
                 if (!selectedDraft) {
                     alert("削除する候補が選択されていません。");
@@ -472,7 +475,7 @@ export async function createDraftList({
     );
     const mapButton = (
         <button
-            class={classNames["map-button"]}
+            class={classNames.button}
             onclick={() => {
                 if (selectedDraft) {
                     overlay.map.setCenter(selectedDraft.coordinates[0]);
@@ -485,7 +488,7 @@ export async function createDraftList({
 
     const templateToggleButton = (
         <button
-            class={classNames["template-button"]}
+            classList={[classNames.button, classNames["template-button"]]}
             onclick={() => {
                 if (!selectedDraft) return;
 
@@ -548,6 +551,12 @@ export async function createDraftList({
             <details class={classNames["detail-pane"]} open={true}>
                 <summary class={classNames["detail-summary"]}>
                     {detailName}
+                    <button
+                        class={classNames.button}
+                        onclick={() => addNewDraft()}
+                    >
+                        📍新規作成
+                    </button>
                 </summary>
                 <div class={classNames["detail-content-wrapper"]}>
                     {descriptionEditor.element}
@@ -556,17 +565,11 @@ export async function createDraftList({
                         {detailCoordinates}
                         {openMapButton}
                     </div>
-                    <button
-                        class={classNames["create-button"]}
-                        onclick={() => addNewDraft()}
-                    >
-                        📍新規作成
-                    </button>
                     {deleteButton}
                     {mapButton}
                     {templateToggleButton}
                     <button
-                        class={classNames["config-button"]}
+                        class={classNames.button}
                         onclick={() => {
                             configDialog.show();
                         }}
