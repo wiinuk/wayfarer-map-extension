@@ -6,6 +6,8 @@
     --background-color-light: #f8f9fa;
     --primary-color: #2563eb;
     --primary-color-dark: #0056b3;
+
+    --open-duration: 0.3s;
 }
 
 .container {
@@ -103,17 +105,45 @@
     display: none;
 }
 
-/* 閉じたときのアイコン */
+/* 開閉時の背景アニメーション */
+.detail-summary {
+    background-color: rgb(from var(--selected-background-color) r g b / 0.2);
+    transition: background-color var(--open-duration);
+}
+.detail-pane[open] > .detail-summary {
+    background-color: transparent;
+}
+
+/* 開閉時のアイコンアニメーション */
 .detail-summary::after {
-    content: "+";
+    content: "∨";
     font-size: 1.5em;
     line-height: 1;
     margin-left: 10px;
+    transition: transform var(--open-duration);
+    transform: rotate(90deg);
 }
 
-/* 開いたときのアイコン */
 .detail-pane[open] > .detail-summary::after {
-    content: "−";
+    transform: rotate(0deg);
+}
+
+/* 開閉時の内容アニメーション */
+:root {
+    interpolate-size: allow-keywords;
+}
+
+.detail-pane::details-content {
+    overflow: clip;
+    transition:
+        content-visibility var(--open-duration) allow-discrete,
+        block-size var(--open-duration) ease,
+        opacity var(--open-duration) ease-in-out 0.3s;
+}
+
+.detail-pane:not([open])::details-content {
+    block-size: 0;
+    opacity: 0;
 }
 
 .detail-name {
