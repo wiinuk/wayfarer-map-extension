@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.6-dev
+// @version      0.5.6
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -23166,32 +23166,29 @@
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText3 = ':root {\n    --border-color-9807e262e6b129278560f047b3162a87bb703c0a: #ccc;\n    --selected-background-color-6ab6afa018394a019180123dbb89698bad5fae78: #2563eb;\n    --selected-text-color-f22b8289af3bae7d31400ba7ef4a5b83de85228c: #fff;\n    --text-muted-7b8877bbe32b2e1ff7ff3f5ff7145070e444f6e0: #666;\n    --background-color-light-423bd9a7706094251e92b8e77dcc649fbb9c7388: #f8f9fa;\n    --primary-color-c67ed2f44ef6aa7bb90304547e73821bf5b1461a: #2563eb;\n    --primary-color-dark-e6d1f837f257f425c14af0b4afee4f456e4411a6: #0056b3;\n}\n\n.container-f8a1e204b626f6e4e9a8b87dcede184f059d4f53 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-1212975ba8d5d2ae786b8ffde3fff7ca9310dfad {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-1212975ba8d5d2ae786b8ffde3fff7ca9310dfad[class~="cm-focused"] {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n    outline: none;\n}\n\n.input-error-e04d021a9aa7130143c487e2ae2b96cf9613e876 {\n    border: 1px solid red;\n}\n\n.list-container-ccd2a5aee0072148781571ece03a7d74fb2b307a {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-9807e262e6b129278560f047b3162a87bb703c0a);\n    border-radius: 4px;\n}\n\n.item-3079a3545e938ce001117f5da9908826758cc038 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-9807e262e6b129278560f047b3162a87bb703c0a);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-3079a3545e938ce001117f5da9908826758cc038:last-child {\n    border-bottom: none;\n}\n\n.item-3079a3545e938ce001117f5da9908826758cc038.selected-1cbd79aa7ef583b2b22aac6b3a392a5e6093567e {\n    background-color: var(--selected-background-color-6ab6afa018394a019180123dbb89698bad5fae78);\n    color: var(--selected-text-color-f22b8289af3bae7d31400ba7ef4a5b83de85228c);\n}\n\n.item-3079a3545e938ce001117f5da9908826758cc038.selected-1cbd79aa7ef583b2b22aac6b3a392a5e6093567e .item-note-18178d0b582e200c6cf12a3684dfcb7be74effa8 {\n    color: var(--selected-text-color-f22b8289af3bae7d31400ba7ef4a5b83de85228c);\n}\n\n.item-name-b270494f32027383505ef56253f36dd3fed1c16c {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-18178d0b582e200c6cf12a3684dfcb7be74effa8 {\n    font-size: 0.8em;\n    color: var(--text-muted-7b8877bbe32b2e1ff7ff3f5ff7145070e444f6e0);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-96dd14e20b352f321a6a4391a2ecc00040e9ee97 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-9807e262e6b129278560f047b3162a87bb703c0a);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-172566d1aaf4bcf95f46b62c78fe99aa93153781 {\n    list-style: none;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-172566d1aaf4bcf95f46b62c78fe99aa93153781::-webkit-details-marker {\n    display: none;\n}\n\n/* \u9589\u3058\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-summary-172566d1aaf4bcf95f46b62c78fe99aa93153781::after {\n    content: "+";\n    font-size: 1.5em;\n    line-height: 1;\n    margin-left: 10px;\n}\n\n/* \u958B\u3044\u305F\u3068\u304D\u306E\u30A2\u30A4\u30B3\u30F3 */\n.detail-pane-96dd14e20b352f321a6a4391a2ecc00040e9ee97[open] > .detail-summary-172566d1aaf4bcf95f46b62c78fe99aa93153781::after {\n    content: "\u2212";\n}\n\n.detail-name-ccbcdfe8f9715dffadfcf20f6eadd5f1db1e33f7 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-description-46b6eeba8db2676c2230095a1a43c79f92edf2a5,\n.detail-note-8acaa25611d23fc7f7ad264c023564b596e7adfe,\n.detail-coordinates-f014ed29904d1a5f0b8386145ab324199e0e3c49 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-4eb5941a1a84396f47fb3e057821ceae595e8ab4 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.coordinates-container-ca57c9ad84cef5c892c7a54bded0ec89e5924955 {\n    display: flex;\n    width: 100%;\n    gap: 4px;\n}\n\n.detail-coordinates-f014ed29904d1a5f0b8386145ab324199e0e3c49 {\n    flex-grow: 1;\n}\n\n.open-map-button-c2bc82ebc52313668d447ef982ea007d3742115f {\n    padding: 4px;\n    border: none;\n    border-radius: 4px;\n    background-color: var(--primary-color-c67ed2f44ef6aa7bb90304547e73821bf5b1461a);\n    color: white;\n    cursor: pointer;\n}\n\n.open-map-button-c2bc82ebc52313668d447ef982ea007d3742115f:hover {\n    background-color: var(--primary-color-dark-e6d1f837f257f425c14af0b4afee4f456e4411a6);\n}\n\n.map-button-4a193116ece5947540b1f40eda43c6d9567fb6f5,\n.create-button-1c119272013af3d1350b73a9e5e63102a59c33c8,\n.delete-button-dfcf86268531a034055b679bc7005eddf36d64c5,\n.template-button-7e798245e312ccff5de1d72448a0cc6933682e24,\n.config-button-35da4cb70728d324dd71e5baeda8bc55478bf9f9 {\n    margin-top: 8px;\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.map-button-4a193116ece5947540b1f40eda43c6d9567fb6f5,\n.create-button-1c119272013af3d1350b73a9e5e63102a59c33c8,\n.template-button-7e798245e312ccff5de1d72448a0cc6933682e24,\n.config-button-35da4cb70728d324dd71e5baeda8bc55478bf9f9 {\n    background-color: var(--primary-color-c67ed2f44ef6aa7bb90304547e73821bf5b1461a);\n}\n\n.map-button-4a193116ece5947540b1f40eda43c6d9567fb6f5:hover,\n.create-button-1c119272013af3d1350b73a9e5e63102a59c33c8:hover,\n.template-button-7e798245e312ccff5de1d72448a0cc6933682e24:hover,\n.config-button-35da4cb70728d324dd71e5baeda8bc55478bf9f9:hover {\n    background-color: var(--primary-color-dark-e6d1f837f257f425c14af0b4afee4f456e4411a6);\n}\n\n.delete-button-dfcf86268531a034055b679bc7005eddf36d64c5 {\n    background-color: #dc3545;\n}\n\n.delete-button-dfcf86268531a034055b679bc7005eddf36d64c5:hover {\n    background-color: #c82333;\n}\n\n.template-button-7e798245e312ccff5de1d72448a0cc6933682e24.is-template-60d9c713ab1630ca55a5768452d6a5c44a82db02 {\n    background-color: #28a745;\n}\n\n.template-button-7e798245e312ccff5de1d72448a0cc6933682e24.is-template-60d9c713ab1630ca55a5768452d6a5c44a82db02:hover {\n    background-color: #218838;\n}\n\n.action-link-22ec0a7da7f18341a22ef92f90387cca09188d19 {\n    color: blue;\n    text-decoration: underline;\n    cursor: pointer;\n}\n\n.input-error-e04d021a9aa7130143c487e2ae2b96cf9613e876 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
+  var cssText3 = ':root {\n    --border-color-8ae9c7c17a138daed3129a0fe0103aab3adc4c37: #ccc;\n    --selected-background-color-0757bb54d50f6cf49d7942514ee7ef8a1d88371a: #2563eb;\n    --selected-text-color-82fd3020a3a296cb939ccc2616e66cde7e1a8435: #fff;\n    --text-muted-642d88121089ac6b4de167f0e4d4a048dbb96aa1: #666;\n    --background-color-light-afca6628e8232c56f80e53cc6adda2edcda710fc: #f8f9fa;\n    --primary-color-79fdee1bc27b9b00abe18a73046bde56343a8cae: #2563eb;\n    --primary-color-dark-60f8b1c3251f38dbedcb0445f903dc666eb11fa4: #0056b3;\n\n    --open-duration-ba1f359506d10747d6a01d4df3210711134aa775: 0.3s;\n}\n\n.container-7c4aa53e7e42f49a5d022aeda86ce28194cff66d {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-82701c481bfbd2ebf17253a00313bf12e116bac3 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-82701c481bfbd2ebf17253a00313bf12e116bac3:focus,\n.input-field-82701c481bfbd2ebf17253a00313bf12e116bac3[class~="cm-focused"] {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n    outline: none;\n}\n\n.input-error-93ea15c6a3554124ac61b0b4a78620e770402f76 {\n    border: 1px solid red;\n}\n\n.list-container-64cb6f072241b0203127b25e11fb56e1e3e2a481 {\n    flex-grow: 1;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-8ae9c7c17a138daed3129a0fe0103aab3adc4c37);\n    border-radius: 4px;\n}\n\n.item-e978ce5ef2f260cf9a0b64775ff2e02bdcc7aaec {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-8ae9c7c17a138daed3129a0fe0103aab3adc4c37);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n}\n\n.item-e978ce5ef2f260cf9a0b64775ff2e02bdcc7aaec:last-child {\n    border-bottom: none;\n}\n\n.item-e978ce5ef2f260cf9a0b64775ff2e02bdcc7aaec.selected-09bd43ebcd9ab581bea34803e8490b4ade18ef9a {\n    background-color: var(--selected-background-color-0757bb54d50f6cf49d7942514ee7ef8a1d88371a);\n    color: var(--selected-text-color-82fd3020a3a296cb939ccc2616e66cde7e1a8435);\n}\n\n.item-e978ce5ef2f260cf9a0b64775ff2e02bdcc7aaec.selected-09bd43ebcd9ab581bea34803e8490b4ade18ef9a .item-note-fa809eb4a2a01cd28b790b72a73bf45335e796aa {\n    color: var(--selected-text-color-82fd3020a3a296cb939ccc2616e66cde7e1a8435);\n}\n\n.item-name-82193f33803993257fbd29a31370e7f62e6db0dd {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-fa809eb4a2a01cd28b790b72a73bf45335e796aa {\n    font-size: 0.8em;\n    color: var(--text-muted-642d88121089ac6b4de167f0e4d4a048dbb96aa1);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-8ae9c7c17a138daed3129a0fe0103aab3adc4c37);\n    border-radius: 4px;\n    flex-shrink: 0;\n    padding: 0;\n}\n\n.detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121 {\n    list-style: none;\n    display: flex;\n    gap: 8px;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121::-webkit-details-marker {\n    display: none;\n}\n\n/* \u958B\u9589\u6642\u306E\u80CC\u666F\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121 {\n    background-color: rgb(from var(--selected-background-color-0757bb54d50f6cf49d7942514ee7ef8a1d88371a) r g b / 0.2);\n    transition: background-color var(--open-duration-ba1f359506d10747d6a01d4df3210711134aa775);\n}\n.detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8[open] > .detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121 {\n    background-color: transparent;\n}\n\n/* \u958B\u9589\u6642\u306E\u30A2\u30A4\u30B3\u30F3\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121::after {\n    content: "\u2228";\n    font-size: 1.5em;\n    line-height: 1;\n    transition: transform var(--open-duration-ba1f359506d10747d6a01d4df3210711134aa775);\n    transform: rotate(-90deg);\n}\n\n.detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8[open] > .detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121::after {\n    transform: rotate(0deg);\n}\n\n/* \u958B\u9589\u6642\u306E\u5185\u5BB9\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n:root {\n    interpolate-size: allow-keywords;\n}\n\n.detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8::details-content {\n    overflow: clip;\n    transition:\n        content-visibility var(--open-duration-ba1f359506d10747d6a01d4df3210711134aa775) allow-discrete,\n        block-size var(--open-duration-ba1f359506d10747d6a01d4df3210711134aa775) ease,\n        opacity var(--open-duration-ba1f359506d10747d6a01d4df3210711134aa775) ease-in-out 0.3s;\n}\n\n.detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8:not([open])::details-content {\n    block-size: 0;\n    opacity: 0;\n}\n\n.detail-name-d3f9b7cc031d7ef92f8f5b3f5172747bc9778710 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n}\n\n.detail-b8e99c2ad053f0629fc41a3d1021a81a452433f9 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-f600250414ec3c4ff632aa5574049421155d4fee {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.coordinates-container-f03c7782cc704d028e72486cbc8a2a2d49cceb0f {\n    display: flex;\n    width: 100%;\n    gap: 8px;\n}\n\n.detail-b8e99c2ad053f0629fc41a3d1021a81a452433f9.detail-coordinates-61d4bc4744a80179dcab11359d937db263d8ce0a {\n    flex-grow: 1;\n    width: auto;\n}\n\n.open-map-button-6187121282a71d0a6e2873a4137f5560230b4755 {\n    padding: 4px;\n    border: none;\n    border-radius: 4px;\n    background-color: var(--primary-color-79fdee1bc27b9b00abe18a73046bde56343a8cae);\n    color: white;\n    cursor: pointer;\n}\n\n.open-map-button-6187121282a71d0a6e2873a4137f5560230b4755:hover {\n    background-color: var(--primary-color-dark-60f8b1c3251f38dbedcb0445f903dc666eb11fa4);\n}\n\n.button-8be02cd6f2fe0b297381cbf3e285c28a0cd2078f {\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n    background-color: var(--primary-color-79fdee1bc27b9b00abe18a73046bde56343a8cae);\n}\n\n.button-8be02cd6f2fe0b297381cbf3e285c28a0cd2078f:hover {\n    background-color: var(--primary-color-dark-60f8b1c3251f38dbedcb0445f903dc666eb11fa4);\n}\n\n.button-8be02cd6f2fe0b297381cbf3e285c28a0cd2078f {\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.delete-button-84fd86c437c6460bad1e73174132f95affdc31f6 {\n    background-color: #dc3545;\n}\n\n.delete-button-84fd86c437c6460bad1e73174132f95affdc31f6:hover {\n    background-color: #c82333;\n}\n\n.template-button-3592e87af190143c5c2d17eadc8b6953d1df3de6.is-template-e09ce9306cb3a4d232fbf3663b7a2294ca72c198 {\n    background-color: #28a745;\n}\n\n.template-button-3592e87af190143c5c2d17eadc8b6953d1df3de6.is-template-e09ce9306cb3a4d232fbf3663b7a2294ca72c198:hover {\n    background-color: #218838;\n}\n\n.action-link-16d1f7809df4202101794ea4d8203b48bc11617e {\n    color: blue;\n    text-decoration: underline;\n    cursor: pointer;\n}\n\n.input-error-93ea15c6a3554124ac61b0b4a78620e770402f76 {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
   var draft_list_default = {
-    container: "container-f8a1e204b626f6e4e9a8b87dcede184f059d4f53",
-    "input-field": "input-field-1212975ba8d5d2ae786b8ffde3fff7ca9310dfad",
-    "input-error": "input-error-e04d021a9aa7130143c487e2ae2b96cf9613e876",
-    "list-container": "list-container-ccd2a5aee0072148781571ece03a7d74fb2b307a",
-    item: "item-3079a3545e938ce001117f5da9908826758cc038",
-    selected: "selected-1cbd79aa7ef583b2b22aac6b3a392a5e6093567e",
-    "item-note": "item-note-18178d0b582e200c6cf12a3684dfcb7be74effa8",
-    "item-name": "item-name-b270494f32027383505ef56253f36dd3fed1c16c",
-    "detail-pane": "detail-pane-96dd14e20b352f321a6a4391a2ecc00040e9ee97",
-    "detail-summary": "detail-summary-172566d1aaf4bcf95f46b62c78fe99aa93153781",
-    "detail-name": "detail-name-ccbcdfe8f9715dffadfcf20f6eadd5f1db1e33f7",
-    "detail-description": "detail-description-46b6eeba8db2676c2230095a1a43c79f92edf2a5",
-    "detail-note": "detail-note-8acaa25611d23fc7f7ad264c023564b596e7adfe",
-    "detail-coordinates": "detail-coordinates-f014ed29904d1a5f0b8386145ab324199e0e3c49",
-    "detail-content-wrapper": "detail-content-wrapper-4eb5941a1a84396f47fb3e057821ceae595e8ab4",
-    "coordinates-container": "coordinates-container-ca57c9ad84cef5c892c7a54bded0ec89e5924955",
-    "open-map-button": "open-map-button-c2bc82ebc52313668d447ef982ea007d3742115f",
-    "map-button": "map-button-4a193116ece5947540b1f40eda43c6d9567fb6f5",
-    "create-button": "create-button-1c119272013af3d1350b73a9e5e63102a59c33c8",
-    "delete-button": "delete-button-dfcf86268531a034055b679bc7005eddf36d64c5",
-    "template-button": "template-button-7e798245e312ccff5de1d72448a0cc6933682e24",
-    "config-button": "config-button-35da4cb70728d324dd71e5baeda8bc55478bf9f9",
-    "is-template": "is-template-60d9c713ab1630ca55a5768452d6a5c44a82db02",
-    "action-link": "action-link-22ec0a7da7f18341a22ef92f90387cca09188d19"
+    container: "container-7c4aa53e7e42f49a5d022aeda86ce28194cff66d",
+    "input-field": "input-field-82701c481bfbd2ebf17253a00313bf12e116bac3",
+    "input-error": "input-error-93ea15c6a3554124ac61b0b4a78620e770402f76",
+    "list-container": "list-container-64cb6f072241b0203127b25e11fb56e1e3e2a481",
+    item: "item-e978ce5ef2f260cf9a0b64775ff2e02bdcc7aaec",
+    selected: "selected-09bd43ebcd9ab581bea34803e8490b4ade18ef9a",
+    "item-note": "item-note-fa809eb4a2a01cd28b790b72a73bf45335e796aa",
+    "item-name": "item-name-82193f33803993257fbd29a31370e7f62e6db0dd",
+    "detail-pane": "detail-pane-93b6e4ea3234865f984eed9820a8415e8df276a8",
+    "detail-summary": "detail-summary-c02c650d91c1ea45ed1a0a4902b270e50b3cc121",
+    "detail-name": "detail-name-d3f9b7cc031d7ef92f8f5b3f5172747bc9778710",
+    detail: "detail-b8e99c2ad053f0629fc41a3d1021a81a452433f9",
+    "detail-content-wrapper": "detail-content-wrapper-f600250414ec3c4ff632aa5574049421155d4fee",
+    "coordinates-container": "coordinates-container-f03c7782cc704d028e72486cbc8a2a2d49cceb0f",
+    "detail-coordinates": "detail-coordinates-61d4bc4744a80179dcab11359d937db263d8ce0a",
+    "open-map-button": "open-map-button-6187121282a71d0a6e2873a4137f5560230b4755",
+    button: "button-8be02cd6f2fe0b297381cbf3e285c28a0cd2078f",
+    "delete-button": "delete-button-84fd86c437c6460bad1e73174132f95affdc31f6",
+    "template-button": "template-button-3592e87af190143c5c2d17eadc8b6953d1df3de6",
+    "is-template": "is-template-e09ce9306cb3a4d232fbf3663b7a2294ca72c198",
+    "action-link": "action-link-16d1f7809df4202101794ea4d8203b48bc11617e"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -49238,7 +49235,7 @@
       location: "description",
       handleAsyncError: handleAsyncError2,
       ruleSource: activeRuleSource,
-      classNames: [draft_list_default["detail-description"], draft_list_default["input-field"]]
+      classNames: [draft_list_default["detail"], draft_list_default["input-field"]]
     });
     const noteEditor = createSimpleEditor({
       initialDoc: "",
@@ -49250,7 +49247,7 @@
       location: "note",
       handleAsyncError: handleAsyncError2,
       ruleSource: activeRuleSource,
-      classNames: [draft_list_default["detail-note"], draft_list_default["input-field"]]
+      classNames: [draft_list_default["detail"], draft_list_default["input-field"]]
     });
     const detailCoordinates = /* @__PURE__ */ jsx(
       "input",
@@ -49258,6 +49255,7 @@
         type: "text",
         value: "",
         classList: [
+          draft_list_default["detail"],
           draft_list_default["detail-coordinates"],
           draft_list_default["input-field"]
         ],
@@ -49287,7 +49285,7 @@
     const openMapButton = /* @__PURE__ */ jsx(
       "button",
       {
-        class: draft_list_default["open-map-button"],
+        classList: [draft_list_default.button, draft_list_default["open-map-button"]],
         onclick: () => {
           if (selectedDraft) {
             const coord = selectedDraft.coordinates[0];
@@ -49300,7 +49298,7 @@
     const deleteButton = /* @__PURE__ */ jsx(
       "button",
       {
-        class: draft_list_default["delete-button"],
+        classList: [draft_list_default.button, draft_list_default["delete-button"]],
         onclick: () => {
           if (!selectedDraft) {
             alert("\u524A\u9664\u3059\u308B\u5019\u88DC\u304C\u9078\u629E\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002");
@@ -49316,7 +49314,7 @@
     const mapButton = /* @__PURE__ */ jsx(
       "button",
       {
-        class: draft_list_default["map-button"],
+        class: draft_list_default.button,
         onclick: () => {
           if (selectedDraft) {
             overlay.map.setCenter(selectedDraft.coordinates[0]);
@@ -49328,7 +49326,7 @@
     const templateToggleButton = /* @__PURE__ */ jsx(
       "button",
       {
-        class: draft_list_default["template-button"],
+        classList: [draft_list_default.button, draft_list_default["template-button"]],
         onclick: () => {
           if (!selectedDraft) return;
           if (getDraftIsTemplate(selectedDraft)) {
@@ -49379,8 +49377,18 @@
     const container = /* @__PURE__ */ jsxs("div", { class: draft_list_default["container"], children: [
       filterInput.element,
       /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"], children: virtualListElement }),
-      /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], open: true, children: [
-        /* @__PURE__ */ jsx("summary", { class: draft_list_default["detail-summary"], children: detailName }),
+      /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], children: [
+        /* @__PURE__ */ jsxs("summary", { class: draft_list_default["detail-summary"], children: [
+          detailName,
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              class: draft_list_default.button,
+              onclick: () => addNewDraft(),
+              children: "\u{1F4CD}\u65B0\u898F\u4F5C\u6210"
+            }
+          )
+        ] }),
         /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
           descriptionEditor.element,
           noteEditor.element,
@@ -49388,21 +49396,13 @@
             detailCoordinates,
             openMapButton
           ] }),
-          /* @__PURE__ */ jsx(
-            "button",
-            {
-              class: draft_list_default["create-button"],
-              onclick: () => addNewDraft(),
-              children: "\u{1F4CD}\u65B0\u898F\u4F5C\u6210"
-            }
-          ),
           deleteButton,
           mapButton,
           templateToggleButton,
           /* @__PURE__ */ jsx(
             "button",
             {
-              class: draft_list_default["config-button"],
+              class: draft_list_default.button,
               onclick: () => {
                 configDialog.show();
               },
