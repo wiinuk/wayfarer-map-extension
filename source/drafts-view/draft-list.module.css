@@ -23,6 +23,7 @@
     outline: none;
 }
 
+.input-field:focus,
 .input-field[class~="cm-focused"] {
     background-color: #ffffff;
     border-color: #cbd5e1;
@@ -94,6 +95,7 @@
 .detail-summary {
     list-style: none;
     display: flex;
+    gap: 8px;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
@@ -119,9 +121,8 @@
     content: "∨";
     font-size: 1.5em;
     line-height: 1;
-    margin-left: 10px;
     transition: transform var(--open-duration);
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
 }
 
 .detail-pane[open] > .detail-summary::after {
@@ -153,9 +154,7 @@
     margin-bottom: 0;
 }
 
-.detail-description,
-.detail-note,
-.detail-coordinates {
+.detail {
     margin-bottom: 4px;
     padding: 0;
     width: 100%;
@@ -172,11 +171,12 @@
 .coordinates-container {
     display: flex;
     width: 100%;
-    gap: 4px;
+    gap: 8px;
 }
 
-.detail-coordinates {
+.detail.detail-coordinates {
     flex-grow: 1;
+    width: auto;
 }
 
 .open-map-button {
@@ -193,7 +193,6 @@
 }
 
 .button {
-    margin-top: 8px;
     padding: 8px 12px;
     color: white;
     border: none;
@@ -204,6 +203,12 @@
 
 .button:hover {
     background-color: var(--primary-color-dark);
+}
+
+.button {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .delete-button {

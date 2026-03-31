@@ -387,10 +387,7 @@ export async function createDraftList({
         location: "description",
         handleAsyncError,
         ruleSource: activeRuleSource,
-        classNames: [
-            classNames["detail-description"],
-            classNames["input-field"],
-        ],
+        classNames: [classNames["detail"], classNames["input-field"]],
     });
 
     const noteEditor = createSimpleEditor({
@@ -403,7 +400,7 @@ export async function createDraftList({
         location: "note",
         handleAsyncError,
         ruleSource: activeRuleSource,
-        classNames: [classNames["detail-note"], classNames["input-field"]],
+        classNames: [classNames["detail"], classNames["input-field"]],
     });
 
     const detailCoordinates = (
@@ -411,6 +408,7 @@ export async function createDraftList({
             type="text"
             value=""
             classList={[
+                classNames["detail"],
                 classNames["detail-coordinates"],
                 classNames["input-field"],
             ]}
@@ -548,7 +546,7 @@ export async function createDraftList({
         <div class={classNames["container"]}>
             {filterInput.element}
             <div class={classNames["list-container"]}>{virtualListElement}</div>
-            <details class={classNames["detail-pane"]} open={true}>
+            <details class={classNames["detail-pane"]}>
                 <summary class={classNames["detail-summary"]}>
                     {detailName}
                     <button
