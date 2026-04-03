@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.6
+// @version      0.5.7
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -48958,7 +48958,7 @@
     const extensions = [
       EditorView.lineWrapping,
       history2(),
-      keymap.of([...defaultKeymap, indentWithTab, ...historyKeymap]),
+      keymap.of([...defaultKeymap, ...historyKeymap]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && hasUserChange(update)) {
           options.onInput(update.state.doc.toString());
