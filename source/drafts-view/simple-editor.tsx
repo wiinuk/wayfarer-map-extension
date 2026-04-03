@@ -339,7 +339,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     const extensions: Extension[] = [
         EditorView.lineWrapping,
         history(),
-        keymap.of([...defaultKeymap, indentWithTab, ...historyKeymap]),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.updateListener.of((update) => {
             if (update.docChanged && hasUserChange(update)) {
                 options.onInput(update.state.doc.toString());
