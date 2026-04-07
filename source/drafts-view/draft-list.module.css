@@ -55,6 +55,7 @@
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+    overflow: hidden;
 }
 
 .item:last-child {
@@ -152,6 +153,7 @@
     font-size: 1.2em;
     font-weight: bold;
     margin-bottom: 0;
+    min-width: 0;
 }
 
 .detail {

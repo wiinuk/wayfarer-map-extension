@@ -22,7 +22,7 @@
     z-index: 10000;
     border-radius: var(--border-radius);
 
-    overflow: auto;
+    overflow: hidden;
     resize: both;
     display: flex;
     flex-direction: column;
@@ -70,6 +70,9 @@
     justify-content: center;
     flex-grow: 1;
 
+    min-width: 0;
+    overflow: hidden;
+
     cursor: move;
 }
 
@@ -112,7 +115,7 @@
 
 .inner-container {
     flex-grow: 1;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .minimized .inner-container {

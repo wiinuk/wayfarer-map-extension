@@ -19,6 +19,7 @@
     font-weight: bold;
     color: var(--text-color);
     flex-grow: 1;
+    white-space: nowrap;
 }
 
 .count-label {
