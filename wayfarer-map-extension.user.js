@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.5.7
+// @version      0.6.0
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -49746,6 +49746,25 @@
     };
   }
 
+  // source/wfmap-modifier.tsx
+  async function modifyWfMapLocation(signal) {
+    const controls = await awaitElement(
+      () => document.getElementById("wfmapmods-topright-controls"),
+      { signal }
+    );
+    const locationButton = await awaitElement(
+      () => document.getElementById("wfmapmods-geo-btn"),
+      {
+        signal
+      }
+    );
+    locationButton.removeAttribute("id");
+    locationButton.classList.add("wfmapmods-iconmenu-toggle");
+    locationButton.querySelector("img")?.classList.add("wfmapmods-iconmenu-icon");
+    const menuButton = /* @__PURE__ */ jsx("div", { class: "wfmapmods-iconmenu", children: locationButton });
+    controls.append(menuButton);
+  }
+
   // source/setup.ts
   var localConfigKey = "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
   function handleAsyncError(reason) {
@@ -49848,7 +49867,10 @@
     await setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
     await setupDraftManagerDialog(page);
-    await setupDraftsOverlay(page.drafts, local, scheduler);
+    await Promise.all([
+      setupDraftsOverlay(page.drafts, local, scheduler),
+      modifyWfMapLocation(signal)
+    ]);
   }
   function setup() {
     const cancel = new AbortController();

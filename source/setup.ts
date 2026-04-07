@@ -1,4 +1,4 @@
-// spell-checker: ignore pois Comlink
+// spell-checker: ignore pois Comlink wfmap
 import { injectGcsListener } from "./gcs";
 import {
     createPoisOverlay,
@@ -25,6 +25,7 @@ import jaDictionary from "./locales/ja.json";
 import { createRemote, type Remote } from "./remote";
 import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 import { createScheduler } from "./dom-extensions";
+import { modifyWfMapLocation } from "./wfmap-modifier";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -166,7 +167,11 @@ async function asyncSetup(signal: AbortSignal) {
     await setupWorkerRecorder(events);
     setupPoiRecordOverlay(page);
     await setupDraftManagerDialog(page);
-    await setupDraftsOverlay(page.drafts, local, scheduler);
+
+    await Promise.all([
+        setupDraftsOverlay(page.drafts, local, scheduler),
+        modifyWfMapLocation(signal),
+    ]);
 }
 
 export function setup() {
