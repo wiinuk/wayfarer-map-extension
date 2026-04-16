@@ -22,7 +22,7 @@
     z-index: 10000;
     border-radius: var(--border-radius);
 
-    overflow: hidden;
+    overflow: auto;
     resize: both;
     display: flex;
     flex-direction: column;
@@ -115,7 +115,7 @@
 
 .inner-container {
     flex-grow: 1;
-    overflow: hidden;
+    overflow: auto;
 }
 
 .minimized .inner-container {

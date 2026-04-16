@@ -37,6 +37,7 @@
 
 .list-container {
     flex-grow: 1;
+    flex-shrink: 5;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -89,8 +90,12 @@
     box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border-color);
     border-radius: 4px;
+    overflow: auto;
     flex-shrink: 0;
     padding: 0;
+}
+.detail-pane[open] {
+    flex-shrink: 1;
 }
 
 .detail-summary {
@@ -140,7 +145,7 @@
     transition:
         content-visibility var(--open-duration) allow-discrete,
         block-size var(--open-duration) ease,
-        opacity var(--open-duration) ease-in-out 0.3s;
+        opacity var(--open-duration) ease-in-out;
 }
 
 .detail-pane:not([open])::details-content {
