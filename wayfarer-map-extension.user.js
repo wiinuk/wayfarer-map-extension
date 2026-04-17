@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.6.2
+// @version      0.6.3
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -48719,6 +48719,12 @@
     const url = `https://photos.google.com/search/${encodeURIComponent(text)}`;
     return openUrlAction(url);
   }
+  function simpleQuote(text) {
+    return '"' + text.replaceAll('"', "") + '"';
+  }
+  function searchPhotosQuoted(text) {
+    return searchPhotos(simpleQuote(text));
+  }
   function searchMap(text) {
     return done({
       ...parseCoordinates(text)[0],
@@ -48728,6 +48734,9 @@
   }
   function copyAction(text) {
     return done(createCopyCommand(text));
+  }
+  function copyQuoted(text) {
+    return copyAction(simpleQuote(text));
   }
   function ruleAsValue(x) {
     return x;
@@ -48779,6 +48788,10 @@
         execute: searchPhotos,
         description: "search in Google Photos"
       }),
+      "search-photos-quoted": actionAsValue({
+        execute: searchPhotosQuoted,
+        description: 'search in Google Photos ( with "" )'
+      }),
       "search-map": actionAsValue({
         execute: searchMap,
         description: "search on Google Maps"
@@ -48786,6 +48799,10 @@
       copy: actionAsValue({
         execute: copyAction,
         description: "copy text to clipboard"
+      }),
+      "copy-quoted": actionAsValue({
+        execute: copyQuoted,
+        description: 'copy text to clipboard ( with "" )'
       }),
       open: actionAsValue({
         execute: openUrlAction,
