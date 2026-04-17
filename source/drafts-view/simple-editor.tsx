@@ -55,6 +55,14 @@ function searchPhotos(text: string): Effective<ActionCommand> {
     return openUrlAction(url);
 }
 
+function simpleQuote(text: string) {
+    return '"' + text.replaceAll('"', "") + '"';
+}
+
+function searchPhotosQuoted(text: string): Effective<ActionCommand> {
+    return searchPhotos(simpleQuote(text));
+}
+
 function searchMap(text: string): Effective<ActionCommand> {
     return done({
         ...parseCoordinates(text)[0]!,
@@ -65,6 +73,10 @@ function searchMap(text: string): Effective<ActionCommand> {
 
 function copyAction(text: string): Effective<ActionCommand> {
     return done(createCopyCommand(text));
+}
+
+function copyQuoted(text: string): Effective<ActionCommand> {
+    return copyAction(simpleQuote(text));
 }
 
 function ruleAsValue(x: ActionRule) {
@@ -123,6 +135,10 @@ export function createSalGlobals() {
             execute: searchPhotos,
             description: "search in Google Photos",
         }),
+        "search-photos-quoted": actionAsValue({
+            execute: searchPhotosQuoted,
+            description: 'search in Google Photos ( with "" )',
+        }),
         "search-map": actionAsValue({
             execute: searchMap,
             description: "search on Google Maps",
@@ -130,6 +146,10 @@ export function createSalGlobals() {
         copy: actionAsValue({
             execute: copyAction,
             description: "copy text to clipboard",
+        }),
+        "copy-quoted": actionAsValue({
+            execute: copyQuoted,
+            description: 'copy text to clipboard ( with "" )',
         }),
         open: actionAsValue({
             execute: openUrlAction,
