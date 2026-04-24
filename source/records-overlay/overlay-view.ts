@@ -16,6 +16,7 @@ import {
     wrapCancellable,
 } from "../standard-extensions";
 import * as Bounds from "../bounds";
+import { debugWorkerForMainThread } from "../worker-debug";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -64,6 +65,7 @@ async function createDrawerForWorker(
             overlayWorker,
         );
 
+    debugWorkerForMainThread(workerApi, "canvas-renderer");
     const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
 

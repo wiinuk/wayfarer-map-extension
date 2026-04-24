@@ -6,15 +6,14 @@ import {
 } from "./typed-event-target";
 import { pageEventTypes, type PageEventMap } from "./page-events";
 import { createGcsSchemas } from "./gcs-schema";
+import { createDebugWorkerThreadApi } from "./worker-debug";
 
-export interface WorkerApi {
-    onGcsReceived(url: string, responseText: string): void;
-}
+export type WorkerApi = Awaited<ReturnType<typeof exposeWorkerApi>>;
 
 function handleAsyncError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
 }
-async function setup() {
+async function exposeWorkerApi() {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
     const mainAPI = Comlink.wrap<import("./setup").MainApi>(
@@ -35,12 +34,14 @@ async function setup() {
     );
 
     const handler = await createGcsHandler(schemas, events, handleAsyncError);
-    const api: WorkerApi = {
-        onGcsReceived(url, responseText) {
+    const api = {
+        ...createDebugWorkerThreadApi(),
+        onGcsReceived(url: string, responseText: string) {
             handler(new URL(url), responseText);
         },
     };
     Comlink.expose(api);
+    return api;
 }
 
-setup().catch(handleAsyncError);
+exposeWorkerApi().catch(handleAsyncError);

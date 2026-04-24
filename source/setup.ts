@@ -26,6 +26,7 @@ import { createRemote, type Remote } from "./remote";
 import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 import { createScheduler } from "./dom-extensions";
 import { modifyWfMapLocation } from "./wfmap-modifier";
+import { debugWorkerForMainThread } from "./worker-debug";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -84,6 +85,7 @@ async function setupWorkerRecorder(events: PageEventTarget) {
 
     const workerApi =
         Comlink.wrap<import("./poi-records.worker").WorkerApi>(recordsWorker);
+    debugWorkerForMainThread(workerApi, "poi-recorder");
 
     injectGcsListener((url, responseText) => {
         events.dispatchEvent(createTypedCustomEvent("gcs-received", undefined));

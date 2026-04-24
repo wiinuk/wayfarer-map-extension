@@ -5,6 +5,7 @@ import {
     type Viewport,
 } from "./canvas-renderer";
 import { createCancellableWorker } from "../standard-extensions";
+import { createDebugWorkerThreadApi } from "../worker-debug";
 
 function handleError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -45,6 +46,7 @@ async function exposeWorkerApi() {
                 updateRecordsCanvasRenderer(views, viewport, signal),
         );
         const api = {
+            ...createDebugWorkerThreadApi(),
             draw,
             drawCancel,
         };
