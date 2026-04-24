@@ -6,6 +6,8 @@ export function debugWorkerForMainThread(
     },
     name: string,
 ) {
+    alert(`debug start: ${name}`);
+
     const lockId = "worker_lock_" + Math.random();
 
     void (async () => {
