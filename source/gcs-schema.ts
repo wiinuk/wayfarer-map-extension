@@ -90,7 +90,6 @@ export async function createGcsSchemas() {
     const DatumSchema = z.object({
         metadata: MetadataSchema,
         pois: z.array(PoiSchema),
-        clusters: z.array(z.unknown()),
     });
 
     const ResultSchema = z.object({
