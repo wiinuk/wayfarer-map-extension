@@ -20,12 +20,7 @@ import {
     StateEffect,
     Transaction,
 } from "@codemirror/state";
-import {
-    defaultKeymap,
-    history,
-    historyKeymap,
-    indentWithTab,
-} from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { LatLng } from "../s2";
 import { parseCoordinates } from "../geometry";
 import classNames from "./draft-list.module.css";
