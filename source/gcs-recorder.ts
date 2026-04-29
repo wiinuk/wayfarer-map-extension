@@ -60,16 +60,13 @@ async function parseGcsLogs(
         await scheduler.yield();
         const response = schemas.parseGcsResponse(responseText);
         if (response.captcha || !response.result.success) continue;
+        if (response.result.cellLevel !== gcsCellLevel) continue;
 
         const bound = schemas.parseGcsQueries(queries);
         bounds.push(Bounds.fromSwNe(bound.sw, bound.ne));
 
-        for (const { metadata, pois } of response.result.data) {
-            if (metadata.s2CellLevel !== gcsCellLevel) continue;
-
-            const cell = tokenToCell(
-                metadata.s2CellId as S2Token<GcsCellLevel>,
-            );
+        for (const { cellId: token, pois } of response.result.data) {
+            const cell = tokenToCell(token as S2Token<GcsCellLevel>);
             const cellId = cell.toString();
             cells.set(cellId, { pois, cell });
         }

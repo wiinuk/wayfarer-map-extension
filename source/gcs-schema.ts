@@ -88,7 +88,9 @@ export async function createGcsSchemas() {
     });
 
     const DatumSchema = z.object({
-        metadata: MetadataSchema,
+        /** e.g. `"60188bf94"` */
+        cellId: z.string(),
+        metadata: MetadataSchema.optional(),
         pois: z.array(PoiSchema),
     });
 
