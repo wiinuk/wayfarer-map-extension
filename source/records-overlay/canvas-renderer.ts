@@ -321,7 +321,7 @@ async function updateCell14Views(
         addCell17Bounds(renderer, stat14, views.cellMeshBuilder);
     }
     addCell14Bound(renderer, views, stat14);
-    if (14 < zoom && zoom < 18) {
+    if (14 < zoom && zoom < 16) {
         addCell14PoiCircles(renderer, port, stat14, views.circlesBuilder);
     }
     if (14 < zoom) {
