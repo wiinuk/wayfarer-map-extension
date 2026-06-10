@@ -6,7 +6,8 @@
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
 // @match        https://wayfarer.nianticlabs.com/new/mapview?*
-// @grant        none
+// @grant        GM.xmlhttpRequest
+// @connect      *
 // ==/UserScript==
 
 import { setup } from "./source/setup";

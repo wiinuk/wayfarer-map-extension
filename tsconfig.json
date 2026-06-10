@@ -18,7 +18,7 @@
     },
 
     "resolveJsonModule": true,
-    "types": ["node", "google.maps"]
+    "types": ["node", "google.maps", "tampermonkey"]
   },
   "exclude": ["node_modules", "**/.private/"],
   "include": ["**/*.ts", "**/*.tsx", "**/*.cjs", "**/*.mjs"]

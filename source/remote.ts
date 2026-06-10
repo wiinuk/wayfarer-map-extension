@@ -21,7 +21,7 @@ interface FetchJsonpOptions {
     jsonp?: string;
     signal?: AbortSignal;
 }
-export async function fetchJsonp(
+async function fetchJsonp(
     url: string,
     options: FetchJsonpOptions = {},
 ): Promise<unknown> {
@@ -66,12 +66,7 @@ export async function fetchJsonp(
         };
 
         const u = new URL(url, window.location.href);
-        if (data) {
-            for (const [key, value] of Object.entries(data)) {
-                if (value == null) continue;
-                u.searchParams.append(key, String(value));
-            }
-        }
+        if (data) appendSearchParams(u, data);
         u.searchParams.append(jsonp, callbackName);
 
         script.onerror = () => {
@@ -99,6 +94,48 @@ interface RemoteOptions {
     signal?: AbortSignal;
     rootUrl: string;
 }
+
+function appendSearchParams(url: URL, data: Readonly<Record<string, unknown>>) {
+    for (const [key, value] of Object.entries(data)) {
+        if (value == null) continue;
+        url.searchParams.append(key, String(value));
+    }
+}
+
+async function fetchGM(
+    url: string | URL,
+    data: Readonly<Record<string, unknown>>,
+    options?: RemoteOptions,
+): Promise<unknown> {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
+
+    url = new URL(url, window.location.href);
+    appendSearchParams(url, data);
+
+    const requestPromise = GM.xmlHttpRequest({
+        url,
+        method: "GET",
+        responseType: "json",
+    });
+
+    const onAbort = () => requestPromise.abort();
+    signal?.addEventListener("abort", onAbort);
+
+    try {
+        const response = await requestPromise;
+        if (response.status < 200 || response.status >= 300) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.response;
+    } catch (error) {
+        signal?.throwIfAborted();
+        throw error;
+    } finally {
+        signal?.removeEventListener("abort", onAbort);
+    }
+}
+
 async function fetchGet<T extends GetApiSchema>(
     schema: T,
     parameters: z.infer<T["parameter"]>,
@@ -111,11 +148,17 @@ async function fetchGet<T extends GetApiSchema>(
     console.debug(
         `-> ${JSON.stringify([method, url, JSON.stringify(parameters)])}`,
     );
-    const responseData = await fetchJsonp(url, {
-        jsonp: "jsonp-callback",
-        data: parameters,
-        signal: options.signal,
-    });
+
+    let responseData;
+    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest !== "undefined") {
+        responseData = await fetchGM(url, parameters, options);
+    } else {
+        responseData = await fetchJsonp(url, {
+            jsonp: "jsonp-callback",
+            data: parameters,
+            signal: options.signal,
+        });
+    }
 
     console.debug(`<- ${JSON.stringify([method, url, responseData])}`);
 
