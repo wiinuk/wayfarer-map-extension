@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.6.7
+// @version      0.6.8
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
 // @match        https://wayfarer.nianticlabs.com/new/mapview?*
-// @grant        none
+// @grant        GM.xmlhttpRequest
+// @connect      *
 // ==/UserScript==
 "use strict";
 (() => {
@@ -22302,12 +22303,7 @@
         resolve(data2);
       };
       const u = new URL(url, window.location.href);
-      if (data) {
-        for (const [key, value] of Object.entries(data)) {
-          if (value == null) continue;
-          u.searchParams.append(key, String(value));
-        }
-      }
+      if (data) appendSearchParams(u, data);
       u.searchParams.append(jsonp, callbackName);
       script.onerror = () => {
         cleanup();
@@ -22327,6 +22323,37 @@
       return "RemoteError";
     }
   };
+  function appendSearchParams(url, data) {
+    for (const [key, value] of Object.entries(data)) {
+      if (value == null) continue;
+      url.searchParams.append(key, String(value));
+    }
+  }
+  async function fetchGM(url, data, options) {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
+    url = new URL(url, window.location.href);
+    appendSearchParams(url, data);
+    const requestPromise = GM.xmlHttpRequest({
+      url,
+      method: "GET",
+      responseType: "json"
+    });
+    const onAbort = () => requestPromise.abort();
+    signal?.addEventListener("abort", onAbort);
+    try {
+      const response = await requestPromise;
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.response;
+    } catch (error) {
+      signal?.throwIfAborted();
+      throw error;
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+  }
   async function fetchGet(schema, parameters, options) {
     const rootUrl = options.rootUrl;
     const method = "GET";
@@ -22334,11 +22361,16 @@
     console.debug(
       `-> ${JSON.stringify([method, url, JSON.stringify(parameters)])}`
     );
-    const responseData = await fetchJsonp(url, {
-      jsonp: "jsonp-callback",
-      data: parameters,
-      signal: options.signal
-    });
+    let responseData;
+    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest !== "undefined") {
+      responseData = await fetchGM(url, parameters, options);
+    } else {
+      responseData = await fetchJsonp(url, {
+        jsonp: "jsonp-callback",
+        data: parameters,
+        signal: options.signal
+      });
+    }
     console.debug(`<- ${JSON.stringify([method, url, responseData])}`);
     const result = jsonResponseSchema.parse(responseData);
     const { type } = result;
