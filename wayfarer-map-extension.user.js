@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.6.9
+// @version      0.6.10
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.nianticlabs.com/new/mapview
@@ -22697,7 +22697,7 @@
           tooClose: selectedCircleBase,
           powerSpotTooClose: {
             ...selectedCircleBase,
-            radius: 40,
+            radius: 22,
             strokeColor: "rgb(247, 158, 255)",
             strokeWeight: 1
           },
