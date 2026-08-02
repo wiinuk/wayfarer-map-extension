@@ -135,7 +135,7 @@ function createDefaultViewConfig(): ViewConfig {
                 tooClose: selectedCircleBase,
                 powerSpotTooClose: {
                     ...selectedCircleBase,
-                    radius: 40,
+                    radius: 22,
                     strokeColor: "rgb(247, 158, 255)",
                     strokeWeight: 1,
                 },
