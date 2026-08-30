@@ -198,6 +198,12 @@ type DeleteParameter = z.infer<typeof interfaces.deleteRoute.parameter>;
 export interface RemoteEventMap {
     "fetch-ready": undefined;
     "fetch-done": undefined;
+    "fetch-error": {
+        message: string;
+        operation: "set" | "delete";
+        routeId: string;
+        rootUrl: string;
+    };
 }
 export interface Remote {
     events: TypedEventTarget<RemoteEventMap>;
@@ -209,6 +215,7 @@ export function createRemote(
     intervalMs: number,
 ): Remote {
     const events = createTypedEventTarget<RemoteEventMap>();
+    const notifiedRouteIds = new Set<string>();
     type Command =
         | {
               type: "set";
@@ -221,6 +228,16 @@ export function createRemote(
               rootUrl: string;
           };
 
+    const formatRemoteFailure = (reason: unknown) => {
+        if (reason instanceof RemoteError) {
+            return reason.response.message;
+        }
+        if (reason instanceof Error) {
+            return reason.message;
+        }
+        return "保存先のリモートサービスへの通信に失敗しました。";
+    };
+
     const queue = createAsyncQueue<Command>(
         async (commands) => {
             const map = new Map<string, Command>();
@@ -231,17 +248,39 @@ export function createRemote(
             try {
                 for (const command of map.values()) {
                     const { type, parameter, rootUrl } = command;
-                    switch (type) {
-                        case "set":
-                            await fetchGet(interfaces.setRoute, parameter, {
-                                rootUrl,
-                            });
-                            break;
-                        case "delete":
-                            await fetchGet(interfaces.deleteRoute, parameter, {
-                                rootUrl,
-                            });
-                            break;
+                    try {
+                        switch (type) {
+                            case "set":
+                                await fetchGet(interfaces.setRoute, parameter, {
+                                    rootUrl,
+                                });
+                                break;
+                            case "delete":
+                                await fetchGet(
+                                    interfaces.deleteRoute,
+                                    parameter,
+                                    {
+                                        rootUrl,
+                                    },
+                                );
+                                break;
+                        }
+                        notifiedRouteIds.delete(parameter["route-id"]);
+                    } catch (error) {
+                        const routeId = parameter["route-id"];
+                        if (routeId && !notifiedRouteIds.has(routeId)) {
+                            notifiedRouteIds.add(routeId);
+                            const message = `保存に失敗しました。再試行を続けます。\n${formatRemoteFailure(error)}`;
+                            events.dispatchEvent(
+                                createTypedCustomEvent("fetch-error", {
+                                    message,
+                                    operation: type,
+                                    routeId,
+                                    rootUrl,
+                                }),
+                            );
+                        }
+                        throw error;
                     }
                     await sleep(intervalMs);
                 }
