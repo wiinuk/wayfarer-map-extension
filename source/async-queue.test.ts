@@ -33,14 +33,20 @@ describe("createRemote", () => {
         vi.unstubAllGlobals();
     });
 
-    it("保存失敗時にユーザーへ通知すること", async () => {
-        const alertMock = vi.fn();
-        vi.stubGlobal("alert", alertMock);
+    it("保存失敗時に fetch-error イベントを発火すること", async () => {
+        const errors: Array<{ message: string; operation: string }> = [];
         vi.stubGlobal("GM", {
             xmlHttpRequest: vi.fn(() => Promise.reject(new Error("network"))),
         });
 
         const remote = createRemote(() => undefined, 0);
+        remote.events.addEventListener("fetch-error", (event) => {
+            errors.push({
+                message: event.detail.message,
+                operation: event.detail.operation,
+            });
+        });
+
         remote.set(
             {
                 type: "route",
@@ -57,8 +63,8 @@ describe("createRemote", () => {
 
         await new Promise((resolve) => setTimeout(resolve, 30));
 
-        expect(alertMock).toHaveBeenCalledWith(
-            expect.stringContaining("Google Drive"),
-        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.operation).toBe("set");
+        expect(errors[0]?.message).toContain("保存に失敗しました");
     });
 });
