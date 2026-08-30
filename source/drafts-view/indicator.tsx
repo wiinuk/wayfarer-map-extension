@@ -5,6 +5,11 @@ const setStyle = styleSetter(cssText);
 export function createIndicator() {
     setStyle();
 
+    const status = (
+        <div class={classNames.status} aria-live="polite" aria-label="status">
+            !
+        </div>
+    );
     const loader = (
         <div class={classNames.loader} aria-label="Communicating">
             <div class={classNames.orb}></div>
@@ -61,6 +66,7 @@ export function createIndicator() {
     }
 
     function startCommunication() {
+        clearError();
         loader.classList.remove(classNames.ending);
         loader.classList.add(classNames.starting);
 
@@ -83,10 +89,33 @@ export function createIndicator() {
         }, 400);
     }
 
+    function setError(message: string) {
+        stopCommunication();
+        status.textContent = "!";
+        status.title = message;
+        status.classList.add(classNames.error);
+        loader.classList.add(classNames.error);
+    }
+
+    function clearError() {
+        status.textContent = "";
+        status.title = "";
+        status.classList.remove(classNames.error);
+        loader.classList.remove(classNames.error);
+    }
+
     stopCommunication();
+    clearError();
     return {
-        element: loader,
+        element: (
+            <div class={classNames.container}>
+                {loader}
+                {status}
+            </div>
+        ),
         start: startCommunication,
         stop: stopCommunication,
+        setError,
+        clearError,
     };
 }

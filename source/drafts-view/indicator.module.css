@@ -1,7 +1,49 @@
+.container {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1rem;
+    min-height: 1rem;
+}
+
 .loader {
     position: relative;
     width: 1rem;
     height: 1rem;
+}
+
+.status {
+    display: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    background: #dc2626;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 0.9rem;
+    text-align: center;
+    user-select: none;
+}
+
+.error {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    filter: saturate(1.1);
+}
+
+.error .orb {
+    background: radial-gradient(
+        circle,
+        rgba(239, 68, 68, 0.95) 0%,
+        rgba(248, 113, 113, 0.75) 45%,
+        rgba(254, 226, 226, 0.25) 75%,
+        transparent 100%
+    );
+    box-shadow:
+        0 0 4px rgba(239, 68, 68, 0.8),
+        0 0 8px rgba(248, 113, 113, 0.5);
 }
 
 .orb {
