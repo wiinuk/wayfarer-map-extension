@@ -16,9 +16,28 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
         </div>
     );
     const taskIds = new Set<unknown>();
+    const errorMessages = new Map<unknown, string>();
     let currentIsBusy: boolean | undefined;
+    let currentErrorMessage: string | undefined;
+
     function updateIndicator() {
         const isBusy = 0 < taskIds.size;
+        const errorMessage = errorMessages.values().next().value;
+
+        if (errorMessage != null) {
+            if (currentErrorMessage !== errorMessage) {
+                indicator.setError(errorMessage);
+                currentErrorMessage = errorMessage;
+            }
+            currentIsBusy = isBusy;
+            return;
+        }
+
+        if (currentErrorMessage != null) {
+            indicator.clearError();
+            currentErrorMessage = undefined;
+        }
+
         if (currentIsBusy !== isBusy) {
             if (isBusy) {
                 indicator.start();
@@ -49,6 +68,14 @@ export function createDraftsDialogTitle({ title }: { title: string }) {
         },
         remarkAsBusy(key: unknown) {
             taskIds.delete(key);
+            updateIndicator();
+        },
+        markAsError(key: unknown, message: string) {
+            errorMessages.set(key, message);
+            updateIndicator();
+        },
+        remarkAsError(key: unknown) {
+            errorMessages.delete(key);
             updateIndicator();
         },
     };
