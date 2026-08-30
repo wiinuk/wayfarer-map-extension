@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.1
+// @version      0.7.2
 // @description  A user script that extends the official Niantic Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
