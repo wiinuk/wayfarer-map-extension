@@ -131,9 +131,13 @@ async function setupDraftManagerDialog(page: PageResource) {
     page.remote.events.addEventListener("fetch-ready", () =>
         title.markAsBusy(page.remote),
     );
-    page.remote.events.addEventListener("fetch-done", () =>
-        title.remarkAsBusy(page.remote),
-    );
+    page.remote.events.addEventListener("fetch-done", () => {
+        title.remarkAsBusy(page.remote);
+        title.remarkAsError(page.remote);
+    });
+    page.remote.events.addEventListener("fetch-error", (e) => {
+        title.markAsError(page.remote, e.detail.message);
+    });
 
     page.drafts.events.addEventListener("drafts-updated", (e) =>
         draftList.setDrafts(e.detail),
