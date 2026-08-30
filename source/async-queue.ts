@@ -38,6 +38,10 @@ export function createAsyncQueue<T>(
 
         try {
             await consume(batch);
+        } catch (error) {
+            queue.unshift(...batch);
+            handleAsyncError(error);
+            throw error;
         } finally {
             processing = false;
 
