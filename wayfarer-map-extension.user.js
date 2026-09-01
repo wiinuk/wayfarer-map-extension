@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.3
+// @version      0.7.4
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
@@ -23957,17 +23957,20 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
+  function reachableWithQuery(center, radius) {
+    return {
+      isVisible(d) {
+        const [p2] = d.coordinates;
+        return done(distance(center, p2) <= radius);
+      }
+    };
+  }
   function reachableWith(center, radius) {
     return {
       isIgnorable: false,
       initialize() {
         const p1 = { lat: center[0], lng: center[1] };
-        return done({
-          isVisible(d) {
-            const [p2] = d.coordinates;
-            return done(distance(p1, p2) <= radius);
-          }
-        });
+        return done(reachableWithQuery(p1, radius));
       }
     };
   }
@@ -24114,6 +24117,13 @@ ${formatRemoteFailure(error)}`;
             distanceMeter
           )
         );
+      }),
+      reachable: builderAsValue({
+        isIgnorable: false,
+        *initialize(e) {
+          const p = yield* e.getUserLocation();
+          return reachableWithQuery(p, 1e4);
+        }
       }),
       duplicated,
       hasStopInCell17: duplicated,
@@ -26082,7 +26092,7 @@ ${formatRemoteFailure(error)}`;
     const cell17Id = getCellId(cell.getLatLng(), 17);
     return stat.cell17s.get(cell17Id);
   }
-  function createEnvironment(records, drafts) {
+  function createEnvironment(records, drafts, geo) {
     const resource = {
       records,
       cell14DraftsLazy: cached(() => buildDraftMap(drafts)),
@@ -26099,10 +26109,7 @@ ${formatRemoteFailure(error)}`;
     const minFreshDate = Date.now() - duration * 1e3;
     return {
       getUserLocation() {
-        return done({
-          lat: 0,
-          lng: 0
-        });
+        return awaitPromise(geo.getLatLng());
       },
       *getCell14Stat(d) {
         const signal = yield* getCancel();
@@ -26137,7 +26144,7 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
-  async function filterDrafts(records, drafts, source, signal, reportError) {
+  async function filterDrafts(records, drafts, geo, source, signal, reportError) {
     const queryGlobals = createStandardQueries();
     const effective = evaluateExpression(
       source,
@@ -26146,7 +26153,7 @@ ${formatRemoteFailure(error)}`;
     );
     const filter = await forceAsPromise(effective, signal);
     const queryBuilder = filter;
-    const environment = createEnvironment(records, drafts);
+    const environment = createEnvironment(records, drafts, geo);
     const query = await forceAsPromise(
       queryBuilder.initialize(environment),
       signal
@@ -49126,6 +49133,7 @@ ${formatRemoteFailure(error)}`;
     remote,
     records,
     local,
+    geo,
     handleAsyncError: handleAsyncError2
   }) {
     setStyle10();
@@ -49626,6 +49634,7 @@ ${formatRemoteFailure(error)}`;
         filteredDrafts = await filterDrafts(
           records,
           allDrafts,
+          geo,
           query,
           signal,
           (message, start, stop) => {
@@ -49926,6 +49935,30 @@ ${formatRemoteFailure(error)}`;
     controls.append(menuButton);
   }
 
+  // source/geo.ts
+  function createGeoForBrowser() {
+    return {
+      getLatLng() {
+        return new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+            },
+            reject,
+            {
+              enableHighAccuracy: true,
+              timeout: 5e3,
+              maximumAge: 0
+            }
+          );
+        });
+      }
+    };
+  }
+
   // source/setup.ts
   var localConfigKey = "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
   function handleAsyncError(reason) {
@@ -49966,6 +49999,7 @@ ${formatRemoteFailure(error)}`;
       overlay: page.drafts,
       remote: page.remote,
       records: page.records,
+      geo: page.geo,
       local: page.local,
       handleAsyncError
     });
@@ -50022,6 +50056,7 @@ ${formatRemoteFailure(error)}`;
       map,
       defaultAsyncErrorHandler: handleAsyncError,
       overlay: await createPoisOverlay(map, handleAsyncError),
+      geo: createGeoForBrowser(),
       events,
       local,
       drafts: createDraftsOverlay(map, handleAsyncError),
