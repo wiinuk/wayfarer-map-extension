@@ -1,18 +1,15 @@
 // spell-checker: ignore jsxs
 
-type KnownElementTagNameMap = HTMLElementTagNameMap &
-    SVGElementTagNameMap &
-    FragmentTagNameMap;
+type KnownElementTagNameMap = HTMLElementTagNameMap & FragmentTagNameMap;
 
 interface FragmentTagNameMap {
     [Fragment]: DocumentFragment;
 }
 
 type EventHandlers<T> = {
-    [K in keyof T as K extends `on${string}`
-        ? K
-        : never]?: T[K] extends // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((this: any, ev: infer E) => any) | null
+    [K in keyof T as K extends `on${string}` ? K : never]?: T[K] extends  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        | ((this: any, ev: infer E) => any)
+        | null
         ? (ev: E) => void
         : never;
 };
