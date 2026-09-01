@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.2
-// @description  A user script that extends the official Niantic Wayfarer map.
+// @version      0.7.3
+// @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
 // @match        https://wayfarer.scopely.com/new/mapview?*
@@ -49104,12 +49104,21 @@ ${formatRemoteFailure(error)}`;
   function isAndroid2() {
     return /android/i.test(navigator.userAgent);
   }
-  function openGoogleMaps2({ lat, lng }, title) {
-    const url = isAndroid2() ? (
+  function getGoogleMapsUrl({ lat, lng }, title) {
+    return isAndroid2() ? (
       // &z=${zoom}
       `intent://0,0?q=${lat},${lng}%20(${encodeURIComponent(title)})#Intent;scheme=geo;package=com.google.android.apps.maps;end`
     ) : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    window.open(url, "_blank");
+  }
+  function getNewDraftUrl({ lat, lng }, title) {
+    const payload = {
+      lat,
+      lng,
+      title,
+      description: "",
+      statement: ""
+    };
+    return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
   }
   var setStyle10 = styleSetter(cssText3);
   async function createDraftList({
@@ -49369,16 +49378,21 @@ ${formatRemoteFailure(error)}`;
         onfocus: (event) => event.target.select()
       }
     );
-    const openMapButton = /* @__PURE__ */ jsx(
-      "button",
+    const openNewDraftButton = /* @__PURE__ */ jsx(
+      "a",
       {
         classList: [draft_list_default.button, draft_list_default["open-map-button"]],
-        onclick: () => {
-          if (selectedDraft) {
-            const coord = selectedDraft.coordinates[0];
-            openGoogleMaps2(coord, selectedDraft.name);
-          }
-        },
+        target: "_blank",
+        rel: "noopener noreferrer",
+        children: "\u270D\uFE0F"
+      }
+    );
+    const openMapButton = /* @__PURE__ */ jsx(
+      "a",
+      {
+        classList: [draft_list_default.button, draft_list_default["open-map-button"]],
+        target: "_blank",
+        rel: "noopener noreferrer",
         children: "\u{1F5FA}\uFE0F"
       }
     );
@@ -49472,17 +49486,18 @@ ${formatRemoteFailure(error)}`;
             {
               class: draft_list_default.button,
               onclick: () => addNewDraft(),
-              children: "\u{1F4CD}\u65B0\u898F\u4F5C\u6210"
+              children: "\u{1F4CD}\u8FFD\u52A0"
             }
           )
         ] }),
         /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
-          descriptionEditor.element,
-          noteEditor.element,
           /* @__PURE__ */ jsxs("div", { class: draft_list_default["coordinates-container"], children: [
             detailCoordinates,
+            openNewDraftButton,
             openMapButton
           ] }),
+          descriptionEditor.element,
+          noteEditor.element,
           deleteButton,
           mapButton,
           templateToggleButton,
@@ -49546,6 +49561,15 @@ ${formatRemoteFailure(error)}`;
         );
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "";
+        openNewDraftButton.href = getNewDraftUrl(
+          selectedDraft.coordinates[0],
+          selectedDraft.name
+        );
+        openNewDraftButton.style.display = "";
+        openMapButton.href = getGoogleMapsUrl(
+          selectedDraft.coordinates[0],
+          selectedDraft.name
+        );
         openMapButton.style.display = "";
         deleteButton.style.display = "";
         templateToggleButton.style.display = "";
@@ -49565,6 +49589,9 @@ ${formatRemoteFailure(error)}`;
         detailCoordinates.value = "";
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "none";
+        openNewDraftButton.removeAttribute("href");
+        openNewDraftButton.style.display = "none";
+        openMapButton.removeAttribute("href");
         openMapButton.style.display = "none";
         deleteButton.style.display = "none";
         templateToggleButton.style.display = "none";
