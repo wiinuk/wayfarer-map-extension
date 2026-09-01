@@ -27,6 +27,7 @@ import {
     type Cell,
     type Cell14Id,
 } from "../typed-s2cell";
+import type { Geo } from "../geo";
 
 async function getDraftStat(
     source: CellStatisticsSource,
@@ -85,6 +86,7 @@ async function getCell17(
 function createEnvironment(
     records: PoiRecords,
     drafts: readonly Draft[],
+    geo: Geo,
 ): QueryEnvironment {
     const resource: CellStatisticsSource = {
         records,
@@ -102,10 +104,7 @@ function createEnvironment(
     const minFreshDate = Date.now() - duration * 1000;
     return {
         getUserLocation() {
-            return done({
-                lat: 0,
-                lng: 0,
-            });
+            return awaitPromise(geo.getLatLng());
         },
         *getCell14Stat(d) {
             const signal = yield* getCancel();
@@ -144,6 +143,7 @@ function createEnvironment(
 export async function filterDrafts(
     records: PoiRecords,
     drafts: readonly Draft[],
+    geo: Geo,
     source: string,
     signal: AbortSignal,
     reportError: ErrorReporter,
@@ -156,7 +156,7 @@ export async function filterDrafts(
     );
     const filter = await forceAsPromise(effective, signal);
     const queryBuilder = filter as unknown as DraftQueryBuilder;
-    const environment = createEnvironment(records, drafts);
+    const environment = createEnvironment(records, drafts, geo);
     const query = await forceAsPromise(
         queryBuilder.initialize(environment),
         signal,

@@ -167,6 +167,18 @@ function or(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
     };
 }
 
+function reachableWithQuery(
+    center: google.maps.LatLngLiteral,
+    radius: number,
+): DraftQuery {
+    return {
+        isVisible(d: Draft) {
+            const [p2] = d.coordinates;
+            return done(distance(center, p2) <= radius);
+        },
+    };
+}
+
 export function reachableWith(
     center: readonly [number, number],
     radius: number,
@@ -175,12 +187,7 @@ export function reachableWith(
         isIgnorable: false,
         initialize() {
             const p1 = { lat: center[0], lng: center[1] };
-            return done({
-                isVisible(d) {
-                    const [p2] = d.coordinates;
-                    return done(distance(p1, p2) <= radius);
-                },
-            });
+            return done(reachableWithQuery(p1, radius));
         },
     };
 }
@@ -364,6 +371,13 @@ export function createStandardQueries() {
                     distanceMeter as number,
                 ),
             );
+        }),
+        reachable: builderAsValue({
+            isIgnorable: false,
+            *initialize(e) {
+                const p = yield* e.getUserLocation();
+                return reachableWithQuery(p, 10000);
+            },
         }),
         duplicated,
         hasStopInCell17: duplicated,

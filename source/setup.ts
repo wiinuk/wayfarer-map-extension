@@ -26,6 +26,7 @@ import { createRemote, type Remote } from "./remote";
 import { createDraftsDialogTitle } from "./drafts-view/drafts-dialog-title";
 import { createScheduler } from "./dom-extensions";
 import { modifyWfMapLocation } from "./wfmap-modifier";
+import { createGeoForBrowser, type Geo } from "./geo";
 
 const localConfigKey =
     "wayfarer-map-extension-f079bd37-f7cd-4d65-9def-f0888b70b231";
@@ -62,6 +63,7 @@ export interface PageResource {
     readonly local: LocalConfigAccessor;
     readonly defaultDictionary: Dictionary;
     readonly drafts: DraftsOverlay;
+    readonly geo: Geo;
 }
 
 export type MainApi = {
@@ -105,6 +107,7 @@ async function setupDraftManagerDialog(page: PageResource) {
         overlay: page.drafts,
         remote: page.remote,
         records: page.records,
+        geo: page.geo,
         local: page.local,
         handleAsyncError,
     });
@@ -161,6 +164,7 @@ async function asyncSetup(signal: AbortSignal) {
         map,
         defaultAsyncErrorHandler: handleAsyncError,
         overlay: await createPoisOverlay(map, handleAsyncError),
+        geo: createGeoForBrowser(),
         events,
         local,
         drafts: createDraftsOverlay(map, handleAsyncError),

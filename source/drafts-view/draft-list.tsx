@@ -25,12 +25,14 @@ import { createEditor, type SalDiagnostic } from "./query-view/editor";
 import type { PoiRecords } from "../poi-records";
 import { SalEvaluationError } from "../sal/evaluator";
 import { createSimpleEditor } from "./simple-editor";
+import type { Geo } from "../geo";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
     readonly remote: Remote;
     readonly records: PoiRecords;
     readonly local: LocalConfigAccessor;
+    readonly geo: Geo;
     readonly handleAsyncError: (reason: unknown) => void;
 }
 interface DraftListEventMap {
@@ -139,6 +141,7 @@ export async function createDraftList({
     remote,
     records,
     local,
+    geo,
     handleAsyncError,
 }: DraftListOptions) {
     setStyle();
@@ -719,6 +722,7 @@ export async function createDraftList({
                 filteredDrafts = await filterDrafts(
                     records,
                     allDrafts,
+                    geo,
                     query,
                     signal,
                     (message, start, stop) => {
