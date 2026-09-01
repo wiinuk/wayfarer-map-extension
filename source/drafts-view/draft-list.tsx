@@ -114,12 +114,23 @@ function isAndroid(): boolean {
     return /android/i.test(navigator.userAgent);
 }
 
-function openGoogleMaps({ lat, lng }: LatLng, title: string) {
-    const url = isAndroid()
+function getGoogleMapsUrl({ lat, lng }: LatLng, title: string) {
+    return isAndroid()
         ? // &z=${zoom}
           `intent://0,0?q=${lat},${lng}%20(${encodeURIComponent(title)})#Intent;scheme=geo;package=com.google.android.apps.maps;end`
         : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    window.open(url, "_blank");
+}
+
+function getNewDraftUrl({ lat, lng }: LatLng, title: string) {
+    const payload = {
+        lat,
+        lng,
+        title,
+        description: "",
+        statement: "",
+    };
+
+    return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
 }
 
 const setStyle = styleSetter(cssText);
@@ -439,19 +450,25 @@ export async function createDraftList({
         />
     ) as HTMLInputElement;
 
-    const openMapButton = (
-        <button
+    const openNewDraftButton = (
+        <a
             classList={[classNames.button, classNames["open-map-button"]]}
-            onclick={() => {
-                if (selectedDraft) {
-                    const coord = selectedDraft.coordinates[0];
-                    openGoogleMaps(coord, selectedDraft.name);
-                }
-            }}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            ✍️
+        </a>
+    ) as HTMLAnchorElement;
+
+    const openMapButton = (
+        <a
+            classList={[classNames.button, classNames["open-map-button"]]}
+            target="_blank"
+            rel="noopener noreferrer"
         >
             🗺️
-        </button>
-    ) as HTMLButtonElement;
+        </a>
+    ) as HTMLAnchorElement;
 
     const deleteButton = (
         <button
@@ -553,16 +570,17 @@ export async function createDraftList({
                         class={classNames.button}
                         onclick={() => addNewDraft()}
                     >
-                        📍新規作成
+                        📍追加
                     </button>
                 </summary>
                 <div class={classNames["detail-content-wrapper"]}>
-                    {descriptionEditor.element}
-                    {noteEditor.element}
                     <div class={classNames["coordinates-container"]}>
                         {detailCoordinates}
+                        {openNewDraftButton}
                         {openMapButton}
                     </div>
+                    {descriptionEditor.element}
+                    {noteEditor.element}
                     {deleteButton}
                     {mapButton}
                     {templateToggleButton}
@@ -633,6 +651,15 @@ export async function createDraftList({
             );
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
+            openNewDraftButton.href = getNewDraftUrl(
+                selectedDraft.coordinates[0],
+                selectedDraft.name,
+            );
+            openNewDraftButton.style.display = "";
+            openMapButton.href = getGoogleMapsUrl(
+                selectedDraft.coordinates[0],
+                selectedDraft.name,
+            );
             openMapButton.style.display = "";
             deleteButton.style.display = "";
             templateToggleButton.style.display = "";
@@ -652,6 +679,9 @@ export async function createDraftList({
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
+            openNewDraftButton.removeAttribute("href");
+            openNewDraftButton.style.display = "none";
+            openMapButton.removeAttribute("href");
             openMapButton.style.display = "none";
             deleteButton.style.display = "none";
             templateToggleButton.style.display = "none";
