@@ -385,6 +385,7 @@ export async function createDraftList({
                 if (!selectedDraft) return;
                 selectedDraft.name = (event.target as HTMLInputElement).value;
                 overlay.updateDraftTitle(selectedDraft);
+                updateOpenMapLinks();
                 updateVirtualList();
                 saveDraftChanges(selectedDraft);
             }}
@@ -447,6 +448,7 @@ export async function createDraftList({
                     return;
                 }
                 overlay.updateDraftCoordinates(selectedDraft);
+                updateOpenMapLinks();
                 saveDraftChanges(selectedDraft);
             }}
             onfocus={(event) => (event.target as HTMLInputElement).select()}
@@ -472,6 +474,19 @@ export async function createDraftList({
             🗺️
         </a>
     ) as HTMLAnchorElement;
+
+    const updateOpenMapLinks = () => {
+        if (!selectedDraft) return;
+
+        openNewDraftButton.href = getNewDraftUrl(
+            selectedDraft.coordinates[0],
+            selectedDraft.name,
+        );
+        openMapButton.href = getGoogleMapsUrl(
+            selectedDraft.coordinates[0],
+            selectedDraft.name,
+        );
+    };
 
     const deleteButton = (
         <button
@@ -654,15 +669,8 @@ export async function createDraftList({
             );
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
-            openNewDraftButton.href = getNewDraftUrl(
-                selectedDraft.coordinates[0],
-                selectedDraft.name,
-            );
+            updateOpenMapLinks();
             openNewDraftButton.style.display = "";
-            openMapButton.href = getGoogleMapsUrl(
-                selectedDraft.coordinates[0],
-                selectedDraft.name,
-            );
             openMapButton.style.display = "";
             deleteButton.style.display = "";
             templateToggleButton.style.display = "";
