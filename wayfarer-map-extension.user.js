@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.4
+// @version      0.7.5
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
@@ -49324,6 +49324,7 @@ ${formatRemoteFailure(error)}`;
           if (!selectedDraft) return;
           selectedDraft.name = event.target.value;
           overlay.updateDraftTitle(selectedDraft);
+          updateOpenMapLinks();
           updateVirtualList();
           saveDraftChanges(selectedDraft);
         }
@@ -49381,6 +49382,7 @@ ${formatRemoteFailure(error)}`;
             return;
           }
           overlay.updateDraftCoordinates(selectedDraft);
+          updateOpenMapLinks();
           saveDraftChanges(selectedDraft);
         },
         onfocus: (event) => event.target.select()
@@ -49404,6 +49406,17 @@ ${formatRemoteFailure(error)}`;
         children: "\u{1F5FA}\uFE0F"
       }
     );
+    const updateOpenMapLinks = () => {
+      if (!selectedDraft) return;
+      openNewDraftButton.href = getNewDraftUrl(
+        selectedDraft.coordinates[0],
+        selectedDraft.name
+      );
+      openMapButton.href = getGoogleMapsUrl(
+        selectedDraft.coordinates[0],
+        selectedDraft.name
+      );
+    };
     const deleteButton = /* @__PURE__ */ jsx(
       "button",
       {
@@ -49569,15 +49582,8 @@ ${formatRemoteFailure(error)}`;
         );
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "";
-        openNewDraftButton.href = getNewDraftUrl(
-          selectedDraft.coordinates[0],
-          selectedDraft.name
-        );
+        updateOpenMapLinks();
         openNewDraftButton.style.display = "";
-        openMapButton.href = getGoogleMapsUrl(
-          selectedDraft.coordinates[0],
-          selectedDraft.name
-        );
         openMapButton.style.display = "";
         deleteButton.style.display = "";
         templateToggleButton.style.display = "";
