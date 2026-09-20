@@ -135,6 +135,23 @@ function getNewDraftUrl({ lat, lng }: LatLng, title: string) {
     return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
 }
 
+function getUpdateDraftUrl(
+    { lat, lng }: LatLng,
+    title: string,
+    description: string,
+    statement: string,
+) {
+    const payload = {
+        lat,
+        lng,
+        title,
+        description,
+        statement,
+    };
+
+    return `./new/submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
+}
+
 const setStyle = styleSetter(cssText);
 export async function createDraftList({
     overlay,
@@ -461,7 +478,17 @@ export async function createDraftList({
             target="_blank"
             rel="noopener noreferrer"
         >
-            ✍️
+            ➕✍️
+        </a>
+    ) as HTMLAnchorElement;
+
+    const openUpdateDraftButton = (
+        <a
+            classList={[classNames.button, classNames["open-map-button"]]}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            🔄✍️
         </a>
     ) as HTMLAnchorElement;
 
@@ -478,14 +505,24 @@ export async function createDraftList({
     const updateOpenMapLinks = () => {
         if (!selectedDraft) return;
 
-        openNewDraftButton.href = getNewDraftUrl(
-            selectedDraft.coordinates[0],
-            selectedDraft.name,
+        const {
+            coordinates: [p],
+            name: title,
+            description,
+            note,
+        } = selectedDraft;
+
+        // 最後の行
+        const statement = note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
+
+        openNewDraftButton.href = getNewDraftUrl(p, title);
+        openUpdateDraftButton.href = getUpdateDraftUrl(
+            p,
+            title,
+            description,
+            statement,
         );
-        openMapButton.href = getGoogleMapsUrl(
-            selectedDraft.coordinates[0],
-            selectedDraft.name,
-        );
+        openMapButton.href = getGoogleMapsUrl(p, title);
     };
 
     const deleteButton = (
@@ -595,6 +632,7 @@ export async function createDraftList({
                     <div class={classNames["coordinates-container"]}>
                         {detailCoordinates}
                         {openNewDraftButton}
+                        {openUpdateDraftButton}
                         {openMapButton}
                     </div>
                     {descriptionEditor.element}
@@ -671,6 +709,7 @@ export async function createDraftList({
             mapButton.style.display = "";
             updateOpenMapLinks();
             openNewDraftButton.style.display = "";
+            openUpdateDraftButton.style.display = "";
             openMapButton.style.display = "";
             deleteButton.style.display = "";
             templateToggleButton.style.display = "";
@@ -692,6 +731,8 @@ export async function createDraftList({
             mapButton.style.display = "none";
             openNewDraftButton.removeAttribute("href");
             openNewDraftButton.style.display = "none";
+            openUpdateDraftButton.removeAttribute("href");
+            openUpdateDraftButton.style.display = "none";
             openMapButton.removeAttribute("href");
             openMapButton.style.display = "none";
             deleteButton.style.display = "none";
