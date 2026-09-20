@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.5
+// @version      0.7.6
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
@@ -49127,6 +49127,16 @@ ${formatRemoteFailure(error)}`;
     };
     return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
   }
+  function getUpdateDraftUrl({ lat, lng }, title, description, statement) {
+    const payload = {
+      lat,
+      lng,
+      title,
+      description,
+      statement
+    };
+    return `./new/submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
+  }
   var setStyle10 = styleSetter(cssText3);
   async function createDraftList({
     overlay,
@@ -49394,7 +49404,16 @@ ${formatRemoteFailure(error)}`;
         classList: [draft_list_default.button, draft_list_default["open-map-button"]],
         target: "_blank",
         rel: "noopener noreferrer",
-        children: "\u270D\uFE0F"
+        children: "\u2795\u270D\uFE0F"
+      }
+    );
+    const openUpdateDraftButton = /* @__PURE__ */ jsx(
+      "a",
+      {
+        classList: [draft_list_default.button, draft_list_default["open-map-button"]],
+        target: "_blank",
+        rel: "noopener noreferrer",
+        children: "\u{1F504}\u270D\uFE0F"
       }
     );
     const openMapButton = /* @__PURE__ */ jsx(
@@ -49408,14 +49427,21 @@ ${formatRemoteFailure(error)}`;
     );
     const updateOpenMapLinks = () => {
       if (!selectedDraft) return;
-      openNewDraftButton.href = getNewDraftUrl(
-        selectedDraft.coordinates[0],
-        selectedDraft.name
+      const {
+        coordinates: [p],
+        name: title,
+        description,
+        note
+      } = selectedDraft;
+      const statement = note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
+      openNewDraftButton.href = getNewDraftUrl(p, title);
+      openUpdateDraftButton.href = getUpdateDraftUrl(
+        p,
+        title,
+        description,
+        statement
       );
-      openMapButton.href = getGoogleMapsUrl(
-        selectedDraft.coordinates[0],
-        selectedDraft.name
-      );
+      openMapButton.href = getGoogleMapsUrl(p, title);
     };
     const deleteButton = /* @__PURE__ */ jsx(
       "button",
@@ -49515,6 +49541,7 @@ ${formatRemoteFailure(error)}`;
           /* @__PURE__ */ jsxs("div", { class: draft_list_default["coordinates-container"], children: [
             detailCoordinates,
             openNewDraftButton,
+            openUpdateDraftButton,
             openMapButton
           ] }),
           descriptionEditor.element,
@@ -49584,6 +49611,7 @@ ${formatRemoteFailure(error)}`;
         mapButton.style.display = "";
         updateOpenMapLinks();
         openNewDraftButton.style.display = "";
+        openUpdateDraftButton.style.display = "";
         openMapButton.style.display = "";
         deleteButton.style.display = "";
         templateToggleButton.style.display = "";
@@ -49605,6 +49633,8 @@ ${formatRemoteFailure(error)}`;
         mapButton.style.display = "none";
         openNewDraftButton.removeAttribute("href");
         openNewDraftButton.style.display = "none";
+        openUpdateDraftButton.removeAttribute("href");
+        openUpdateDraftButton.style.display = "none";
         openMapButton.removeAttribute("href");
         openMapButton.style.display = "none";
         deleteButton.style.display = "none";
