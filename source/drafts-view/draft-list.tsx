@@ -414,6 +414,7 @@ export async function createDraftList({
         onInput(value) {
             if (!selectedDraft) return;
             selectedDraft.description = value;
+            updateOpenMapLinks();
             saveDraftChanges(selectedDraft);
         },
         location: "description",
@@ -427,6 +428,7 @@ export async function createDraftList({
         onInput(value) {
             if (!selectedDraft) return;
             selectedDraft.note = value;
+            updateOpenMapLinks();
             saveDraftChanges(selectedDraft);
         },
         location: "note",
