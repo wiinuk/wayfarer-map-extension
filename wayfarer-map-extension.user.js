@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.6
+// @version      0.7.7
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/new/mapview
@@ -49345,6 +49345,7 @@ ${formatRemoteFailure(error)}`;
       onInput(value) {
         if (!selectedDraft) return;
         selectedDraft.description = value;
+        updateOpenMapLinks();
         saveDraftChanges(selectedDraft);
       },
       location: "description",
@@ -49357,6 +49358,7 @@ ${formatRemoteFailure(error)}`;
       onInput(value) {
         if (!selectedDraft) return;
         selectedDraft.note = value;
+        updateOpenMapLinks();
         saveDraftChanges(selectedDraft);
       },
       location: "note",
