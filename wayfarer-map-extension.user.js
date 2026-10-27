@@ -4,8 +4,8 @@
 // @version      0.7.7
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
-// @match        https://wayfarer.scopely.com/new/mapview
-// @match        https://wayfarer.scopely.com/new/mapview?*
+// @match        https://wayfarer.scopely.com/mapview
+// @match        https://wayfarer.scopely.com/mapview?*
 // @grant        GM.xmlHttpRequest
 // @connect      *
 // ==/UserScript==
@@ -49125,7 +49125,7 @@ ${formatRemoteFailure(error)}`;
       description: "",
       statement: ""
     };
-    return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
+    return `./submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
   }
   function getUpdateDraftUrl({ lat, lng }, title, description, statement) {
     const payload = {
@@ -49135,7 +49135,7 @@ ${formatRemoteFailure(error)}`;
       description,
       statement
     };
-    return `./new/submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
+    return `./submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
   }
   var setStyle10 = styleSetter(cssText3);
   async function createDraftList({
@@ -50004,12 +50004,43 @@ ${formatRemoteFailure(error)}`;
   }
   async function getGMapObject(options) {
     return await awaitElement(() => {
-      try {
-        const e = document.querySelector("app-wf-base-map");
-        return e.__ngContext__[27];
-      } catch {
-        return null;
+      if (typeof google === "undefined" || typeof google.maps.Map !== "function") {
+        return void 0;
       }
+      const root = document.querySelector("main");
+      if (!root) return void 0;
+      const visited = /* @__PURE__ */ new WeakSet();
+      const findMap = (value, depth) => {
+        if (value === null || typeof value !== "object" || depth > 12) {
+          return void 0;
+        }
+        if (value instanceof google.maps.Map) return value;
+        if (visited.has(value)) return void 0;
+        visited.add(value);
+        const prototype = Object.getPrototypeOf(value);
+        if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+          return void 0;
+        }
+        for (const key of Reflect.ownKeys(value)) {
+          if (typeof key !== "string" || key === "_owner" || key === "_store" || key === "type") {
+            continue;
+          }
+          const map = findMap(Reflect.get(value, key), depth + 1);
+          if (map) return map;
+        }
+        return void 0;
+      };
+      const elements = [root, ...root.querySelectorAll("*")];
+      for (const element of elements) {
+        for (const key of Reflect.ownKeys(element)) {
+          if (typeof key !== "string" || !key.startsWith("__reactProps$")) {
+            continue;
+          }
+          const map = findMap(Reflect.get(element, key), 0);
+          if (map) return map;
+        }
+      }
+      return void 0;
     }, options);
   }
   var defaultDictionary = ja_default;

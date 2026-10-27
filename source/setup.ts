@@ -39,14 +39,66 @@ async function getGMapObject(options: {
     signal?: AbortSignal;
 }): Promise<google.maps.Map> {
     return await awaitElement(() => {
-        try {
-            // 実行時エラーは catch で無視する
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const e: any = document.querySelector("app-wf-base-map");
-            return e.__ngContext__[27];
-        } catch {
-            return null;
+        if (
+            typeof google === "undefined" ||
+            typeof google.maps.Map !== "function"
+        ) {
+            return undefined;
         }
+
+        const root = document.querySelector("main");
+        if (!root) return undefined;
+
+        const visited = new WeakSet<object>();
+        const findMap = (
+            value: unknown,
+            depth: number,
+        ): google.maps.Map | undefined => {
+            if (value === null || typeof value !== "object" || depth > 12) {
+                return undefined;
+            }
+            if (value instanceof google.maps.Map) return value;
+            if (visited.has(value)) return undefined;
+            visited.add(value);
+
+            const prototype = Object.getPrototypeOf(value);
+            if (
+                !Array.isArray(value) &&
+                prototype !== Object.prototype &&
+                prototype !== null
+            ) {
+                return undefined;
+            }
+
+            for (const key of Reflect.ownKeys(value)) {
+                if (
+                    typeof key !== "string" ||
+                    key === "_owner" ||
+                    key === "_store" ||
+                    key === "type"
+                ) {
+                    continue;
+                }
+                const map = findMap(Reflect.get(value, key), depth + 1);
+                if (map) return map;
+            }
+            return undefined;
+        };
+
+        const elements = [root, ...root.querySelectorAll("*")];
+        for (const element of elements) {
+            for (const key of Reflect.ownKeys(element)) {
+                if (
+                    typeof key !== "string" ||
+                    !key.startsWith("__reactProps$")
+                ) {
+                    continue;
+                }
+                const map = findMap(Reflect.get(element, key), 0);
+                if (map) return map;
+            }
+        }
+        return undefined;
     }, options);
 }
 
