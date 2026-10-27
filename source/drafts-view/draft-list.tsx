@@ -132,7 +132,7 @@ function getNewDraftUrl({ lat, lng }: LatLng, title: string) {
         statement: "",
     };
 
-    return `./new/submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
+    return `./submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
 }
 
 function getUpdateDraftUrl(
@@ -149,7 +149,7 @@ function getUpdateDraftUrl(
         statement,
     };
 
-    return `./new/submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
+    return `./submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
 }
 
 const setStyle = styleSetter(cssText);
