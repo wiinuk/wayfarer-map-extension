@@ -3,6 +3,7 @@
     --initial-width: min(400px, 80%);
     --border-radius: 6px;
 
+    font-size: 0.8rem;
     position: fixed;
     top: var(--drag-top, calc(100% - var(--initial-height)));
     left: var(--drag-left, calc(100% - var(--initial-width)));
