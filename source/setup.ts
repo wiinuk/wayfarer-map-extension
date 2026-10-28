@@ -201,6 +201,7 @@ async function setupDraftManagerDialog(page: PageResource) {
 
 async function asyncSetup(signal: AbortSignal) {
     const map = await getGMapObject({ signal });
+    await google.maps.importLibrary("geometry");
     const events = createTypedEventTarget<PageEventMap>();
     const local = await createConfigAccessor(localConfigKey);
     local.events.addEventListener("config-changed", () =>
