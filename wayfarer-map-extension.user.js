@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.7.7
+// @version      0.8.0
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -20417,29 +20417,28 @@
     }
   }
   function injectGcsListener(listener) {
-    const origOpen = XMLHttpRequest.prototype.open;
-    const origSend = XMLHttpRequest.prototype.send;
-    const isTargetSymbol = /* @__PURE__ */ Symbol("_isTarget");
-    const urlObjSymbol = /* @__PURE__ */ Symbol("_urlObj");
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    const targetWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const origFetch = targetWindow.fetch;
+    targetWindow.fetch = async function(input, init) {
+      const request = input instanceof Request ? input : null;
+      const url = request ? request.url : input.toString();
+      const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
       const urlObj = normalizeUrl(url);
-      this[isTargetSymbol] = method === "GET" && urlObj?.pathname === TARGET_PATH;
-      this[urlObjSymbol] = urlObj;
-      return origOpen.call(this, method, url, ...rest);
-    };
-    XMLHttpRequest.prototype.send = function(...args) {
-      if (this[isTargetSymbol]) {
-        this.addEventListener("load", function() {
-          try {
-            const ct = this.getResponseHeader("content-type") || "";
-            if (!ct.includes("application/json")) return;
-            listener(this[urlObjSymbol], this.responseText);
-          } catch (e) {
-            console.warn("[GCS LOGGER] Parse failed", e);
+      const isTarget = method === "GET" && urlObj?.pathname === TARGET_PATH;
+      const response = await origFetch.call(this, input, init);
+      if (isTarget) {
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (!ct.includes("application/json")) {
+            return response;
           }
-        });
+          const responseJsonText = await response.clone().text();
+          listener(urlObj, responseJsonText);
+        } catch (e) {
+          console.warn("[GCS LOGGER] Parse failed", e);
+        }
       }
-      return origSend.apply(this, args);
+      return response;
     };
   }
 
@@ -23009,30 +23008,30 @@ ${formatRemoteFailure(error)}`;
   }
 
   // source/drafts-view/dialog.module.css
-  var cssText2 = '.dialog-cd3deb5da72894652fbb4cabcba54d9cfd1faa20 {\n    --initial-height-dd19bcd1eecf34965fb504aa0d1f67c817d5ebea: min(300px, 50%);\n    --initial-width-f36872b2db22487e371646dc19ebc2176740c592: min(400px, 80%);\n    --border-radius-1d685ea0a92ebf720f0ee5c1e9f34e31ed6967bc: 6px;\n\n    position: fixed;\n    top: var(--drag-top-462403c7f317cdc10295213e81b42ecb9975a885, calc(100% - var(--initial-height-dd19bcd1eecf34965fb504aa0d1f67c817d5ebea)));\n    left: var(--drag-left-aa22a7aaf70001feaf2d1bdfbacbf3acb6222e38, calc(100% - var(--initial-width-f36872b2db22487e371646dc19ebc2176740c592)));\n    height: var(--initial-height-dd19bcd1eecf34965fb504aa0d1f67c817d5ebea);\n    width: var(--initial-width-f36872b2db22487e371646dc19ebc2176740c592);\n\n    --foreground-color-9b58e20ddf20d7dc413aa5398e818448c58c4b6e: var(--external-foreground-color-02610bf7302824e79396d600a1196c377899e90e, #717171);\n    --background-color-0769f4c7cca9727bceff2b69944be172008fe682: var(\n        --external-background-color-093fd36bbd0565c2a2b34c34f633d7eb002ebe7e,\n        rgba(247, 251, 255, 0.8)\n    );\n\n    color: var(--foreground-color-9b58e20ddf20d7dc413aa5398e818448c58c4b6e);\n    background: var(--background-color-0769f4c7cca9727bceff2b69944be172008fe682);\n    backdrop-filter: blur(6px);\n    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);\n    z-index: 10000;\n    border-radius: var(--border-radius-1d685ea0a92ebf720f0ee5c1e9f34e31ed6967bc);\n\n    overflow: auto;\n    resize: both;\n    display: flex;\n    flex-direction: column;\n}\n\n.dialog-cd3deb5da72894652fbb4cabcba54d9cfd1faa20.maximized-5bbe1fe2597d341c1b88a1aaecffe4caf3734b5f {\n    /* resize: both \u306B\u3088\u3063\u3066\u30D6\u30E9\u30A6\u30B6\u306B\u3088\u3063\u3066\u8A2D\u5B9A\u3055\u308C\u305F\u30A4\u30F3\u30E9\u30A4\u30F3\u30B9\u30BF\u30A4\u30EB\u3092\u4E0A\u66F8\u304D\u3059\u308B\u305F\u3081 */\n    width: 100% !important;\n    height: 100% !important;\n    left: 0;\n    top: 0;\n    resize: none;\n}\n\n.dialog-cd3deb5da72894652fbb4cabcba54d9cfd1faa20.minimized-56221c1f8dadd876a16fae1b96d53bb0a84d64bf {\n    resize: none;\n\n    /* resize: both \u306B\u3088\u3063\u3066\u30D6\u30E9\u30A6\u30B6\u306B\u3088\u3063\u3066\u8A2D\u5B9A\u3055\u308C\u305F\u30A4\u30F3\u30E9\u30A4\u30F3\u30B9\u30BF\u30A4\u30EB\u3092\u4E0A\u66F8\u304D\u3059\u308B\u305F\u3081 */\n    width: auto !important;\n    height: auto !important;\n}\n\n.titlebar-29bb9fa619b6c3d7f424608114c74b6b0d16a7e2 {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    align-content: center;\n    user-select: none;\n    touch-action: none;\n\n    padding: 2px 4px;\n\n    background-color: #e5e7eb;\n    border-radius: var(--border-radius-1d685ea0a92ebf720f0ee5c1e9f34e31ed6967bc) var(--border-radius-1d685ea0a92ebf720f0ee5c1e9f34e31ed6967bc) 0 0;\n}\n\n.titlebar-icon-2125f2ede2090046614e742845a385157f4e3ba3 {\n    width: 16px;\n    height: 16px;\n    margin-right: 8px;\n}\n\n.titlebar-title-4197d01f83d887f085634218824bf37be9d4cd53 {\n    display: flex;\n    justify-content: center;\n    flex-grow: 1;\n\n    min-width: 0;\n    overflow: hidden;\n\n    cursor: move;\n}\n\n.titlebar-right-controls-0e2c1106eebc931424fd74a44591034ddcf122d0 {\n    display: flex;\n    align-items: center;\n}\n\n.titlebar-button-83eaef189993ad638f096741143dc272469abcea {\n    color: var(--foreground-color-9b58e20ddf20d7dc413aa5398e818448c58c4b6e);\n    background: none;\n    border: none;\n    cursor: pointer;\n    padding: 0 12px;\n}\n\n.titlebar-button-83eaef189993ad638f096741143dc272469abcea::before {\n    color: var(--foreground-color-9b58e20ddf20d7dc413aa5398e818448c58c4b6e);\n}\n\n.maximize-toggle-button-124fb16c6eaf74d1177c07ce5d5870e871123dce::before {\n    content: "\u25A1";\n}\n\n.maximized-5bbe1fe2597d341c1b88a1aaecffe4caf3734b5f .maximize-toggle-button-124fb16c6eaf74d1177c07ce5d5870e871123dce::before {\n    content: "\u2750";\n}\n\n.minimize-toggle-button-075b060d9c49b156aba0911daea834b6fba338b7::before {\n    content: "\uFF3F";\n}\n\n.minimized-56221c1f8dadd876a16fae1b96d53bb0a84d64bf .minimize-toggle-button-075b060d9c49b156aba0911daea834b6fba338b7::before {\n    content: "\u2750";\n}\n\n.minimized-56221c1f8dadd876a16fae1b96d53bb0a84d64bf .titlebar-button-83eaef189993ad638f096741143dc272469abcea:not(.minimize-toggle-button-075b060d9c49b156aba0911daea834b6fba338b7) {\n    display: none;\n}\n\n.inner-container-a9f2c5483e858bb2aebe6aa7093690bd95fa4761 {\n    flex-grow: 1;\n    overflow: auto;\n}\n\n.minimized-56221c1f8dadd876a16fae1b96d53bb0a84d64bf .inner-container-a9f2c5483e858bb2aebe6aa7093690bd95fa4761 {\n    display: none;\n}\n';
+  var cssText2 = '.dialog-6a56e70b33310611b4269e42ad6181b48e74d224 {\n    --initial-height-3c8e0ec142b3c8d34bd402ccc9b6bedce5ab0c27: min(300px, 50%);\n    --initial-width-c17a0e75cb65bc9ea1c51978b980b3ef8f2a7f87: min(400px, 80%);\n    --border-radius-3fabe881639cbcbfca0a20938a429df90a8798dd: 6px;\n\n    font-size: 0.8rem;\n    position: fixed;\n    top: var(--drag-top-50d3893c99563d6eba29c0b31fbaf00adf703534, calc(100% - var(--initial-height-3c8e0ec142b3c8d34bd402ccc9b6bedce5ab0c27)));\n    left: var(--drag-left-11c40a2b07b3e4a533322f0db1276c2593570600, calc(100% - var(--initial-width-c17a0e75cb65bc9ea1c51978b980b3ef8f2a7f87)));\n    height: var(--initial-height-3c8e0ec142b3c8d34bd402ccc9b6bedce5ab0c27);\n    width: var(--initial-width-c17a0e75cb65bc9ea1c51978b980b3ef8f2a7f87);\n\n    --foreground-color-7d091ced9b811074887924c4960bd03ace0ca2bc: var(--external-foreground-color-162975b79b73cde07bcf1077452e2edc2c20a9d6, #717171);\n    --background-color-5a16d5d0c146dd3817fa8184980636ab045db87e: var(\n        --external-background-color-89bb1920d401e917b8225bd263812ef153e11a93,\n        rgba(247, 251, 255, 0.8)\n    );\n\n    color: var(--foreground-color-7d091ced9b811074887924c4960bd03ace0ca2bc);\n    background: var(--background-color-5a16d5d0c146dd3817fa8184980636ab045db87e);\n    backdrop-filter: blur(6px);\n    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);\n    z-index: 10000;\n    border-radius: var(--border-radius-3fabe881639cbcbfca0a20938a429df90a8798dd);\n\n    overflow: auto;\n    resize: both;\n    display: flex;\n    flex-direction: column;\n}\n\n.dialog-6a56e70b33310611b4269e42ad6181b48e74d224.maximized-4e3079d50092a4f2ea558d902fbdf3e94902e07b {\n    /* resize: both \u306B\u3088\u3063\u3066\u30D6\u30E9\u30A6\u30B6\u306B\u3088\u3063\u3066\u8A2D\u5B9A\u3055\u308C\u305F\u30A4\u30F3\u30E9\u30A4\u30F3\u30B9\u30BF\u30A4\u30EB\u3092\u4E0A\u66F8\u304D\u3059\u308B\u305F\u3081 */\n    width: 100% !important;\n    height: 100% !important;\n    left: 0;\n    top: 0;\n    resize: none;\n}\n\n.dialog-6a56e70b33310611b4269e42ad6181b48e74d224.minimized-79e75311307a0525b26b21c4d656d462976d34d0 {\n    resize: none;\n\n    /* resize: both \u306B\u3088\u3063\u3066\u30D6\u30E9\u30A6\u30B6\u306B\u3088\u3063\u3066\u8A2D\u5B9A\u3055\u308C\u305F\u30A4\u30F3\u30E9\u30A4\u30F3\u30B9\u30BF\u30A4\u30EB\u3092\u4E0A\u66F8\u304D\u3059\u308B\u305F\u3081 */\n    width: auto !important;\n    height: auto !important;\n}\n\n.titlebar-d8696d20a649263eaf90359828384336b3bd5687 {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    align-content: center;\n    user-select: none;\n    touch-action: none;\n\n    padding: 2px 4px;\n\n    background-color: #e5e7eb;\n    border-radius: var(--border-radius-3fabe881639cbcbfca0a20938a429df90a8798dd) var(--border-radius-3fabe881639cbcbfca0a20938a429df90a8798dd) 0 0;\n}\n\n.titlebar-icon-8672dc6cc1d038cdec74deedcfc2f1a151661a65 {\n    width: 16px;\n    height: 16px;\n    margin-right: 8px;\n}\n\n.titlebar-title-50f06063587e4cb66878c511030bcc2aae5f3c8e {\n    display: flex;\n    justify-content: center;\n    flex-grow: 1;\n\n    min-width: 0;\n    overflow: hidden;\n\n    cursor: move;\n}\n\n.titlebar-right-controls-53e7667a1c9e6ab106c9561ae3d79489a52a36f7 {\n    display: flex;\n    align-items: center;\n}\n\n.titlebar-button-346253eed4c08df26ce3403eee1cda4265605ca2 {\n    color: var(--foreground-color-7d091ced9b811074887924c4960bd03ace0ca2bc);\n    background: none;\n    border: none;\n    cursor: pointer;\n    padding: 0 12px;\n}\n\n.titlebar-button-346253eed4c08df26ce3403eee1cda4265605ca2::before {\n    color: var(--foreground-color-7d091ced9b811074887924c4960bd03ace0ca2bc);\n}\n\n.maximize-toggle-button-10669bffc3ef992c904fe0985bb0fb2e2fed6779::before {\n    content: "\u25A1";\n}\n\n.maximized-4e3079d50092a4f2ea558d902fbdf3e94902e07b .maximize-toggle-button-10669bffc3ef992c904fe0985bb0fb2e2fed6779::before {\n    content: "\u2750";\n}\n\n.minimize-toggle-button-ddd094f8eb6c9122050a7782de96b08cbda88828::before {\n    content: "\uFF3F";\n}\n\n.minimized-79e75311307a0525b26b21c4d656d462976d34d0 .minimize-toggle-button-ddd094f8eb6c9122050a7782de96b08cbda88828::before {\n    content: "\u2750";\n}\n\n.minimized-79e75311307a0525b26b21c4d656d462976d34d0 .titlebar-button-346253eed4c08df26ce3403eee1cda4265605ca2:not(.minimize-toggle-button-ddd094f8eb6c9122050a7782de96b08cbda88828) {\n    display: none;\n}\n\n.inner-container-421a44514e0ff0a3d17f8e2cc468d9769acb3561 {\n    flex-grow: 1;\n    overflow: auto;\n}\n\n.minimized-79e75311307a0525b26b21c4d656d462976d34d0 .inner-container-421a44514e0ff0a3d17f8e2cc468d9769acb3561 {\n    display: none;\n}\n';
   var variables = {
-    "--initial-height": "--initial-height-dd19bcd1eecf34965fb504aa0d1f67c817d5ebea",
-    "--initial-width": "--initial-width-f36872b2db22487e371646dc19ebc2176740c592",
-    "--border-radius": "--border-radius-1d685ea0a92ebf720f0ee5c1e9f34e31ed6967bc",
-    "--drag-top": "--drag-top-462403c7f317cdc10295213e81b42ecb9975a885",
-    "--drag-left": "--drag-left-aa22a7aaf70001feaf2d1bdfbacbf3acb6222e38",
-    "--foreground-color": "--foreground-color-9b58e20ddf20d7dc413aa5398e818448c58c4b6e",
-    "--external-foreground-color": "--external-foreground-color-02610bf7302824e79396d600a1196c377899e90e",
-    "--background-color": "--background-color-0769f4c7cca9727bceff2b69944be172008fe682",
-    "--external-background-color": "--external-background-color-093fd36bbd0565c2a2b34c34f633d7eb002ebe7e"
+    "--initial-height": "--initial-height-3c8e0ec142b3c8d34bd402ccc9b6bedce5ab0c27",
+    "--initial-width": "--initial-width-c17a0e75cb65bc9ea1c51978b980b3ef8f2a7f87",
+    "--border-radius": "--border-radius-3fabe881639cbcbfca0a20938a429df90a8798dd",
+    "--drag-top": "--drag-top-50d3893c99563d6eba29c0b31fbaf00adf703534",
+    "--drag-left": "--drag-left-11c40a2b07b3e4a533322f0db1276c2593570600",
+    "--foreground-color": "--foreground-color-7d091ced9b811074887924c4960bd03ace0ca2bc",
+    "--external-foreground-color": "--external-foreground-color-162975b79b73cde07bcf1077452e2edc2c20a9d6",
+    "--background-color": "--background-color-5a16d5d0c146dd3817fa8184980636ab045db87e",
+    "--external-background-color": "--external-background-color-89bb1920d401e917b8225bd263812ef153e11a93"
   };
   var dialog_default = {
-    dialog: "dialog-cd3deb5da72894652fbb4cabcba54d9cfd1faa20",
-    maximized: "maximized-5bbe1fe2597d341c1b88a1aaecffe4caf3734b5f",
-    minimized: "minimized-56221c1f8dadd876a16fae1b96d53bb0a84d64bf",
-    titlebar: "titlebar-29bb9fa619b6c3d7f424608114c74b6b0d16a7e2",
-    "titlebar-icon": "titlebar-icon-2125f2ede2090046614e742845a385157f4e3ba3",
-    "titlebar-title": "titlebar-title-4197d01f83d887f085634218824bf37be9d4cd53",
-    "titlebar-right-controls": "titlebar-right-controls-0e2c1106eebc931424fd74a44591034ddcf122d0",
-    "titlebar-button": "titlebar-button-83eaef189993ad638f096741143dc272469abcea",
-    "maximize-toggle-button": "maximize-toggle-button-124fb16c6eaf74d1177c07ce5d5870e871123dce",
-    "minimize-toggle-button": "minimize-toggle-button-075b060d9c49b156aba0911daea834b6fba338b7",
-    "inner-container": "inner-container-a9f2c5483e858bb2aebe6aa7093690bd95fa4761"
+    dialog: "dialog-6a56e70b33310611b4269e42ad6181b48e74d224",
+    maximized: "maximized-4e3079d50092a4f2ea558d902fbdf3e94902e07b",
+    minimized: "minimized-79e75311307a0525b26b21c4d656d462976d34d0",
+    titlebar: "titlebar-d8696d20a649263eaf90359828384336b3bd5687",
+    "titlebar-icon": "titlebar-icon-8672dc6cc1d038cdec74deedcfc2f1a151661a65",
+    "titlebar-title": "titlebar-title-50f06063587e4cb66878c511030bcc2aae5f3c8e",
+    "titlebar-right-controls": "titlebar-right-controls-53e7667a1c9e6ab106c9561ae3d79489a52a36f7",
+    "titlebar-button": "titlebar-button-346253eed4c08df26ce3403eee1cda4265605ca2",
+    "maximize-toggle-button": "maximize-toggle-button-10669bffc3ef992c904fe0985bb0fb2e2fed6779",
+    "minimize-toggle-button": "minimize-toggle-button-ddd094f8eb6c9122050a7782de96b08cbda88828",
+    "inner-container": "inner-container-421a44514e0ff0a3d17f8e2cc468d9769acb3561"
   };
 
   // source/document-jsx/jsx-runtime.ts
@@ -50109,6 +50108,7 @@ ${formatRemoteFailure(error)}`;
   }
   async function asyncSetup(signal) {
     const map = await getGMapObject({ signal });
+    await google.maps.importLibrary("geometry");
     const events = createTypedEventTarget();
     const local = await createConfigAccessor(localConfigKey);
     local.events.addEventListener(
