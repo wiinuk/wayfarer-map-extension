@@ -16,6 +16,12 @@ import {
     wrapCancellable,
 } from "../standard-extensions";
 import * as Bounds from "../bounds";
+import {
+    getWorldWidth,
+    hashPixels,
+    resolveBufferRatio,
+    setCanvasStyleIfChanged,
+} from "./overlay-benchmark";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -92,7 +98,11 @@ function padBoundsRelative(
     // 画面サイズ[世界座標]を計算
     const swWorld = projection.fromLatLngToPoint(sw)!;
     const neWorld = projection.fromLatLngToPoint(ne)!;
-    const worldWidth = Math.abs(neWorld.x - swWorld.x);
+    const worldWidth = getWorldWidth(
+        swWorld.x,
+        neWorld.x,
+        sw.lng() > ne.lng(),
+    );
     const worldHeight = Math.abs(swWorld.y - neWorld.y);
 
     // 拡張されたサイズ[世界座標]を計算
@@ -138,7 +148,9 @@ export type PoiRecordsCanvasOverlay = Awaited<
 export async function createPoiRecordsCanvasOverlay(
     handleAsyncError: (reason: unknown) => void,
 ) {
-    const bufferRatio = 0;
+    const bufferRatio = __DEBUG_BUILD__
+        ? resolveBufferRatio(window.location.search, true)
+        : 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
         private ctx: CanvasRenderingContext2D;
         private drawer!: IsolatedDrawer;
@@ -199,7 +211,11 @@ export async function createPoiRecordsCanvasOverlay(
                 const currentPos = projection.fromLatLngToDivPixel(
                     this.renderedViewport.nwLatLng,
                 )!;
-                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+                setCanvasStyleIfChanged(
+                    this.ctx.canvas.style,
+                    "transform",
+                    `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`,
+                );
             }
 
             let needsRedraw = false;
@@ -260,8 +276,16 @@ export async function createPoiRecordsCanvasOverlay(
             // 地図のサイズ[px]
             const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
             const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
-            this.ctx.canvas.style.width = `${canvasWidth}px`;
-            this.ctx.canvas.style.height = `${canvasHeight}px`;
+            setCanvasStyleIfChanged(
+                this.ctx.canvas.style,
+                "width",
+                `${canvasWidth}px`,
+            );
+            setCanvasStyleIfChanged(
+                this.ctx.canvas.style,
+                "height",
+                `${canvasHeight}px`,
+            );
 
             // 地図の左上[世界座標]
             const nwWorld = pointClassToRecord(
@@ -279,7 +303,17 @@ export async function createPoiRecordsCanvasOverlay(
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
 
+            const startedAt = __DEBUG_BUILD__ ? performance.now() : 0;
             await this.drawer(signal, port);
+            if (__DEBUG_BUILD__) {
+                console.info("[records-overlay benchmark]", {
+                    phase: "full-draw",
+                    bufferRatio,
+                    milliseconds: performance.now() - startedAt,
+                    width: canvasWidth,
+                    height: canvasHeight,
+                });
+            }
         }
         async commitImage(
             image: ImageBitmap,
@@ -287,6 +321,7 @@ export async function createPoiRecordsCanvasOverlay(
             signal: AbortSignal,
         ) {
             // 転送された画面を描画
+            const startedAt = __DEBUG_BUILD__ ? performance.now() : 0;
             await waitAnimationFrame(signal);
             const { ctx } = this;
             initCanvas(ctx, port);
@@ -299,11 +334,64 @@ export async function createPoiRecordsCanvasOverlay(
             const latestProjection = this.getProjection() as
                 | google.maps.MapCanvasProjection
                 | undefined;
+            let currentPos: google.maps.Point | undefined;
             if (latestProjection) {
-                const currentPos = latestProjection.fromLatLngToDivPixel(
+                currentPos = latestProjection.fromLatLngToDivPixel(
                     port.nwLatLng,
                 )!;
-                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
+                setCanvasStyleIfChanged(
+                    this.ctx.canvas.style,
+                    "transform",
+                    `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`,
+                );
+            }
+            if (__DEBUG_BUILD__) {
+                console.info("[records-overlay benchmark]", {
+                    phase: "commit-image",
+                    bufferRatio,
+                    milliseconds: performance.now() - startedAt,
+                });
+                const map = this.getMap();
+                if (
+                    currentPos &&
+                    map instanceof google.maps.Map &&
+                    ctx.canvas.width > 0 &&
+                    ctx.canvas.height > 0
+                ) {
+                    const dpr = port.devicePixelRatio;
+                    const visibleRect = map.getDiv().getBoundingClientRect();
+                    const left = Math.max(
+                        0,
+                        Math.round(-(currentPos.x | 0) * dpr),
+                    );
+                    const top = Math.max(
+                        0,
+                        Math.round(-(currentPos.y | 0) * dpr),
+                    );
+                    const width = Math.min(
+                        Math.round(visibleRect.width * dpr),
+                        ctx.canvas.width - left,
+                    );
+                    const height = Math.min(
+                        Math.round(visibleRect.height * dpr),
+                        ctx.canvas.height - top,
+                    );
+                    if (width > 0 && height > 0) {
+                        const pixels = ctx.getImageData(
+                            left,
+                            top,
+                            width,
+                            height,
+                        );
+                        console.info("[records-overlay benchmark]", {
+                            phase: "visible-pixels",
+                            bufferRatio,
+                            width,
+                            height,
+                            hash: await hashPixels(pixels.data),
+                        });
+                    }
+                }
             }
         }
     }
