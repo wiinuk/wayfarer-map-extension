@@ -2,14 +2,17 @@ import { latLngToWorldPoint, type Point } from "../geometry";
 import type { LatLng } from "../s2";
 import { raise } from "../standard-extensions";
 import { asUntypedGeometry, newGeometry } from "../typed-pixi-shader";
-import type { CanvasRenderer } from "./canvas-renderer";
 import { normalizeColor } from "./colors";
 import type { Cell17Options } from "./options";
 
 export type CellMeshBuilder = ReturnType<typeof newCellMeshBuilder>;
+type CellMeshRenderer = Pick<
+    import("./canvas-renderer").CanvasRenderer,
+    "PIXI" | "shader" | "_point_result_cache"
+>;
 const cornerCount = 4;
 export function newCellMeshBuilder(
-    renderer: CanvasRenderer,
+    renderer: CellMeshRenderer,
     cell14Center: Point,
 ) {
     const { x: cellX, y: cellY } = cell14Center;

@@ -16,6 +16,7 @@ import {
     wrapCancellable,
 } from "../standard-extensions";
 import * as Bounds from "../bounds";
+import { getWorldWidth, setCanvasStyleIfChanged } from "./overlay-utils";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -92,7 +93,11 @@ function padBoundsRelative(
     // 画面サイズ[世界座標]を計算
     const swWorld = projection.fromLatLngToPoint(sw)!;
     const neWorld = projection.fromLatLngToPoint(ne)!;
-    const worldWidth = Math.abs(neWorld.x - swWorld.x);
+    const worldWidth = getWorldWidth(
+        swWorld.x,
+        neWorld.x,
+        sw.lng() > ne.lng(),
+    );
     const worldHeight = Math.abs(swWorld.y - neWorld.y);
 
     // 拡張されたサイズ[世界座標]を計算
@@ -116,7 +121,7 @@ function padBoundsRelative(
 }
 
 function initCanvas(
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    ctx: CanvasRenderingContext2D,
     port: Viewport,
 ) {
     const { canvas } = ctx;
@@ -128,8 +133,8 @@ function initCanvas(
     if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
+        ctx.globalCompositeOperation = "copy";
     }
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 }
 
 export type PoiRecordsCanvasOverlay = Awaited<
@@ -154,6 +159,7 @@ export async function createPoiRecordsCanvasOverlay(
             canvas.style.top = "0px";
             canvas.style.imageRendering = "crisp-edges";
             this.ctx = canvas.getContext("2d") ?? raise`context 2d`;
+            this.ctx.globalCompositeOperation = "copy";
         }
 
         async init(handleAsyncError: (reason: unknown) => void) {
@@ -199,7 +205,11 @@ export async function createPoiRecordsCanvasOverlay(
                 const currentPos = projection.fromLatLngToDivPixel(
                     this.renderedViewport.nwLatLng,
                 )!;
-                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+                setCanvasStyleIfChanged(
+                    this.ctx.canvas.style,
+                    "transform",
+                    `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`,
+                );
             }
 
             let needsRedraw = false;
@@ -260,8 +270,16 @@ export async function createPoiRecordsCanvasOverlay(
             // 地図のサイズ[px]
             const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
             const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
-            this.ctx.canvas.style.width = `${canvasWidth}px`;
-            this.ctx.canvas.style.height = `${canvasHeight}px`;
+            setCanvasStyleIfChanged(
+                this.ctx.canvas.style,
+                "width",
+                `${canvasWidth}px`,
+            );
+            setCanvasStyleIfChanged(
+                this.ctx.canvas.style,
+                "height",
+                `${canvasHeight}px`,
+            );
 
             // 地図の左上[世界座標]
             const nwWorld = pointClassToRecord(
@@ -299,11 +317,16 @@ export async function createPoiRecordsCanvasOverlay(
             const latestProjection = this.getProjection() as
                 | google.maps.MapCanvasProjection
                 | undefined;
+            let currentPos: google.maps.Point | undefined;
             if (latestProjection) {
-                const currentPos = latestProjection.fromLatLngToDivPixel(
+                currentPos = latestProjection.fromLatLngToDivPixel(
                     port.nwLatLng,
                 )!;
-                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
+                setCanvasStyleIfChanged(
+                    this.ctx.canvas.style,
+                    "transform",
+                    `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`,
+                );
             }
         }
     }
