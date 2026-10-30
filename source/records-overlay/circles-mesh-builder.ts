@@ -2,11 +2,14 @@
 import { latLngToWorldPoint, type Point } from "../geometry";
 import type { LatLng } from "../s2";
 import { asUntypedGeometry, newGeometry } from "../typed-pixi-shader";
-import type { CanvasRenderer } from "./canvas-renderer";
 import { normalizeColor } from "./colors";
 import type { WayspotOptions } from "./options";
 
 export type CirclesMeshBuilder = ReturnType<typeof newCirclesMeshBuilder>;
+type CirclesMeshRenderer = Pick<
+    import("./canvas-renderer").CanvasRenderer,
+    "PIXI" | "circleShader" | "_point_result_cache"
+>;
 const corners = [
     [-1, -1],
     [1, -1],
@@ -14,7 +17,7 @@ const corners = [
     [-1, 1],
 ] as const;
 export function newCirclesMeshBuilder(
-    renderer: CanvasRenderer,
+    renderer: CirclesMeshRenderer,
     cell14Center: Point,
 ) {
     const { PIXI, circleShader: shader, _point_result_cache } = renderer;

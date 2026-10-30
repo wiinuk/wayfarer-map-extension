@@ -23,6 +23,7 @@
     "fast-check": "^4.5.3",
     "gas-drivetunnel": "github:wiinuk/gas-drivetunnel#d3c576328adf7cb180c7623893d3ac65f28097d1",
     "pixi.js": "8.16.0",
+    "playwright": "^1.64.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "ws": "^8.19.0",
@@ -33,6 +34,7 @@
     "debug": "node build.mjs --watch",
     "test": "vitest run",
     "benchmark": "vitest bench source/records-overlay/overlay-render.bench.ts",
+    "benchmark:canvas": "node scripts/benchmark-records-overlay.mjs",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "check": "tsc --noEmit"

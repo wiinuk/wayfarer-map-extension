@@ -104,6 +104,7 @@ export default defineConfig([
         "./esbuild-glsl-plugin",
         "./eslint/rules",
         "./build.mjs",
+        "./scripts/",
         "./*.config.mjs",
         "./*.user.js",
         "./*.debug.js",
