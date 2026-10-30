@@ -125,35 +125,6 @@ function getGoogleMapsUrl({ lat, lng }: LatLng, title: string) {
         : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
-function getNewDraftUrl({ lat, lng }: LatLng, title: string) {
-    const payload = {
-        lat,
-        lng,
-        title,
-        description: "",
-        statement: "",
-    };
-
-    return `./submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
-}
-
-function getUpdateDraftUrl(
-    { lat, lng }: LatLng,
-    title: string,
-    description: string,
-    statement: string,
-) {
-    const payload = {
-        lat,
-        lng,
-        title,
-        description,
-        statement,
-    };
-
-    return `./submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
-}
-
 const setStyle = styleSetter(cssText);
 export async function createDraftList({
     overlay,
