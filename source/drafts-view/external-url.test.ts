@@ -19,10 +19,15 @@ describe("external URL Sal settings", () => {
                     lng: r /get lng,
                     title: r /get title,
                     description: r /get description,
-                    statement: r /get statement,
+                    statement: statement,
                 }
                 /pipe json-stringify
                 /pipe encode-url-component
+                @where statement =
+                    r
+                    /get note
+                    /pipe trim-end
+                    /pipe last-line
             )
             @where register-9db = open:"9db登録":(@fn r:
                 "https://9db.jp/pokemongo/map#"
@@ -37,7 +42,7 @@ describe("external URL Sal settings", () => {
                 lng: 139.7,
                 title: "候補名",
                 description: "説明",
-                statement: "補足",
+                note: "前の行\r\n補足\r\n\r\n  ",
             },
             new AbortController().signal,
         );

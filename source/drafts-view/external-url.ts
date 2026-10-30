@@ -17,7 +17,7 @@ export interface ExternalUrlData extends Record<string, Value> {
     readonly lng: number;
     readonly title: string;
     readonly description: string;
-    readonly statement: string;
+    readonly note: string;
 }
 
 export interface ExternalUrlOption {
@@ -122,6 +122,18 @@ function createSalExternalUrlGlobals() {
                 return operation(value);
             }),
     );
+    globals.set("trim-end", (value) => {
+        if (typeof value !== "string") {
+            throw new Error("trim-end expects a string");
+        }
+        return done(value.trimEnd());
+    });
+    globals.set("last-line", (value) => {
+        if (typeof value !== "string") {
+            throw new Error("last-line expects a string");
+        }
+        return done(value.split(/\r\n|\n|\r/).at(-1) ?? "");
+    });
     globals.set("json-stringify", (value) => {
         const result = JSON.stringify(value);
         return done(result);

@@ -633,13 +633,12 @@ export async function createDraftList({
 
         const draft = selectedDraft;
         const [point] = draft.coordinates;
-        const statement = draft.note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
         const data: ExternalUrlData = {
             lat: point.lat,
             lng: point.lng,
             title: draft.name,
             description: draft.description,
-            statement,
+            note: draft.note,
         };
         void (async () => {
             try {
