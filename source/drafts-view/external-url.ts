@@ -3,6 +3,7 @@ import {
     type Value,
 } from "../sal/evaluator";
 import { done, forceAsPromise, type Effective } from "../sal/effective";
+import { raise } from "../standard-extensions";
 
 const externalUrlMarker = "sal-external-url";
 
@@ -143,6 +144,18 @@ function createSalExternalUrlGlobals() {
             throw new Error("encode-url-component expects a string");
         }
         return done(encodeURIComponent(value));
+    });
+    globals.set("remove-symbols", (value) => {
+        if (typeof value !== "string") {
+            return raise`remove-symbols expects a string`;
+        }
+        return done(
+            value.replace(
+                // eslint-disable-next-line no-misleading-character-class
+                /[\u{3200}-\u{32FF}\u{1F000}-\u{1FFFF}\u{2100}-\u{2BFF}\u{FE00}-\u{FE0F}\u200D]/gu,
+                "",
+            ),
+        );
     });
     return globals;
 }
