@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.8.1
+// @version      0.8.2
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -48606,7 +48606,7 @@ ${formatRemoteFailure(error)}`;
             })
           );
         },
-        children: "\u30A2\u30AF\u30B7\u30E7\u30F3\u5316\u6307\u5B9A"
+        children: "\u30A2\u30AF\u30B7\u30E7\u30F3\u8A2D\u5B9A"
       }
     );
     const salOpenButton = /* @__PURE__ */ jsx(
@@ -48626,7 +48626,7 @@ ${formatRemoteFailure(error)}`;
             })
           );
         },
-        children: "\u5916\u90E8URL\u5316\u6307\u5B9A"
+        children: "\u5916\u90E8URL\u8A2D\u5B9A"
       }
     );
     const toolbar = /* @__PURE__ */ jsxs("div", { class: editor_default.toolbar, children: [
@@ -49371,6 +49371,18 @@ ${formatRemoteFailure(error)}`;
         throw new Error("encode-url-component expects a string");
       }
       return done(encodeURIComponent(value));
+    });
+    globals.set("remove-symbols", (value) => {
+      if (typeof value !== "string") {
+        return raise`remove-symbols expects a string`;
+      }
+      return done(
+        value.replace(
+          // eslint-disable-next-line no-misleading-character-class
+          /[\u{3200}-\u{32FF}\u{1F000}-\u{1FFFF}\u{2100}-\u{2BFF}\u{FE00}-\u{FE0F}\u200D]/gu,
+          ""
+        )
+      );
     });
     return globals;
   }
