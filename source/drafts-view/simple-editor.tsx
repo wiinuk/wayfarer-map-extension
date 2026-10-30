@@ -181,16 +181,24 @@ export function createSalGlobals() {
     return (key: string) => globals.get(key);
 }
 
-interface ActionDecorationSpec {
+interface ActionMatchRange {
+    from: number;
+    to: number;
     text: string;
     action: Action;
+    command: ActionCommand | undefined;
+}
+interface ActionDecorations {
+    decorations: DecorationSet;
+    matches: ActionMatchRange[];
 }
 async function createDecorations(
     state: EditorState,
     location: ActionLocation,
     signal: AbortSignal,
     ruleSource: string,
-): Promise<DecorationSet> {
+    handleAsyncError: (reason: unknown) => void,
+): Promise<ActionDecorations> {
     const builder = new RangeSetBuilder<Decoration>();
     const resolveGlobal = createSalGlobals();
 
@@ -204,11 +212,29 @@ async function createDecorations(
         ...(await forceAsPromise(rule.match({ text, location }), signal)),
     ];
     matches.sort((a, b) => a.index - b.index);
+    const actionMatches: ActionMatchRange[] = [];
     for (const { action, index: start, length } of matches) {
         if (length === 0) continue;
 
         const end = start + length;
         const matchedText = text.slice(start, end);
+        let command: ActionCommand | undefined;
+        try {
+            command = await forceAsPromise(
+                action.execute(matchedText),
+                signal,
+            );
+        } catch (error) {
+            if (signal.aborted) throw error;
+            handleAsyncError(error);
+        }
+        actionMatches.push({
+            from: start,
+            to: end,
+            text: matchedText,
+            action,
+            command,
+        });
         builder.add(
             start,
             end,
@@ -216,17 +242,15 @@ async function createDecorations(
                 class: classNames["action-link"],
                 attributes: {
                     title: action.description,
-                    "data-action-text": matchedText,
                 },
-                spec: {
-                    action,
-                    text: matchedText,
-                } satisfies ActionDecorationSpec,
             }),
         );
     }
 
-    return builder.finish();
+    return {
+        decorations: builder.finish(),
+        matches: actionMatches,
+    };
 }
 function openLink(url: string) {
     window.open(url, "_blank");
@@ -259,14 +283,6 @@ async function executeCommand(command: ActionCommand) {
             return raise`unreachable: '${command satisfies never}'`;
     }
 }
-async function executeAction(action: Action, matchedText: string) {
-    const command = await forceAsPromise(
-        action.execute(matchedText),
-        new AbortController().signal,
-    );
-    await executeCommand(command);
-}
-
 export interface SimpleEditorOptions {
     initialDoc: string;
     onInput: (doc: string) => void;
@@ -283,7 +299,154 @@ function hasUserChange(update: ViewUpdate) {
 }
 
 export function createSimpleEditor(options: SimpleEditorOptions) {
-    const setActionDecorationsEffect = StateEffect.define<DecorationSet>();
+    const editorShell = document.createElement("div");
+    editorShell.className = classNames["action-editor"];
+    const actionMenu = document.createElement("div");
+    actionMenu.className = classNames["action-menu"];
+    actionMenu.hidden = true;
+    actionMenu.setAttribute("role", "group");
+    actionMenu.setAttribute("aria-label", "一致箇所のアクション");
+    editorShell.append(actionMenu);
+
+    let actionMatches: ActionMatchRange[] = [];
+    let visibleMatches: ActionMatchRange[] = [];
+    let menuPosition = 0;
+
+    function closeActionMenu() {
+        visibleMatches = [];
+        actionMenu.hidden = true;
+        actionMenu.replaceChildren();
+    }
+
+    function positionActionMenu(position: number) {
+        const coords = editor.coordsAtPos(position);
+        if (!coords) return;
+
+        const shellRect = editorShell.getBoundingClientRect();
+        const menuWidth = actionMenu.offsetWidth;
+        const menuHeight = actionMenu.offsetHeight;
+        const left = Math.max(
+            0,
+            Math.min(
+                coords.left - shellRect.left,
+                editorShell.clientWidth - menuWidth,
+            ),
+        );
+        const below = coords.bottom - shellRect.top + 6;
+        const top =
+            below + menuHeight <= editorShell.clientHeight
+                ? below
+                : Math.max(0, coords.top - shellRect.top - menuHeight - 6);
+        actionMenu.style.left = `${left}px`;
+        actionMenu.style.top = `${top}px`;
+    }
+
+    function sameMatches(
+        first: readonly ActionMatchRange[],
+        second: readonly ActionMatchRange[],
+    ) {
+        return (
+            first.length === second.length &&
+            first.every((match, index) => match === second[index])
+        );
+    }
+
+    function renderActionMenu(
+        activeMatches: ActionMatchRange[],
+        position: number,
+    ) {
+        if (activeMatches.length === 0) {
+            closeActionMenu();
+            return;
+        }
+
+        if (sameMatches(visibleMatches, activeMatches) && !actionMenu.hidden) {
+            menuPosition = position;
+            positionActionMenu(position);
+            return;
+        }
+
+        visibleMatches = activeMatches;
+        menuPosition = position;
+        actionMenu.hidden = false;
+        actionMenu.replaceChildren();
+
+        activeMatches.forEach((match, index) => {
+            const label = document.createElement("span");
+            label.className = classNames["action-menu-label"];
+            label.textContent = `${activeMatches.length > 1 ? `${index + 1}. ` : ""}${match.action.description}`;
+
+            const matchedText = document.createElement("small");
+            matchedText.className = classNames["action-menu-match"];
+            matchedText.textContent = `“${match.text}”`;
+
+            if (!match.command) {
+                const unavailable = document.createElement("button");
+                unavailable.type = "button";
+                unavailable.className = classNames["action-menu-item"];
+                unavailable.disabled = true;
+                label.textContent += " — 実行できません";
+                unavailable.append(label, matchedText);
+                actionMenu.append(unavailable);
+                return;
+            }
+
+            if (match.command.type === "open-link") {
+                const link = document.createElement("a");
+                try {
+                    const url = new URL(match.command.url, document.baseURI);
+                    if (
+                        ["javascript:", "data:", "vbscript:"].includes(
+                            url.protocol,
+                        )
+                    ) {
+                        throw new Error(
+                            `Unsupported link protocol: ${url.protocol}`,
+                        );
+                    }
+                    link.href = url.href;
+                    link.target = "_blank";
+                    link.rel = "noopener noreferrer";
+                    link.className = classNames["action-menu-item"];
+                    link.append(label, matchedText);
+                } catch (reason) {
+                    options.handleAsyncError(reason);
+                    const unavailable = document.createElement("button");
+                    unavailable.type = "button";
+                    unavailable.className = classNames["action-menu-item"];
+                    unavailable.disabled = true;
+                    unavailable.append(label, matchedText);
+                    actionMenu.append(unavailable);
+                    return;
+                }
+                actionMenu.append(link);
+            } else {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = classNames["action-menu-item"];
+                button.append(label, matchedText);
+                const command = match.command;
+                button.addEventListener("click", () => {
+                    closeActionMenu();
+                    void executeCommand(command).catch(
+                        options.handleAsyncError,
+                    );
+                });
+                actionMenu.append(button);
+            }
+        });
+        positionActionMenu(menuPosition);
+    }
+
+    function showActionsAt(position: number) {
+        const activeMatches = actionMatches.filter(
+            (match) => match.from <= position && position < match.to,
+        );
+        renderActionMenu(activeMatches, position);
+    }
+
+    const setActionDecorationsEffect =
+        StateEffect.define<ActionDecorations>();
     const actionDecorator = ViewPlugin.fromClass(
         class ActionDecorator {
             decorations = Decoration.none;
@@ -296,16 +459,17 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
                 this.notifyDecorationsUpdated(view.state);
             }
             notifyDecorationsUpdated(state: EditorState) {
-                this.decorations = Decoration.none;
                 this.cancelScope(async (signal) => {
-                    const decorations = await createDecorations(
+                    const result = await createDecorations(
                         state,
                         options.location,
                         signal,
                         this.ruleSource,
+                        options.handleAsyncError,
                     );
+                    if (signal.aborted) return;
                     this.view.dispatch({
-                        effects: setActionDecorationsEffect.of(decorations),
+                        effects: setActionDecorationsEffect.of(result),
                     });
                 });
             }
@@ -313,11 +477,15 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
                 for (const { effects } of update.transactions) {
                     for (const effect of effects) {
                         if (effect.is(setActionDecorationsEffect)) {
-                            this.decorations = effect.value;
+                            this.decorations = effect.value.decorations;
+                            actionMatches = effect.value.matches;
                         }
                     }
                 }
                 if (update.docChanged) {
+                    this.decorations = this.decorations.map(update.changes);
+                    actionMatches = [];
+                    closeActionMenu();
                     this.notifyDecorationsUpdated(update.state);
                 }
             }
@@ -329,20 +497,21 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
 
     const actionClickHandler = EditorView.domEventHandlers({
         click: (event, view) => {
-            const target = event.target as HTMLElement;
-            if (target.classList.contains(classNames["action-link"])) {
-                event.preventDefault();
-                const pos = view.posAtDOM(target);
-                const plugin = view.plugin(actionDecorator);
-                if (!plugin) return;
-
-                const foundSpecs: ActionDecorationSpec[] = [];
-                plugin.decorations.between(pos, pos, (from, to, value) => {
-                    foundSpecs.push(value.spec.spec);
-                });
-                for (const { action, text } of foundSpecs) {
-                    executeAction(action, text).catch(options.handleAsyncError);
-                }
+            const position = view.posAtCoords({
+                x: event.clientX,
+                y: event.clientY,
+            });
+            if (position == null) {
+                closeActionMenu();
+                return;
+            }
+            showActionsAt(position);
+        },
+        keydown: (event) => {
+            if (event.key === "Escape" && !actionMenu.hidden) {
+                closeActionMenu();
+                editor.focus();
+                return true;
             }
         },
     });
@@ -368,6 +537,23 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     const editor = new EditorView({
         state: EditorState.create({ doc: options.initialDoc, extensions }),
     });
+    editorShell.append(editor.dom, actionMenu);
+
+    document.addEventListener("pointerdown", (event) => {
+        const target = event.target;
+        if (
+            target instanceof Node &&
+            !actionMenu.contains(target) &&
+            !editor.dom.contains(target)
+        ) {
+            closeActionMenu();
+        }
+    });
+    editor.scrollDOM.addEventListener("scroll", () => {
+        if (!actionMenu.hidden) {
+            positionActionMenu(editor.state.selection.main.head);
+        }
+    });
 
     function dispatchSource(source: string) {
         editor.dispatch({
@@ -380,9 +566,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     }
     return {
         editor,
-        get element() {
-            return editor.dom;
-        },
+        element: editorShell,
         dispatchSource,
         updateRuleSource(newRuleSource: string) {
             const plugin = editor.plugin(actionDecorator);
