@@ -16,12 +16,7 @@ import {
     wrapCancellable,
 } from "../standard-extensions";
 import * as Bounds from "../bounds";
-import {
-    getWorldWidth,
-    hashPixels,
-    resolveBufferRatio,
-    setCanvasStyleIfChanged,
-} from "./overlay-benchmark";
+import { getWorldWidth, setCanvasStyleIfChanged } from "./overlay-utils";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -148,9 +143,7 @@ export type PoiRecordsCanvasOverlay = Awaited<
 export async function createPoiRecordsCanvasOverlay(
     handleAsyncError: (reason: unknown) => void,
 ) {
-    const bufferRatio = __DEBUG_BUILD__
-        ? resolveBufferRatio(window.location.search, true)
-        : 0;
+    const bufferRatio = 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
         private ctx: CanvasRenderingContext2D;
         private drawer!: IsolatedDrawer;
@@ -303,17 +296,7 @@ export async function createPoiRecordsCanvasOverlay(
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
 
-            const startedAt = __DEBUG_BUILD__ ? performance.now() : 0;
             await this.drawer(signal, port);
-            if (__DEBUG_BUILD__) {
-                console.info("[records-overlay benchmark]", {
-                    phase: "full-draw",
-                    bufferRatio,
-                    milliseconds: performance.now() - startedAt,
-                    width: canvasWidth,
-                    height: canvasHeight,
-                });
-            }
         }
         async commitImage(
             image: ImageBitmap,
@@ -321,7 +304,6 @@ export async function createPoiRecordsCanvasOverlay(
             signal: AbortSignal,
         ) {
             // 転送された画面を描画
-            const startedAt = __DEBUG_BUILD__ ? performance.now() : 0;
             await waitAnimationFrame(signal);
             const { ctx } = this;
             initCanvas(ctx, port);
@@ -344,54 +326,6 @@ export async function createPoiRecordsCanvasOverlay(
                     "transform",
                     `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`,
                 );
-            }
-            if (__DEBUG_BUILD__) {
-                console.info("[records-overlay benchmark]", {
-                    phase: "commit-image",
-                    bufferRatio,
-                    milliseconds: performance.now() - startedAt,
-                });
-                const map = this.getMap();
-                if (
-                    currentPos &&
-                    map instanceof google.maps.Map &&
-                    ctx.canvas.width > 0 &&
-                    ctx.canvas.height > 0
-                ) {
-                    const dpr = port.devicePixelRatio;
-                    const visibleRect = map.getDiv().getBoundingClientRect();
-                    const left = Math.max(
-                        0,
-                        Math.round(-(currentPos.x | 0) * dpr),
-                    );
-                    const top = Math.max(
-                        0,
-                        Math.round(-(currentPos.y | 0) * dpr),
-                    );
-                    const width = Math.min(
-                        Math.round(visibleRect.width * dpr),
-                        ctx.canvas.width - left,
-                    );
-                    const height = Math.min(
-                        Math.round(visibleRect.height * dpr),
-                        ctx.canvas.height - top,
-                    );
-                    if (width > 0 && height > 0) {
-                        const pixels = ctx.getImageData(
-                            left,
-                            top,
-                            width,
-                            height,
-                        );
-                        console.info("[records-overlay benchmark]", {
-                            phase: "visible-pixels",
-                            bufferRatio,
-                            width,
-                            height,
-                            hash: await hashPixels(pixels.data),
-                        });
-                    }
-                }
             }
         }
     }

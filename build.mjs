@@ -225,9 +225,6 @@ async function build() {
         entryPoints: [mainFile],
         bundle: true,
         outfile: changeExt(mainFile, watchMode ? ".debug.js" : ".js"),
-        define: {
-            __DEBUG_BUILD__: JSON.stringify(watchMode),
-        },
         banner: { js: banner },
         footer: watchMode ? { js: clientSnippet } : undefined,
         sourcemap: watchMode ? "inline" : false,
