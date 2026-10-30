@@ -183,8 +183,7 @@ export async function createDraftList({
     let activeRuleSource =
         currentSources.sources.find((s) => s.id === activeRuleSourceId)
             ?.contents ?? defaultSalSource;
-    let activeOpenSourceId =
-        currentSources.activeSalOpenSourceId ?? null;
+    let activeOpenSourceId = currentSources.activeSalOpenSourceId ?? null;
     let activeOpenSource =
         currentSources.sources.find((s) => s.id === activeOpenSourceId)
             ?.contents ?? "";
@@ -291,22 +290,19 @@ export async function createDraftList({
             noteEditor.updateRuleSource(activeRuleSource);
         },
     );
-    editor.events.addEventListener(
-        "sal-open-source-changed",
-        ({ detail }) => {
-            activeOpenSourceId = detail.sourceId;
-            currentSources = {
-                ...currentSources,
-                activeSalOpenSourceId: activeOpenSourceId,
-            };
-            activeOpenSource =
-                currentSources.sources.find(
-                    (source) => source.id === activeOpenSourceId,
-                )?.contents ?? "";
-            local.setConfig({ ...local.getConfig(), sources: currentSources });
-            updateOpenMapLinks();
-        },
-    );
+    editor.events.addEventListener("sal-open-source-changed", ({ detail }) => {
+        activeOpenSourceId = detail.sourceId;
+        currentSources = {
+            ...currentSources,
+            activeSalOpenSourceId: activeOpenSourceId,
+        };
+        activeOpenSource =
+            currentSources.sources.find(
+                (source) => source.id === activeOpenSourceId,
+            )?.contents ?? "";
+        local.setConfig({ ...local.getConfig(), sources: currentSources });
+        updateOpenMapLinks();
+    });
 
     function setCurrentSourcesAndNotify(
         newSources: typeof currentSources,
@@ -510,10 +506,7 @@ export async function createDraftList({
     ) as HTMLInputElement;
 
     const externalUrlMenu = (
-        <div
-            class={classNames["external-url-menu"]}
-            hidden
-        ></div>
+        <div class={classNames["external-url-menu"]} hidden></div>
     ) as HTMLDivElement;
     externalUrlMenu.setAttribute("role", "menu");
     const externalUrlButton = (
@@ -527,11 +520,7 @@ export async function createDraftList({
                 if (externalUrlMenu.childElementCount === 1) {
                     const link = externalUrlMenu.firstElementChild;
                     if (link instanceof HTMLAnchorElement) {
-                        window.open(
-                            link.href,
-                            "_blank",
-                            "noopener,noreferrer",
-                        );
+                        window.open(link.href, "_blank", "noopener,noreferrer");
                     }
                     return;
                 }
@@ -569,26 +558,6 @@ export async function createDraftList({
     });
     externalUrlMenu.addEventListener("click", closeExternalUrlMenu);
 
-    const openNewDraftButton = (
-        <a
-            classList={[classNames.button, classNames["open-map-button"]]}
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            ➕✍️
-        </a>
-    ) as HTMLAnchorElement;
-
-    const openUpdateDraftButton = (
-        <a
-            classList={[classNames.button, classNames["open-map-button"]]}
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            🔄✍️
-        </a>
-    ) as HTMLAnchorElement;
-
     const openMapButton = (
         <a
             classList={[classNames.button, classNames["open-map-button"]]}
@@ -606,20 +575,7 @@ export async function createDraftList({
         const {
             coordinates: [p],
             name: title,
-            description,
-            note,
         } = selectedDraft;
-
-        // 最後の行
-        const statement = note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
-
-        openNewDraftButton.href = getNewDraftUrl(p, title);
-        openUpdateDraftButton.href = getUpdateDraftUrl(
-            p,
-            title,
-            description,
-            statement,
-        );
         openMapButton.href = getGoogleMapsUrl(p, title);
     };
 
@@ -789,8 +745,6 @@ export async function createDraftList({
                 <div class={classNames["detail-content-wrapper"]}>
                     <div class={classNames["coordinates-container"]}>
                         {detailCoordinates}
-                        {openNewDraftButton}
-                        {openUpdateDraftButton}
                         {openMapButton}
                         {externalUrlControl}
                     </div>
@@ -867,8 +821,6 @@ export async function createDraftList({
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
             updateOpenMapLinks();
-            openNewDraftButton.style.display = "";
-            openUpdateDraftButton.style.display = "";
             openMapButton.style.display = "";
             externalUrlControl.style.display = "";
             deleteButton.style.display = "";
@@ -889,10 +841,6 @@ export async function createDraftList({
             detailCoordinates.value = "";
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "none";
-            openNewDraftButton.removeAttribute("href");
-            openNewDraftButton.style.display = "none";
-            openUpdateDraftButton.removeAttribute("href");
-            openUpdateDraftButton.style.display = "none";
             openMapButton.removeAttribute("href");
             openMapButton.style.display = "none";
             externalUrlUpdateId++;
