@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.8.0
+// @version      0.8.1
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -21801,7 +21801,8 @@
     const SourceWithSelectionSchema = zod.strictObject({
       selectedIndex: zod.number().nullable(),
       sources: zod.tuple([QuerySourceSchema]).rest(QuerySourceSchema).readonly(),
-      activeSalActionSourceId: zod.string().nullable().optional()
+      activeSalActionSourceId: zod.string().nullable().optional(),
+      activeSalOpenSourceId: zod.string().nullable().optional()
     }).readonly();
     const ConfigSchema = zod.strictObject({
       version: zod.literal("1"),
@@ -23235,29 +23236,37 @@ ${formatRemoteFailure(error)}`;
   }
 
   // source/drafts-view/draft-list.module.css
-  var cssText3 = ':root {\n    --border-color-4433abee67f95b518a74eba35dd2d50581517010: #ccc;\n    --selected-background-color-15ccf392543ef065648fd522cc42f6c95551fbc2: #2563eb;\n    --selected-text-color-4a4d3128d6a49e87826d1113c505762d0f0335af: #fff;\n    --text-muted-718cfffb25f1dabed940bbf4092af4662c81878f: #666;\n    --background-color-light-03f4bc0e62cf62a16da63b7328eddff5ff5057e3: #f8f9fa;\n    --primary-color-7004e6ab84fa1f8d2a256c5f11c04544c3f20b4f: #2563eb;\n    --primary-color-dark-d1544b39b746af03b7eb5eb520d5081042974cb6: #0056b3;\n\n    --open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2: 0.3s;\n}\n\n.container-94dc3a427bdf6370ab1333f2fb25f46e5a363650 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-e59a6da4440f0f01266db19cd41b7346604d37d1 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-e59a6da4440f0f01266db19cd41b7346604d37d1:focus,\n.input-field-e59a6da4440f0f01266db19cd41b7346604d37d1[class~="cm-focused"] {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n    outline: none;\n}\n\n.input-error-efabe0e6d58d922d29e75296e07eb82f04f2e6ed {\n    border: 1px solid red;\n}\n\n.list-container-dcc049e675e5e886daaaa0df8981dc752a4baac1 {\n    flex-grow: 1;\n    flex-shrink: 5;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-4433abee67f95b518a74eba35dd2d50581517010);\n    border-radius: 4px;\n}\n\n.item-8b7295dbe43bfa8b12c55020ab61c00ed39e4b61 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-4433abee67f95b518a74eba35dd2d50581517010);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n    overflow: hidden;\n}\n\n.item-8b7295dbe43bfa8b12c55020ab61c00ed39e4b61:last-child {\n    border-bottom: none;\n}\n\n.item-8b7295dbe43bfa8b12c55020ab61c00ed39e4b61.selected-f9cbe5bbe1fb622d32f908dd7508d130a7daaaa2 {\n    background-color: var(--selected-background-color-15ccf392543ef065648fd522cc42f6c95551fbc2);\n    color: var(--selected-text-color-4a4d3128d6a49e87826d1113c505762d0f0335af);\n}\n\n.item-8b7295dbe43bfa8b12c55020ab61c00ed39e4b61.selected-f9cbe5bbe1fb622d32f908dd7508d130a7daaaa2 .item-note-0f91063e76c743881380fd267e4d0cf9c06ad5d8 {\n    color: var(--selected-text-color-4a4d3128d6a49e87826d1113c505762d0f0335af);\n}\n\n.item-name-566cd473a26190d5b5466dbfb4073b04b990b33a {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-0f91063e76c743881380fd267e4d0cf9c06ad5d8 {\n    font-size: 0.8em;\n    color: var(--text-muted-718cfffb25f1dabed940bbf4092af4662c81878f);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-4433abee67f95b518a74eba35dd2d50581517010);\n    border-radius: 4px;\n    overflow: auto;\n    flex-shrink: 0;\n    padding: 0;\n}\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a[open] {\n    flex-shrink: 1;\n}\n\n.detail-summary-e5fa389729229218feaa725c030f6288b10d9da9 {\n    list-style: none;\n    display: flex;\n    gap: 8px;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-e5fa389729229218feaa725c030f6288b10d9da9::-webkit-details-marker {\n    display: none;\n}\n\n/* \u958B\u9589\u6642\u306E\u80CC\u666F\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-e5fa389729229218feaa725c030f6288b10d9da9 {\n    background-color: rgb(from var(--selected-background-color-15ccf392543ef065648fd522cc42f6c95551fbc2) r g b / 0.2);\n    transition: background-color var(--open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2);\n}\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a[open] > .detail-summary-e5fa389729229218feaa725c030f6288b10d9da9 {\n    background-color: transparent;\n}\n\n/* \u958B\u9589\u6642\u306E\u30A2\u30A4\u30B3\u30F3\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-e5fa389729229218feaa725c030f6288b10d9da9::after {\n    content: "\u2228";\n    font-size: 1.5em;\n    line-height: 1;\n    transition: transform var(--open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2);\n    transform: rotate(-90deg);\n}\n\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a[open] > .detail-summary-e5fa389729229218feaa725c030f6288b10d9da9::after {\n    transform: rotate(0deg);\n}\n\n/* \u958B\u9589\u6642\u306E\u5185\u5BB9\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n:root {\n    interpolate-size: allow-keywords;\n}\n\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a::details-content {\n    overflow: clip;\n    transition:\n        content-visibility var(--open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2) allow-discrete,\n        block-size var(--open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2) ease,\n        opacity var(--open-duration-26434734d2adfac4c49f38a23f87ecc3f1343fd2) ease-in-out;\n}\n\n.detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a:not([open])::details-content {\n    block-size: 0;\n    opacity: 0;\n}\n\n.detail-name-3e47d76256c9df281e6748de400125ca93a4c0a3 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n    min-width: 0;\n}\n\n.detail-fdd4a08143c2d6c40f66c5f9726a8f4976ab8bb6 {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-1e2ecc00e58b0f0a73c50fcaba80220d6f025a31 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.coordinates-container-afe542eb0a977e90c0d0487d0599b9d4f86b7654 {\n    display: flex;\n    width: 100%;\n    gap: 8px;\n}\n\n.detail-fdd4a08143c2d6c40f66c5f9726a8f4976ab8bb6.detail-coordinates-bd8e9ed02d1323dba52e45ec8031ee2c93c881ec {\n    flex-grow: 1;\n    width: auto;\n}\n\n.open-map-button-cc00b42749e2c61ebf545650b3167894a6119153 {\n    padding: 4px;\n    border: none;\n    border-radius: 4px;\n    background-color: var(--primary-color-7004e6ab84fa1f8d2a256c5f11c04544c3f20b4f);\n    color: white;\n    cursor: pointer;\n}\n\n.open-map-button-cc00b42749e2c61ebf545650b3167894a6119153:hover {\n    background-color: var(--primary-color-dark-d1544b39b746af03b7eb5eb520d5081042974cb6);\n}\n\n.button-6c8bb7c29450f0db549c53c7c649d91d232590fc {\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n    background-color: var(--primary-color-7004e6ab84fa1f8d2a256c5f11c04544c3f20b4f);\n}\n\n.button-6c8bb7c29450f0db549c53c7c649d91d232590fc:hover {\n    background-color: var(--primary-color-dark-d1544b39b746af03b7eb5eb520d5081042974cb6);\n}\n\n.button-6c8bb7c29450f0db549c53c7c649d91d232590fc {\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.delete-button-409b8be453b6c1da0b5d082584e2cc354dc0a3d5 {\n    background-color: #dc3545;\n}\n\n.delete-button-409b8be453b6c1da0b5d082584e2cc354dc0a3d5:hover {\n    background-color: #c82333;\n}\n\n.template-button-be02a1faabb4f193d1dbf55766a582727d94d2ed.is-template-94b7d02cf490640dd6e813d396bfc18cc38606fb {\n    background-color: #28a745;\n}\n\n.template-button-be02a1faabb4f193d1dbf55766a582727d94d2ed.is-template-94b7d02cf490640dd6e813d396bfc18cc38606fb:hover {\n    background-color: #218838;\n}\n\n.action-link-0eb4d06ea17f99f039052c74a673077936a17948 {\n    color: blue;\n    text-decoration: underline;\n    cursor: pointer;\n}\n\n.input-error-efabe0e6d58d922d29e75296e07eb82f04f2e6ed {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
+  var cssText3 = ':root {\n    --border-color-6571b3563ebdf7f5058a6180762e08586af249d3: #ccc;\n    --selected-background-color-be2d2ef5e22e64feb91bc89be664cdddfea34d4e: #2563eb;\n    --selected-text-color-864e0d8da9df6745269c77222e273c1930ff28a4: #fff;\n    --text-muted-e4168493931db0b04f78998f34af24403598117c: #666;\n    --background-color-light-1fd735df06baa083856d87d00909fbdea968ccfc: #f8f9fa;\n    --primary-color-ec4ecfe50fb2ebfcafb99becf6ccb299f86c03d7: #2563eb;\n    --primary-color-dark-3b36b2e1c16c8182477a5f913a6ece593947022e: #0056b3;\n\n    --open-duration-b7525bbbc14da6793e3edf9481493439b050e587: 0.3s;\n}\n\n.container-aa1accdd552a46c6244a6dc5d10f34d308312242 {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.input-field-20e5275444e4d84b7178827073156efa30ea8ef4 {\n    border: 1px solid;\n    border-color: rgba(255, 255, 255, 0.514) rgba(255, 255, 255, 0.726) white;\n    background-color: rgba(255, 255, 255, 0.25);\n    outline: none;\n}\n\n.input-field-20e5275444e4d84b7178827073156efa30ea8ef4:focus,\n.input-field-20e5275444e4d84b7178827073156efa30ea8ef4[class~="cm-focused"] {\n    background-color: #ffffff;\n    border-color: #cbd5e1;\n    box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.35);\n    outline: none;\n}\n\n.input-error-58919fff8370bb8ed7c4e125a7b93132b8f0e30b {\n    border: 1px solid red;\n}\n\n.list-container-51dbe966deb66cee243d4104a86bca057fc8f9cc {\n    flex-grow: 1;\n    flex-shrink: 5;\n    overflow-y: auto;\n    border: 1px solid var(--border-color-6571b3563ebdf7f5058a6180762e08586af249d3);\n    border-radius: 4px;\n}\n\n.item-d2f78be6a7151ca141beceb9ec6894c218a6f021 {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    flex-grow: 1;\n    min-width: 0;\n    padding: 4px;\n    border-bottom: 1px solid var(--border-color-6571b3563ebdf7f5058a6180762e08586af249d3);\n    cursor: pointer;\n    -webkit-user-select: none;\n    -moz-user-select: none;\n    -ms-user-select: none;\n    user-select: none;\n    overflow: hidden;\n}\n\n.item-d2f78be6a7151ca141beceb9ec6894c218a6f021:last-child {\n    border-bottom: none;\n}\n\n.item-d2f78be6a7151ca141beceb9ec6894c218a6f021.selected-eac4b057f65ab5d59f5dcd14ab89ba5208967985 {\n    background-color: var(--selected-background-color-be2d2ef5e22e64feb91bc89be664cdddfea34d4e);\n    color: var(--selected-text-color-864e0d8da9df6745269c77222e273c1930ff28a4);\n}\n\n.item-d2f78be6a7151ca141beceb9ec6894c218a6f021.selected-eac4b057f65ab5d59f5dcd14ab89ba5208967985 .item-note-8875cdc55225bb9faab6a52c0d4a262922499235 {\n    color: var(--selected-text-color-864e0d8da9df6745269c77222e273c1930ff28a4);\n}\n\n.item-name-dd4f57102a64471f0a9bc1762ad6e885b543b77b {\n    font-weight: bold;\n    flex-shrink: 0;\n    margin-right: 4px;\n}\n\n.item-note-8875cdc55225bb9faab6a52c0d4a262922499235 {\n    font-size: 0.8em;\n    color: var(--text-muted-e4168493931db0b04f78998f34af24403598117c);\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980 {\n    box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.5);\n    border: 1px solid var(--border-color-6571b3563ebdf7f5058a6180762e08586af249d3);\n    border-radius: 4px;\n    overflow: auto;\n    flex-shrink: 0;\n    padding: 0;\n}\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980[open] {\n    flex-shrink: 1;\n}\n\n.detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd {\n    list-style: none;\n    display: flex;\n    gap: 8px;\n    justify-content: space-between;\n    align-items: center;\n    cursor: pointer;\n    padding: 16px;\n}\n\n/* Webkit\u30D6\u30E9\u30A6\u30B6\u306E\u30C7\u30D5\u30A9\u30EB\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u975E\u8868\u793A\u306B\u3059\u308B */\n.detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd::-webkit-details-marker {\n    display: none;\n}\n\n/* \u958B\u9589\u6642\u306E\u80CC\u666F\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd {\n    background-color: rgb(from var(--selected-background-color-be2d2ef5e22e64feb91bc89be664cdddfea34d4e) r g b / 0.2);\n    transition: background-color var(--open-duration-b7525bbbc14da6793e3edf9481493439b050e587);\n}\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980[open] > .detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd {\n    background-color: transparent;\n}\n\n/* \u958B\u9589\u6642\u306E\u30A2\u30A4\u30B3\u30F3\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n.detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd::after {\n    content: "\u2228";\n    font-size: 1.5em;\n    line-height: 1;\n    transition: transform var(--open-duration-b7525bbbc14da6793e3edf9481493439b050e587);\n    transform: rotate(-90deg);\n}\n\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980[open] > .detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd::after {\n    transform: rotate(0deg);\n}\n\n/* \u958B\u9589\u6642\u306E\u5185\u5BB9\u30A2\u30CB\u30E1\u30FC\u30B7\u30E7\u30F3 */\n:root {\n    interpolate-size: allow-keywords;\n}\n\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980::details-content {\n    overflow: clip;\n    transition:\n        content-visibility var(--open-duration-b7525bbbc14da6793e3edf9481493439b050e587) allow-discrete,\n        block-size var(--open-duration-b7525bbbc14da6793e3edf9481493439b050e587) ease,\n        opacity var(--open-duration-b7525bbbc14da6793e3edf9481493439b050e587) ease-in-out;\n}\n\n.detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980:not([open])::details-content {\n    block-size: 0;\n    opacity: 0;\n}\n\n.detail-name-f9c0340c5d86dad348b328cdca810caa852c5d95 {\n    flex-grow: 1;\n    font-size: 1.2em;\n    font-weight: bold;\n    margin-bottom: 0;\n    min-width: 0;\n}\n\n.detail-6fb4dc30cb8204f67f4eb0a5143594c5c693a04e {\n    margin-bottom: 4px;\n    padding: 0;\n    width: 100%;\n    box-sizing: border-box;\n}\n\n.detail-content-wrapper-d096cc9a4a213773d45af78b81eb05e846100171 {\n    padding: 0 16px 16px 16px;\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n}\n\n.coordinates-container-f1695189b9aaa6e8f71c3035cca8fe80bae2d71f {\n    display: flex;\n    width: 100%;\n    gap: 8px;\n    align-items: center;\n}\n\n.detail-6fb4dc30cb8204f67f4eb0a5143594c5c693a04e.detail-coordinates-5d37fa3e7c1c721fa504a244a3c1001e59b7743e {\n    flex-grow: 1;\n    width: auto;\n}\n\n.open-map-button-e2bdeca346ae2174e6a9db86a7abcc4d50c46189 {\n    padding: 4px;\n    border: none;\n    border-radius: 4px;\n    background-color: var(--primary-color-ec4ecfe50fb2ebfcafb99becf6ccb299f86c03d7);\n    color: white;\n    cursor: pointer;\n}\n\n.open-map-button-e2bdeca346ae2174e6a9db86a7abcc4d50c46189:hover {\n    background-color: var(--primary-color-dark-3b36b2e1c16c8182477a5f913a6ece593947022e);\n}\n\n.external-url-control-8a0cd724f4646bff021f93cd5662a0b63befaaa6 {\n    position: relative;\n    display: flex;\n}\n\n.external-url-menu-fa6c365419f369114c137be900bf8a8b67d24021 {\n    position: absolute;\n    z-index: 20;\n    top: calc(100% + 4px);\n    right: 0;\n    display: flex;\n    flex-direction: column;\n    min-width: 180px;\n    max-width: min(320px, calc(100vw - 16px));\n    max-height: min(50vh, 320px);\n    overflow-y: auto;\n    padding: 6px;\n    border: 1px solid var(--border-color-6571b3563ebdf7f5058a6180762e08586af249d3);\n    border-radius: 6px;\n    background: white;\n    box-shadow: 0 4px 14px rgb(0 0 0 / 22%);\n}\n\n.external-url-menu-fa6c365419f369114c137be900bf8a8b67d24021[hidden] {\n    display: none;\n}\n\n.external-url-menu-item-9e5bb923043783938a8339357309f1c305839db4 {\n    padding: 8px 10px;\n    border-radius: 4px;\n    color: #1f2937;\n    text-decoration: none;\n    white-space: nowrap;\n}\n\n.external-url-menu-item-9e5bb923043783938a8339357309f1c305839db4:hover,\n.external-url-menu-item-9e5bb923043783938a8339357309f1c305839db4:focus-visible {\n    background: #e8eefc;\n    outline: none;\n}\n\n.button-129b1496662fcd310cf3167a621d9660481f4d84 {\n    padding: 8px 12px;\n    color: white;\n    border: none;\n    border-radius: 4px;\n    cursor: pointer;\n    background-color: var(--primary-color-ec4ecfe50fb2ebfcafb99becf6ccb299f86c03d7);\n}\n\n.button-129b1496662fcd310cf3167a621d9660481f4d84:hover {\n    background-color: var(--primary-color-dark-3b36b2e1c16c8182477a5f913a6ece593947022e);\n}\n\n.button-129b1496662fcd310cf3167a621d9660481f4d84:disabled {\n    cursor: not-allowed;\n    opacity: 0.6;\n}\n\n.button-129b1496662fcd310cf3167a621d9660481f4d84 {\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n}\n\n.delete-button-1ecb58099807f156e74e91d1f318be593de1461c {\n    background-color: #dc3545;\n}\n\n.delete-button-1ecb58099807f156e74e91d1f318be593de1461c:hover {\n    background-color: #c82333;\n}\n\n.template-button-0b890e753e3da62c669658613a49d4e780f46990.is-template-399766bfb776c063d86624743971ef4ad858ac5b {\n    background-color: #28a745;\n}\n\n.template-button-0b890e753e3da62c669658613a49d4e780f46990.is-template-399766bfb776c063d86624743971ef4ad858ac5b:hover {\n    background-color: #218838;\n}\n\n.action-link-acdc2c24d5a02ea58932c56c62f26c0322019b5d {\n    color: inherit;\n    text-decoration: underline dotted #2563eb;\n    text-underline-offset: 2px;\n    cursor: text;\n}\n\n.action-editor-8ee29ccf6a0ea63c291444a2d766107584cd180a {\n    position: relative;\n    width: 100%;\n}\n\n.action-menu-62d4fd417faa65db70868126e70be2fe33e03f6b {\n    position: absolute;\n    z-index: 20;\n    display: flex;\n    flex-direction: column;\n    gap: 4px;\n    min-width: 180px;\n    max-width: min(320px, calc(100vw - 16px));\n    max-height: min(50vh, 320px);\n    overflow-y: auto;\n    padding: 6px;\n    border: 1px solid var(--border-color-6571b3563ebdf7f5058a6180762e08586af249d3);\n    border-radius: 6px;\n    background: white;\n    box-shadow: 0 4px 14px rgb(0 0 0 / 22%);\n}\n\n.action-menu-62d4fd417faa65db70868126e70be2fe33e03f6b[hidden] {\n    display: none;\n}\n\n.action-menu-item-191440761d135b83679c78d26ab7dbf63081bc0d {\n    display: flex;\n    flex-direction: column;\n    gap: 2px;\n    width: 100%;\n    padding: 8px 10px;\n    border: 0;\n    border-radius: 4px;\n    color: #1f2937;\n    background: transparent;\n    font: inherit;\n    text-align: left;\n    text-decoration: none;\n    cursor: pointer;\n}\n\n.action-menu-item-191440761d135b83679c78d26ab7dbf63081bc0d:hover,\n.action-menu-item-191440761d135b83679c78d26ab7dbf63081bc0d:focus-visible {\n    background: #e8eefc;\n    outline: none;\n}\n\n.action-menu-item-191440761d135b83679c78d26ab7dbf63081bc0d:disabled {\n    color: #666;\n    cursor: not-allowed;\n}\n\n.action-menu-label-865ef38b0c93da80a8469efd69bf8449c8d47aa2 {\n    font-weight: 600;\n}\n\n.action-menu-match-a0bf5f5b8d760b16a1b7f79758c5f20a49783796 {\n    overflow-wrap: anywhere;\n    color: #666;\n    font-size: 0.8em;\n}\n\n.input-error-58919fff8370bb8ed7c4e125a7b93132b8f0e30b {\n    border: 1px solid red;\n    background-color: #c82333;\n}\n';
   var draft_list_default = {
-    container: "container-94dc3a427bdf6370ab1333f2fb25f46e5a363650",
-    "input-field": "input-field-e59a6da4440f0f01266db19cd41b7346604d37d1",
-    "input-error": "input-error-efabe0e6d58d922d29e75296e07eb82f04f2e6ed",
-    "list-container": "list-container-dcc049e675e5e886daaaa0df8981dc752a4baac1",
-    item: "item-8b7295dbe43bfa8b12c55020ab61c00ed39e4b61",
-    selected: "selected-f9cbe5bbe1fb622d32f908dd7508d130a7daaaa2",
-    "item-note": "item-note-0f91063e76c743881380fd267e4d0cf9c06ad5d8",
-    "item-name": "item-name-566cd473a26190d5b5466dbfb4073b04b990b33a",
-    "detail-pane": "detail-pane-a0a72222f5fc72d24bac0979b0914b206788812a",
-    "detail-summary": "detail-summary-e5fa389729229218feaa725c030f6288b10d9da9",
-    "detail-name": "detail-name-3e47d76256c9df281e6748de400125ca93a4c0a3",
-    detail: "detail-fdd4a08143c2d6c40f66c5f9726a8f4976ab8bb6",
-    "detail-content-wrapper": "detail-content-wrapper-1e2ecc00e58b0f0a73c50fcaba80220d6f025a31",
-    "coordinates-container": "coordinates-container-afe542eb0a977e90c0d0487d0599b9d4f86b7654",
-    "detail-coordinates": "detail-coordinates-bd8e9ed02d1323dba52e45ec8031ee2c93c881ec",
-    "open-map-button": "open-map-button-cc00b42749e2c61ebf545650b3167894a6119153",
-    button: "button-6c8bb7c29450f0db549c53c7c649d91d232590fc",
-    "delete-button": "delete-button-409b8be453b6c1da0b5d082584e2cc354dc0a3d5",
-    "template-button": "template-button-be02a1faabb4f193d1dbf55766a582727d94d2ed",
-    "is-template": "is-template-94b7d02cf490640dd6e813d396bfc18cc38606fb",
-    "action-link": "action-link-0eb4d06ea17f99f039052c74a673077936a17948"
+    container: "container-aa1accdd552a46c6244a6dc5d10f34d308312242",
+    "input-field": "input-field-20e5275444e4d84b7178827073156efa30ea8ef4",
+    "input-error": "input-error-58919fff8370bb8ed7c4e125a7b93132b8f0e30b",
+    "list-container": "list-container-51dbe966deb66cee243d4104a86bca057fc8f9cc",
+    item: "item-d2f78be6a7151ca141beceb9ec6894c218a6f021",
+    selected: "selected-eac4b057f65ab5d59f5dcd14ab89ba5208967985",
+    "item-note": "item-note-8875cdc55225bb9faab6a52c0d4a262922499235",
+    "item-name": "item-name-dd4f57102a64471f0a9bc1762ad6e885b543b77b",
+    "detail-pane": "detail-pane-b7fefc2ae7154991ab45e667935cfbfe12146980",
+    "detail-summary": "detail-summary-4ff9b6e89db49f4c7a02f537344ff6a5abea47bd",
+    "detail-name": "detail-name-f9c0340c5d86dad348b328cdca810caa852c5d95",
+    detail: "detail-6fb4dc30cb8204f67f4eb0a5143594c5c693a04e",
+    "detail-content-wrapper": "detail-content-wrapper-d096cc9a4a213773d45af78b81eb05e846100171",
+    "coordinates-container": "coordinates-container-f1695189b9aaa6e8f71c3035cca8fe80bae2d71f",
+    "detail-coordinates": "detail-coordinates-5d37fa3e7c1c721fa504a244a3c1001e59b7743e",
+    "open-map-button": "open-map-button-e2bdeca346ae2174e6a9db86a7abcc4d50c46189",
+    "external-url-control": "external-url-control-8a0cd724f4646bff021f93cd5662a0b63befaaa6",
+    "external-url-menu": "external-url-menu-fa6c365419f369114c137be900bf8a8b67d24021",
+    "external-url-menu-item": "external-url-menu-item-9e5bb923043783938a8339357309f1c305839db4",
+    button: "button-129b1496662fcd310cf3167a621d9660481f4d84",
+    "delete-button": "delete-button-1ecb58099807f156e74e91d1f318be593de1461c",
+    "template-button": "template-button-0b890e753e3da62c669658613a49d4e780f46990",
+    "is-template": "is-template-399766bfb776c063d86624743971ef4ad858ac5b",
+    "action-link": "action-link-acdc2c24d5a02ea58932c56c62f26c0322019b5d",
+    "action-editor": "action-editor-8ee29ccf6a0ea63c291444a2d766107584cd180a",
+    "action-menu": "action-menu-62d4fd417faa65db70868126e70be2fe33e03f6b",
+    "action-menu-item": "action-menu-item-191440761d135b83679c78d26ab7dbf63081bc0d",
+    "action-menu-label": "action-menu-label-865ef38b0c93da80a8469efd69bf8449c8d47aa2",
+    "action-menu-match": "action-menu-match-a0bf5f5b8d760b16a1b7f79758c5f20a49783796"
   };
 
   // source/drafts-view/virtual-list.module.css
@@ -48521,7 +48530,8 @@ ${formatRemoteFailure(error)}`;
   async function createEditor({
     initialFileName,
     initialText,
-    initialActiveSalActionSourceId
+    initialActiveSalActionSourceId,
+    initialActiveSalOpenSourceId
   }) {
     setStyle9();
     const fileErrors = /* @__PURE__ */ new Map();
@@ -48564,9 +48574,17 @@ ${formatRemoteFailure(error)}`;
       }
     });
     let activeSalActionSource = initialActiveSalActionSourceId;
+    let activeSalOpenSource = initialActiveSalOpenSourceId;
     function updateSalActionButton() {
       const isActive = currentFileName === activeSalActionSource;
       salActionButton.classList.toggle(
+        editor_default["active-sal-action-button"],
+        isActive
+      );
+    }
+    function updateSalOpenButton() {
+      const isActive = currentFileName === activeSalOpenSource;
+      salOpenButton.classList.toggle(
         editor_default["active-sal-action-button"],
         isActive
       );
@@ -48591,7 +48609,30 @@ ${formatRemoteFailure(error)}`;
         children: "\u30A2\u30AF\u30B7\u30E7\u30F3\u5316\u6307\u5B9A"
       }
     );
-    const toolbar = /* @__PURE__ */ jsx("div", { class: editor_default.toolbar, children: salActionButton });
+    const salOpenButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: editor_default["sal-action-button"],
+        onclick: () => {
+          if (activeSalOpenSource === currentFileName) {
+            activeSalOpenSource = null;
+          } else {
+            activeSalOpenSource = currentFileName;
+          }
+          updateSalOpenButton();
+          events.dispatchEvent(
+            createTypedCustomEvent("sal-open-source-changed", {
+              sourceId: activeSalOpenSource
+            })
+          );
+        },
+        children: "\u5916\u90E8URL\u5316\u6307\u5B9A"
+      }
+    );
+    const toolbar = /* @__PURE__ */ jsxs("div", { class: editor_default.toolbar, children: [
+      salActionButton,
+      salOpenButton
+    ] });
     const basicSetup = [
       // lineNumbers()
       highlightSpecialChars(),
@@ -48670,6 +48711,7 @@ ${formatRemoteFailure(error)}`;
       parent: editorHost
     });
     updateSalActionButton();
+    updateSalOpenButton();
     const fileStates = /* @__PURE__ */ new Map();
     function switchFile(newFileName, newContent) {
       const cachedState = fileStates.get(newFileName);
@@ -48711,6 +48753,7 @@ ${formatRemoteFailure(error)}`;
       currentFileName = fileName;
       switchFile(fileName, value);
       updateSalActionButton();
+      updateSalOpenButton();
     }
     function setErrors(fileName, diagnostics) {
       fileErrors.set(fileName, diagnostics);
@@ -48908,7 +48951,7 @@ ${formatRemoteFailure(error)}`;
     }
     return (key) => globals.get(key);
   }
-  async function createDecorations(state, location2, signal, ruleSource) {
+  async function createDecorations(state, location2, signal, ruleSource, handleAsyncError2) {
     const builder = new RangeSetBuilder();
     const resolveGlobal = createSalGlobals();
     const r = await forceAsPromise(
@@ -48921,27 +48964,43 @@ ${formatRemoteFailure(error)}`;
       ...await forceAsPromise(rule.match({ text, location: location2 }), signal)
     ];
     matches.sort((a, b) => a.index - b.index);
+    const actionMatches = [];
     for (const { action, index: start, length } of matches) {
       if (length === 0) continue;
       const end = start + length;
       const matchedText = text.slice(start, end);
+      let command2;
+      try {
+        command2 = await forceAsPromise(
+          action.execute(matchedText),
+          signal
+        );
+      } catch (error) {
+        if (signal.aborted) throw error;
+        handleAsyncError2(error);
+      }
+      actionMatches.push({
+        from: start,
+        to: end,
+        text: matchedText,
+        action,
+        command: command2
+      });
       builder.add(
         start,
         end,
         Decoration.mark({
           class: draft_list_default["action-link"],
           attributes: {
-            title: action.description,
-            "data-action-text": matchedText
-          },
-          spec: {
-            action,
-            text: matchedText
+            title: action.description
           }
         })
       );
     }
-    return builder.finish();
+    return {
+      decorations: builder.finish(),
+      matches: actionMatches
+    };
   }
   function openLink(url) {
     window.open(url, "_blank");
@@ -48971,19 +49030,130 @@ ${formatRemoteFailure(error)}`;
         return raise`unreachable: '${command2}'`;
     }
   }
-  async function executeAction(action, matchedText) {
-    const command2 = await forceAsPromise(
-      action.execute(matchedText),
-      new AbortController().signal
-    );
-    await executeCommand(command2);
-  }
   function hasUserChange(update) {
     return update.transactions.some(
       (t2) => t2.annotation(Transaction.userEvent) !== void 0
     );
   }
   function createSimpleEditor(options) {
+    const editorShell = document.createElement("div");
+    editorShell.className = draft_list_default["action-editor"];
+    const actionMenu = document.createElement("div");
+    actionMenu.className = draft_list_default["action-menu"];
+    actionMenu.hidden = true;
+    actionMenu.setAttribute("role", "group");
+    actionMenu.setAttribute("aria-label", "\u4E00\u81F4\u7B87\u6240\u306E\u30A2\u30AF\u30B7\u30E7\u30F3");
+    editorShell.append(actionMenu);
+    let actionMatches = [];
+    let visibleMatches = [];
+    let menuPosition = 0;
+    function closeActionMenu() {
+      visibleMatches = [];
+      actionMenu.hidden = true;
+      actionMenu.replaceChildren();
+    }
+    function positionActionMenu(position) {
+      const coords = editor.coordsAtPos(position);
+      if (!coords) return;
+      const shellRect = editorShell.getBoundingClientRect();
+      const menuWidth = actionMenu.offsetWidth;
+      const menuHeight = actionMenu.offsetHeight;
+      const left = Math.max(
+        0,
+        Math.min(
+          coords.left - shellRect.left,
+          editorShell.clientWidth - menuWidth
+        )
+      );
+      const below = coords.bottom - shellRect.top + 6;
+      const top2 = below + menuHeight <= editorShell.clientHeight ? below : Math.max(0, coords.top - shellRect.top - menuHeight - 6);
+      actionMenu.style.left = `${left}px`;
+      actionMenu.style.top = `${top2}px`;
+    }
+    function sameMatches(first, second) {
+      return first.length === second.length && first.every((match, index) => match === second[index]);
+    }
+    function renderActionMenu(activeMatches, position) {
+      if (activeMatches.length === 0) {
+        closeActionMenu();
+        return;
+      }
+      if (sameMatches(visibleMatches, activeMatches) && !actionMenu.hidden) {
+        menuPosition = position;
+        positionActionMenu(position);
+        return;
+      }
+      visibleMatches = activeMatches;
+      menuPosition = position;
+      actionMenu.hidden = false;
+      actionMenu.replaceChildren();
+      activeMatches.forEach((match, index) => {
+        const label = document.createElement("span");
+        label.className = draft_list_default["action-menu-label"];
+        label.textContent = `${activeMatches.length > 1 ? `${index + 1}. ` : ""}${match.action.description}`;
+        const matchedText = document.createElement("small");
+        matchedText.className = draft_list_default["action-menu-match"];
+        matchedText.textContent = `\u201C${match.text}\u201D`;
+        if (!match.command) {
+          const unavailable = document.createElement("button");
+          unavailable.type = "button";
+          unavailable.className = draft_list_default["action-menu-item"];
+          unavailable.disabled = true;
+          label.textContent += " \u2014 \u5B9F\u884C\u3067\u304D\u307E\u305B\u3093";
+          unavailable.append(label, matchedText);
+          actionMenu.append(unavailable);
+          return;
+        }
+        if (match.command.type === "open-link") {
+          const link = document.createElement("a");
+          try {
+            const url = new URL(match.command.url, document.baseURI);
+            if (["javascript:", "data:", "vbscript:"].includes(
+              url.protocol
+            )) {
+              throw new Error(
+                `Unsupported link protocol: ${url.protocol}`
+              );
+            }
+            link.href = url.href;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.className = draft_list_default["action-menu-item"];
+            link.append(label, matchedText);
+          } catch (reason) {
+            options.handleAsyncError(reason);
+            const unavailable = document.createElement("button");
+            unavailable.type = "button";
+            unavailable.className = draft_list_default["action-menu-item"];
+            unavailable.disabled = true;
+            unavailable.append(label, matchedText);
+            actionMenu.append(unavailable);
+            return;
+          }
+          actionMenu.append(link);
+        } else {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = draft_list_default["action-menu-item"];
+          button.append(label, matchedText);
+          const command2 = match.command;
+          button.addEventListener("click", () => {
+            closeActionMenu();
+            void executeCommand(command2).catch(
+              options.handleAsyncError
+            );
+          });
+          actionMenu.append(button);
+        }
+      });
+      positionActionMenu(menuPosition);
+    }
+    function showActionsAt(position) {
+      const activeMatches = actionMatches.filter(
+        (match) => match.from <= position && position < match.to
+      );
+      renderActionMenu(activeMatches, position);
+    }
     const setActionDecorationsEffect = StateEffect.define();
     const actionDecorator = ViewPlugin.fromClass(
       class ActionDecorator {
@@ -48997,16 +49167,17 @@ ${formatRemoteFailure(error)}`;
           options.handleAsyncError
         );
         notifyDecorationsUpdated(state) {
-          this.decorations = Decoration.none;
           this.cancelScope(async (signal) => {
-            const decorations2 = await createDecorations(
+            const result = await createDecorations(
               state,
               options.location,
               signal,
-              this.ruleSource
+              this.ruleSource,
+              options.handleAsyncError
             );
+            if (signal.aborted) return;
             this.view.dispatch({
-              effects: setActionDecorationsEffect.of(decorations2)
+              effects: setActionDecorationsEffect.of(result)
             });
           });
         }
@@ -49014,11 +49185,15 @@ ${formatRemoteFailure(error)}`;
           for (const { effects } of update.transactions) {
             for (const effect of effects) {
               if (effect.is(setActionDecorationsEffect)) {
-                this.decorations = effect.value;
+                this.decorations = effect.value.decorations;
+                actionMatches = effect.value.matches;
               }
             }
           }
           if (update.docChanged) {
+            this.decorations = this.decorations.map(update.changes);
+            actionMatches = [];
+            closeActionMenu();
             this.notifyDecorationsUpdated(update.state);
           }
         }
@@ -49029,19 +49204,21 @@ ${formatRemoteFailure(error)}`;
     );
     const actionClickHandler = EditorView.domEventHandlers({
       click: (event, view) => {
-        const target = event.target;
-        if (target.classList.contains(draft_list_default["action-link"])) {
-          event.preventDefault();
-          const pos = view.posAtDOM(target);
-          const plugin = view.plugin(actionDecorator);
-          if (!plugin) return;
-          const foundSpecs = [];
-          plugin.decorations.between(pos, pos, (from, to, value) => {
-            foundSpecs.push(value.spec.spec);
-          });
-          for (const { action, text } of foundSpecs) {
-            executeAction(action, text).catch(options.handleAsyncError);
-          }
+        const position = view.posAtCoords({
+          x: event.clientX,
+          y: event.clientY
+        });
+        if (position == null) {
+          closeActionMenu();
+          return;
+        }
+        showActionsAt(position);
+      },
+      keydown: (event) => {
+        if (event.key === "Escape" && !actionMenu.hidden) {
+          closeActionMenu();
+          editor.focus();
+          return true;
         }
       }
     });
@@ -49064,6 +49241,18 @@ ${formatRemoteFailure(error)}`;
     const editor = new EditorView({
       state: EditorState.create({ doc: options.initialDoc, extensions })
     });
+    editorShell.append(editor.dom, actionMenu);
+    document.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (target instanceof Node && !actionMenu.contains(target) && !editor.dom.contains(target)) {
+        closeActionMenu();
+      }
+    });
+    editor.scrollDOM.addEventListener("scroll", () => {
+      if (!actionMenu.hidden) {
+        positionActionMenu(editor.state.selection.main.head);
+      }
+    });
     function dispatchSource(source) {
       editor.dispatch({
         changes: {
@@ -49075,9 +49264,7 @@ ${formatRemoteFailure(error)}`;
     }
     return {
       editor,
-      get element() {
-        return editor.dom;
-      },
+      element: editorShell,
       dispatchSource,
       updateRuleSource(newRuleSource) {
         const plugin = editor.plugin(actionDecorator);
@@ -49086,6 +49273,130 @@ ${formatRemoteFailure(error)}`;
         plugin.notifyDecorationsUpdated(editor.state);
       }
     };
+  }
+
+  // source/drafts-view/external-url.ts
+  var externalUrlMarker = "sal-external-url";
+  function isValueRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isExternalUrlDefinition(value) {
+    return isValueRecord(value) && value["marker"] === externalUrlMarker && typeof value["label"] === "string" && typeof value["buildUrl"] === "function";
+  }
+  function getDefinitions(value) {
+    if (isExternalUrlDefinition(value)) return [value];
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => getDefinitions(item));
+    }
+    throw new Error("External URL settings must be defined with open");
+  }
+  function binary2(operation) {
+    return (left) => done((right) => done(operation(left, right)));
+  }
+  function createSalExternalUrlGlobals() {
+    const globals = /* @__PURE__ */ new Map();
+    globals.set("fromVoid", () => done(null));
+    globals.set("fromMissing", () => done(null));
+    globals.set("fromString", (value) => done(value));
+    globals.set("fromWord", (value) => done(value));
+    globals.set("fromNumber", (value) => done(value));
+    globals.set(
+      "_seq_",
+      binary2((left, right) => `${left ?? ""}${right ?? ""}`)
+    );
+    globals.set(
+      "_and_",
+      binary2((left, right) => [
+        ...getDefinitions(left),
+        ...getDefinitions(right)
+      ])
+    );
+    globals.set(
+      "open",
+      (label) => done((buildUrl) => {
+        if (typeof label !== "string") {
+          throw new Error("open expects a string label");
+        }
+        if (typeof buildUrl !== "function") {
+          throw new Error("open expects a URL-generating function");
+        }
+        const definition = {
+          marker: externalUrlMarker,
+          label,
+          buildUrl
+        };
+        return done(definition);
+      })
+    );
+    globals.set(
+      "get",
+      (record2) => done((key) => {
+        if (!isValueRecord(record2) || typeof key !== "string") {
+          throw new Error("get expects a record and a string key");
+        }
+        const value = record2[key];
+        if (value === void 0) {
+          throw new Error(`Unknown record field: ${key}`);
+        }
+        return done(value);
+      })
+    );
+    globals.set(
+      "pipe",
+      (value) => done((operation) => {
+        if (typeof operation !== "function") {
+          throw new Error("pipe expects a function");
+        }
+        return operation(value);
+      })
+    );
+    globals.set("trim-end", (value) => {
+      if (typeof value !== "string") {
+        throw new Error("trim-end expects a string");
+      }
+      return done(value.trimEnd());
+    });
+    globals.set("last-line", (value) => {
+      if (typeof value !== "string") {
+        throw new Error("last-line expects a string");
+      }
+      return done(value.split(/\r\n|\n|\r/).at(-1) ?? "");
+    });
+    globals.set("json-stringify", (value) => {
+      const result = JSON.stringify(value);
+      return done(result);
+    });
+    globals.set("encode-url-component", (value) => {
+      if (typeof value !== "string") {
+        throw new Error("encode-url-component expects a string");
+      }
+      return done(encodeURIComponent(value));
+    });
+    return globals;
+  }
+  async function evaluateExternalUrls(source, data, signal) {
+    if (source.trim() === "") return [];
+    const globals = createSalExternalUrlGlobals();
+    const value = await forceAsPromise(
+      evaluateExpression(source, (name2) => globals.get(name2)),
+      signal
+    );
+    const definitions = getDefinitions(value);
+    const payload = data;
+    const options = [];
+    for (const definition of definitions) {
+      const url = await forceAsPromise(
+        definition.buildUrl(payload),
+        signal
+      );
+      if (typeof url !== "string") {
+        throw new Error(
+          `URL generator "${definition.label}" must return a string`
+        );
+      }
+      options.push({ label: definition.label, url });
+    }
+    return options;
   }
 
   // source/drafts-view/draft-list.tsx
@@ -49116,26 +49427,6 @@ ${formatRemoteFailure(error)}`;
       `intent://0,0?q=${lat},${lng}%20(${encodeURIComponent(title)})#Intent;scheme=geo;package=com.google.android.apps.maps;end`
     ) : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   }
-  function getNewDraftUrl({ lat, lng }, title) {
-    const payload = {
-      lat,
-      lng,
-      title,
-      description: "",
-      statement: ""
-    };
-    return `./submit/new#data=${encodeURIComponent(JSON.stringify(payload))}`;
-  }
-  function getUpdateDraftUrl({ lat, lng }, title, description, statement) {
-    const payload = {
-      lat,
-      lng,
-      title,
-      description,
-      statement
-    };
-    return `./submit#update=${encodeURIComponent(JSON.stringify(payload))}`;
-  }
   var setStyle10 = styleSetter(cssText3);
   async function createDraftList({
     overlay,
@@ -49159,6 +49450,8 @@ ${formatRemoteFailure(error)}`;
     const defaultSalSource = `pattern:("https://" many1:(not-space)) /to open`;
     let activeRuleSourceId = currentSources.activeSalActionSourceId ?? null;
     let activeRuleSource = currentSources.sources.find((s) => s.id === activeRuleSourceId)?.contents ?? defaultSalSource;
+    let activeOpenSourceId = currentSources.activeSalOpenSourceId ?? null;
+    let activeOpenSource = currentSources.sources.find((s) => s.id === activeOpenSourceId)?.contents ?? "";
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
       title: "\u691C\u7D22\u4E00\u89A7"
@@ -49166,7 +49459,8 @@ ${formatRemoteFailure(error)}`;
     const editor = await createEditor({
       initialFileName: getSelectedSourceId() ?? "",
       initialText: getSelectedSource() ?? "",
-      initialActiveSalActionSourceId: activeRuleSourceId
+      initialActiveSalActionSourceId: activeRuleSourceId,
+      initialActiveSalOpenSourceId: activeOpenSourceId
     });
     const editorDialog = createDialog(editor.element, {
       title: "\u691C\u7D22\u30EF\u30FC\u30C9\u3092\u7DE8\u96C6"
@@ -49237,8 +49531,26 @@ ${formatRemoteFailure(error)}`;
         noteEditor.updateRuleSource(activeRuleSource);
       }
     );
+    editor.events.addEventListener("sal-open-source-changed", ({ detail }) => {
+      activeOpenSourceId = detail.sourceId;
+      currentSources = {
+        ...currentSources,
+        activeSalOpenSourceId: activeOpenSourceId
+      };
+      activeOpenSource = currentSources.sources.find(
+        (source) => source.id === activeOpenSourceId
+      )?.contents ?? "";
+      local.setConfig({ ...local.getConfig(), sources: currentSources });
+      updateOpenMapLinks();
+    });
     function setCurrentSourcesAndNotify(newSources, updateEditor = true) {
       currentSources = newSources;
+      activeRuleSource = currentSources.sources.find(
+        (source) => source.id === activeRuleSourceId
+      )?.contents ?? defaultSalSource;
+      activeOpenSource = currentSources.sources.find(
+        (source) => source.id === activeOpenSourceId
+      )?.contents ?? "";
       sourceList.setSources(currentSources);
       const selectedSourceId = getSelectedSourceId() ?? "";
       const selectedSource = getSelectedSource() ?? "";
@@ -49247,6 +49559,9 @@ ${formatRemoteFailure(error)}`;
       if (updateEditor) {
         editor.setSource(selectedSourceId, selectedSource);
       }
+      descriptionEditor.updateRuleSource(activeRuleSource);
+      noteEditor.updateRuleSource(activeRuleSource);
+      updateOpenMapLinks();
       local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
@@ -49399,24 +49714,50 @@ ${formatRemoteFailure(error)}`;
         onfocus: (event) => event.target.select()
       }
     );
-    const openNewDraftButton = /* @__PURE__ */ jsx(
-      "a",
+    const externalUrlMenu = /* @__PURE__ */ jsx("div", { class: draft_list_default["external-url-menu"], hidden: true });
+    externalUrlMenu.setAttribute("role", "menu");
+    const externalUrlButton = /* @__PURE__ */ jsx(
+      "button",
       {
+        type: "button",
         classList: [draft_list_default.button, draft_list_default["open-map-button"]],
-        target: "_blank",
-        rel: "noopener noreferrer",
-        children: "\u2795\u270D\uFE0F"
+        title: "\u8A2D\u5B9A\u3057\u305F\u5916\u90E8URL\u3092\u958B\u304F",
+        "aria-label": "\u8A2D\u5B9A\u3057\u305F\u5916\u90E8URL\u3092\u958B\u304F",
+        disabled: true,
+        onclick: () => {
+          if (externalUrlMenu.childElementCount === 1) {
+            const link = externalUrlMenu.firstElementChild;
+            if (link instanceof HTMLAnchorElement) {
+              window.open(link.href, "_blank", "noopener,noreferrer");
+            }
+            return;
+          }
+          if (externalUrlMenu.hidden) {
+            externalUrlMenu.hidden = false;
+            externalUrlButton.setAttribute("aria-expanded", "true");
+          } else {
+            closeExternalUrlMenu();
+          }
+        },
+        children: "\u2197"
       }
     );
-    const openUpdateDraftButton = /* @__PURE__ */ jsx(
-      "a",
-      {
-        classList: [draft_list_default.button, draft_list_default["open-map-button"]],
-        target: "_blank",
-        rel: "noopener noreferrer",
-        children: "\u{1F504}\u270D\uFE0F"
+    externalUrlButton.setAttribute("aria-haspopup", "menu");
+    externalUrlButton.setAttribute("aria-expanded", "false");
+    const externalUrlControl = /* @__PURE__ */ jsxs("div", { class: draft_list_default["external-url-control"], children: [
+      externalUrlButton,
+      externalUrlMenu
+    ] });
+    const closeExternalUrlMenu = () => {
+      externalUrlMenu.hidden = true;
+      externalUrlButton.setAttribute("aria-expanded", "false");
+    };
+    document.addEventListener("pointerdown", (event) => {
+      if (!externalUrlMenu.hidden && event.target instanceof Node && !externalUrlControl.contains(event.target)) {
+        closeExternalUrlMenu();
       }
-    );
+    });
+    externalUrlMenu.addEventListener("click", closeExternalUrlMenu);
     const openMapButton = /* @__PURE__ */ jsx(
       "a",
       {
@@ -49427,22 +49768,68 @@ ${formatRemoteFailure(error)}`;
       }
     );
     const updateOpenMapLinks = () => {
+      updateExternalUrlOptions();
       if (!selectedDraft) return;
       const {
         coordinates: [p],
-        name: title,
-        description,
-        note
+        name: title
       } = selectedDraft;
-      const statement = note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
-      openNewDraftButton.href = getNewDraftUrl(p, title);
-      openUpdateDraftButton.href = getUpdateDraftUrl(
-        p,
-        title,
-        description,
-        statement
-      );
       openMapButton.href = getGoogleMapsUrl(p, title);
+    };
+    let externalUrlUpdateId = 0;
+    const updateExternalUrlOptions = () => {
+      const updateId = ++externalUrlUpdateId;
+      externalUrlMenu.replaceChildren();
+      closeExternalUrlMenu();
+      externalUrlButton.disabled = !selectedDraft || !activeOpenSource;
+      if (!selectedDraft || !activeOpenSource) return;
+      const draft = selectedDraft;
+      const [point] = draft.coordinates;
+      const data = {
+        lat: point.lat,
+        lng: point.lng,
+        title: draft.name,
+        description: draft.description,
+        note: draft.note
+      };
+      void (async () => {
+        try {
+          const options = await evaluateExternalUrls(
+            activeOpenSource,
+            data,
+            new AbortController().signal
+          );
+          if (updateId !== externalUrlUpdateId || selectedDraft !== draft) {
+            return;
+          }
+          for (const option of options) {
+            const url = new URL(option.url, document.baseURI);
+            if (url.protocol !== "http:" && url.protocol !== "https:") {
+              throw new Error(
+                `Unsupported external URL protocol: ${url.protocol}`
+              );
+            }
+            const link = /* @__PURE__ */ jsx(
+              "a",
+              {
+                href: url.href,
+                target: "_blank",
+                rel: "noopener noreferrer",
+                class: draft_list_default["external-url-menu-item"],
+                children: option.label
+              }
+            );
+            link.setAttribute("role", "menuitem");
+            externalUrlMenu.append(link);
+          }
+          externalUrlButton.disabled = options.length === 0;
+        } catch (error) {
+          if (updateId === externalUrlUpdateId) {
+            externalUrlButton.disabled = true;
+            handleAsyncError2(error);
+          }
+        }
+      })();
     };
     const deleteButton = /* @__PURE__ */ jsx(
       "button",
@@ -49541,9 +49928,8 @@ ${formatRemoteFailure(error)}`;
         /* @__PURE__ */ jsxs("div", { class: draft_list_default["detail-content-wrapper"], children: [
           /* @__PURE__ */ jsxs("div", { class: draft_list_default["coordinates-container"], children: [
             detailCoordinates,
-            openNewDraftButton,
-            openUpdateDraftButton,
-            openMapButton
+            openMapButton,
+            externalUrlControl
           ] }),
           descriptionEditor.element,
           noteEditor.element,
@@ -49611,9 +49997,8 @@ ${formatRemoteFailure(error)}`;
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "";
         updateOpenMapLinks();
-        openNewDraftButton.style.display = "";
-        openUpdateDraftButton.style.display = "";
         openMapButton.style.display = "";
+        externalUrlControl.style.display = "";
         deleteButton.style.display = "";
         templateToggleButton.style.display = "";
         if (getDraftIsTemplate(selectedDraft)) {
@@ -49632,12 +50017,13 @@ ${formatRemoteFailure(error)}`;
         detailCoordinates.value = "";
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "none";
-        openNewDraftButton.removeAttribute("href");
-        openNewDraftButton.style.display = "none";
-        openUpdateDraftButton.removeAttribute("href");
-        openUpdateDraftButton.style.display = "none";
         openMapButton.removeAttribute("href");
         openMapButton.style.display = "none";
+        externalUrlUpdateId++;
+        externalUrlMenu.replaceChildren();
+        closeExternalUrlMenu();
+        externalUrlButton.disabled = true;
+        externalUrlControl.style.display = "none";
         deleteButton.style.display = "none";
         templateToggleButton.style.display = "none";
       }
