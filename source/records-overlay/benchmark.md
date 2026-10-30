@@ -17,9 +17,14 @@ transparent. Compare runs using the same browser, machine, and GPU backend.
 Headless Chromium may use SwiftShader, so these numbers measure a repeatable
 test renderer, not necessarily a user's hardware GPU.
 
+The benchmark also compares the main-thread presentation paths used by
+`overlay-view.ts`: clearing and drawing the `ImageBitmap` into a 2D canvas
+versus drawing it with `globalCompositeOperation = "copy"`. It reports each
+path's CPU time and verifies the resulting pixels match and are non-transparent.
+
 This benchmark covers mesh creation and rendering for a fixed synthetic scene.
 It does not cover IndexedDB reads, Google Maps projection, Worker messaging, or
-the main-thread `ImageBitmap` commit.
+the end-to-end main-thread commit scheduling.
 
 ## Collision-check CPU benchmark
 

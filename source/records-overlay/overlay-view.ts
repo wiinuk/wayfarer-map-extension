@@ -121,7 +121,7 @@ function padBoundsRelative(
 }
 
 function initCanvas(
-    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    ctx: CanvasRenderingContext2D,
     port: Viewport,
 ) {
     const { canvas } = ctx;
@@ -133,8 +133,8 @@ function initCanvas(
     if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
+        ctx.globalCompositeOperation = "copy";
     }
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 }
 
 export type PoiRecordsCanvasOverlay = Awaited<
@@ -159,6 +159,7 @@ export async function createPoiRecordsCanvasOverlay(
             canvas.style.top = "0px";
             canvas.style.imageRendering = "crisp-edges";
             this.ctx = canvas.getContext("2d") ?? raise`context 2d`;
+            this.ctx.globalCompositeOperation = "copy";
         }
 
         async init(handleAsyncError: (reason: unknown) => void) {

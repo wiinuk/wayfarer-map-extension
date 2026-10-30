@@ -16,9 +16,8 @@ import {
 import { createOverlayViewOptions } from "../../source/records-overlay/options";
 
 const PIXI = await import("pixi.js");
-const canvasElement = document.querySelector<HTMLCanvasElement>(
-    "#benchmark-canvas",
-);
+const canvasElement =
+    document.querySelector<HTMLCanvasElement>("#benchmark-canvas");
 if (!canvasElement) throw new Error("Benchmark canvas was not found");
 const canvas: HTMLCanvasElement = canvasElement;
 
@@ -109,15 +108,9 @@ async function createScene() {
     };
 
     const worldContainer = app.stage.addChild(new PIXI.Container());
-    const cellLayer = worldContainer.addChild(
-        new PIXI.Container(),
-    );
-    const circleLayer = worldContainer.addChild(
-        new PIXI.Container(),
-    );
-    const labelLayer = worldContainer.addChild(
-        new PIXI.Container(),
-    );
+    const cellLayer = worldContainer.addChild(new PIXI.Container());
+    const circleLayer = worldContainer.addChild(new PIXI.Container());
+    const labelLayer = worldContainer.addChild(new PIXI.Container());
     const cellBuilders: CellMeshBuilder[] = [];
     const circleBuilders: CirclesMeshBuilder[] = [];
     const labelStyle = new PIXI.TextStyle({
@@ -195,9 +188,7 @@ async function createScene() {
                 const markerColumn = marker % 4;
                 circleBuilder.add(
                     {
-                        lat:
-                            centerLat +
-                            (markerRow - 1) * cellHalfSize * 0.45,
+                        lat: centerLat + (markerRow - 1) * cellHalfSize * 0.45,
                         lng:
                             centerLng +
                             (markerColumn - 1.5) * cellHalfSize * 0.45,
@@ -212,7 +203,8 @@ async function createScene() {
                 const labelLat =
                     centerLat + ((label % 2) - 0.5) * cellHalfSize * 0.8;
                 const labelLng =
-                    centerLng + (Math.floor(label / 2) - 1.5) * cellHalfSize * 0.8;
+                    centerLng +
+                    (Math.floor(label / 2) - 1.5) * cellHalfSize * 0.8;
                 const position = latLngToWorldPoint(
                     labelLat,
                     labelLng,
@@ -261,12 +253,14 @@ async function createScene() {
 
 function percentile(samples: number[], fraction: number) {
     const sorted = [...samples].sort((a, b) => a - b);
-    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))]!;
+    return sorted[
+        Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))
+    ]!;
 }
 
-async function getCanvasHash() {
+async function getCanvasHash(sourceCanvas: HTMLCanvasElement) {
     const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
+        sourceCanvas.toBlob((result) => {
             if (result) resolve(result);
             else reject(new Error("Could not read the rendered canvas"));
         }, "image/png");
@@ -287,13 +281,104 @@ async function getCanvasHash() {
     for (let i = 3; i < pixels.length; i += 4) {
         if (pixels[i] !== 0) nonTransparentPixels++;
     }
-    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(pixels));
+    const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new Uint8Array(pixels),
+    );
     return {
         sha256: Array.from(new Uint8Array(digest), (byte) =>
             byte.toString(16).padStart(2, "0"),
         ).join(""),
         nonTransparentPixels,
     };
+}
+
+async function benchmarkImagePresentation() {
+    const source = await createImageBitmap(canvas);
+    const drawImageCanvas = document.createElement("canvas");
+    const copyCanvas = document.createElement("canvas");
+
+    const drawImageContext = drawImageCanvas.getContext("2d");
+    if (!drawImageContext) {
+        source.close();
+        throw new Error("Could not create the 2D presentation context");
+    }
+    const copyContext = copyCanvas.getContext("2d");
+    if (!copyContext) {
+        source.close();
+        throw new Error("Could not create the copy presentation context");
+    }
+    drawImageCanvas.width = copyCanvas.width = canvas.width;
+    drawImageCanvas.height = copyCanvas.height = canvas.height;
+    copyContext.globalCompositeOperation = "copy";
+
+    const drawImageSamples: number[] = [];
+    const copySamples: number[] = [];
+    const repetitionsPerSample = 128;
+    try {
+        for (let i = 0; i < 40; i++) {
+            const drawStartedAt = performance.now();
+            for (
+                let repetition = 0;
+                repetition < repetitionsPerSample;
+                repetition++
+            ) {
+                drawImageContext.clearRect(
+                    0,
+                    0,
+                    drawImageCanvas.width,
+                    drawImageCanvas.height,
+                );
+                drawImageContext.drawImage(source, 0, 0);
+            }
+            drawImageSamples.push(
+                (performance.now() - drawStartedAt) / repetitionsPerSample,
+            );
+
+            const copyStartedAt = performance.now();
+            for (
+                let repetition = 0;
+                repetition < repetitionsPerSample;
+                repetition++
+            ) {
+                copyContext.drawImage(source, 0, 0);
+            }
+            copySamples.push(
+                (performance.now() - copyStartedAt) / repetitionsPerSample,
+            );
+        }
+
+        const drawImageHash = await getCanvasHash(drawImageCanvas);
+        const copyHash = await getCanvasHash(copyCanvas);
+        if (
+            drawImageHash.sha256 !== copyHash.sha256 ||
+            drawImageHash.nonTransparentPixels === 0 ||
+            copyHash.nonTransparentPixels === 0
+        ) {
+            throw new Error(
+                `Canvas image presentation output differs: ${JSON.stringify({
+                    drawImageHash,
+                    copyHash,
+                })}`,
+            );
+        }
+        return {
+            repetitionsPerSample,
+            drawImageMilliseconds: {
+                median: Number(percentile(drawImageSamples, 0.5).toFixed(3)),
+                p95: Number(percentile(drawImageSamples, 0.95).toFixed(3)),
+            },
+            copyDrawImageMilliseconds: {
+                median: Number(percentile(copySamples, 0.5).toFixed(3)),
+                p95: Number(percentile(copySamples, 0.95).toFixed(3)),
+            },
+            pixelSha256: copyHash.sha256,
+            nonTransparentPixels: copyHash.nonTransparentPixels,
+            outputsMatch: true,
+        };
+    } finally {
+        source.close();
+    }
 }
 
 async function runBenchmark() {
@@ -317,13 +402,15 @@ async function runBenchmark() {
 
     app.render();
     scene.gl.finish();
-    const firstHash = await getCanvasHash();
+    const firstHash = await getCanvasHash(canvas);
     app.render();
     scene.gl.finish();
-    const secondHash = await getCanvasHash();
+    const secondHash = await getCanvasHash(canvas);
+    app.render();
+    scene.gl.finish();
+    const imagePresentation = await benchmarkImagePresentation();
     const webglVersion = scene.gl.getParameter(scene.gl.VERSION);
-    const webglRenderer =
-        scene.gl.getParameter(scene.gl.RENDERER) ?? "unknown";
+    const webglRenderer = scene.gl.getParameter(scene.gl.RENDERER) ?? "unknown";
     app.destroy(true);
 
     if (firstHash.sha256 !== secondHash.sha256) {
@@ -351,6 +438,7 @@ async function runBenchmark() {
         pixelSha256: firstHash.sha256,
         nonTransparentPixels: firstHash.nonTransparentPixels,
         repeatedRenderMatches: true,
+        imagePresentation,
         ...scene.counts,
     };
 }
