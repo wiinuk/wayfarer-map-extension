@@ -26,6 +26,7 @@ import type { PoiRecords } from "../poi-records";
 import { SalEvaluationError } from "../sal/evaluator";
 import { createSimpleEditor } from "./simple-editor";
 import type { Geo } from "../geo";
+import { evaluateExternalUrls, type ExternalUrlData } from "./external-url";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
@@ -52,6 +53,7 @@ export interface SourcesWithSelection {
     readonly sources: readonly [QuerySource, ...QuerySource[]];
     readonly selectedIndex: number | null;
     readonly activeSalActionSourceId?: string | null;
+    readonly activeSalOpenSourceId?: string | null;
 }
 
 function newFreshId(baseName: string, definedIds: readonly string[]) {
@@ -181,6 +183,11 @@ export async function createDraftList({
     let activeRuleSource =
         currentSources.sources.find((s) => s.id === activeRuleSourceId)
             ?.contents ?? defaultSalSource;
+    let activeOpenSourceId =
+        currentSources.activeSalOpenSourceId ?? null;
+    let activeOpenSource =
+        currentSources.sources.find((s) => s.id === activeOpenSourceId)
+            ?.contents ?? "";
 
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
@@ -191,6 +198,7 @@ export async function createDraftList({
         initialFileName: getSelectedSourceId() ?? "",
         initialText: getSelectedSource() ?? "",
         initialActiveSalActionSourceId: activeRuleSourceId,
+        initialActiveSalOpenSourceId: activeOpenSourceId,
     });
     const editorDialog = createDialog(editor.element, {
         title: "検索ワードを編集",
@@ -283,12 +291,36 @@ export async function createDraftList({
             noteEditor.updateRuleSource(activeRuleSource);
         },
     );
+    editor.events.addEventListener(
+        "sal-open-source-changed",
+        ({ detail }) => {
+            activeOpenSourceId = detail.sourceId;
+            currentSources = {
+                ...currentSources,
+                activeSalOpenSourceId: activeOpenSourceId,
+            };
+            activeOpenSource =
+                currentSources.sources.find(
+                    (source) => source.id === activeOpenSourceId,
+                )?.contents ?? "";
+            local.setConfig({ ...local.getConfig(), sources: currentSources });
+            updateOpenMapLinks();
+        },
+    );
 
     function setCurrentSourcesAndNotify(
         newSources: typeof currentSources,
         updateEditor = true,
     ) {
         currentSources = newSources;
+        activeRuleSource =
+            currentSources.sources.find(
+                (source) => source.id === activeRuleSourceId,
+            )?.contents ?? defaultSalSource;
+        activeOpenSource =
+            currentSources.sources.find(
+                (source) => source.id === activeOpenSourceId,
+            )?.contents ?? "";
         sourceList.setSources(currentSources);
         const selectedSourceId = getSelectedSourceId() ?? "";
         const selectedSource = getSelectedSource() ?? "";
@@ -300,6 +332,9 @@ export async function createDraftList({
         if (updateEditor) {
             editor.setSource(selectedSourceId, selectedSource);
         }
+        descriptionEditor.updateRuleSource(activeRuleSource);
+        noteEditor.updateRuleSource(activeRuleSource);
+        updateOpenMapLinks();
         local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
@@ -474,6 +509,52 @@ export async function createDraftList({
         />
     ) as HTMLInputElement;
 
+    const externalUrlMenu = (
+        <div
+            class={classNames["external-url-menu"]}
+            hidden
+        ></div>
+    ) as HTMLDivElement;
+    externalUrlMenu.setAttribute("role", "menu");
+    const externalUrlButton = (
+        <button
+            type="button"
+            classList={[classNames.button, classNames["open-map-button"]]}
+            title="設定した外部URLを開く"
+            aria-label="設定した外部URLを開く"
+            disabled
+            onclick={() => {
+                if (externalUrlMenu.childElementCount === 1) {
+                    const link = externalUrlMenu.firstElementChild;
+                    if (link instanceof HTMLAnchorElement) {
+                        window.open(
+                            link.href,
+                            "_blank",
+                            "noopener,noreferrer",
+                        );
+                    }
+                    return;
+                }
+                const isHidden = externalUrlMenu.hidden;
+                externalUrlMenu.hidden = !isHidden;
+                externalUrlButton.setAttribute(
+                    "aria-expanded",
+                    String(isHidden),
+                );
+            }}
+        >
+            ↗
+        </button>
+    ) as HTMLButtonElement;
+    externalUrlButton.setAttribute("aria-haspopup", "menu");
+    externalUrlButton.setAttribute("aria-expanded", "false");
+    const externalUrlControl = (
+        <div class={classNames["external-url-control"]}>
+            {externalUrlButton}
+            {externalUrlMenu}
+        </div>
+    ) as HTMLDivElement;
+
     const openNewDraftButton = (
         <a
             classList={[classNames.button, classNames["open-map-button"]]}
@@ -505,6 +586,7 @@ export async function createDraftList({
     ) as HTMLAnchorElement;
 
     const updateOpenMapLinks = () => {
+        updateExternalUrlOptions();
         if (!selectedDraft) return;
 
         const {
@@ -525,6 +607,68 @@ export async function createDraftList({
             statement,
         );
         openMapButton.href = getGoogleMapsUrl(p, title);
+    };
+
+    let externalUrlUpdateId = 0;
+    const updateExternalUrlOptions = () => {
+        const updateId = ++externalUrlUpdateId;
+        externalUrlMenu.replaceChildren();
+        externalUrlMenu.hidden = true;
+        externalUrlButton.setAttribute("aria-expanded", "false");
+        externalUrlButton.disabled = !selectedDraft || !activeOpenSource;
+        if (!selectedDraft || !activeOpenSource) return;
+
+        const draft = selectedDraft;
+        const [point] = draft.coordinates;
+        const statement = draft.note.trimEnd().match(/[^\r\n]+$/)?.[0] ?? "";
+        const data: ExternalUrlData = {
+            lat: point.lat,
+            lng: point.lng,
+            title: draft.name,
+            description: draft.description,
+            statement,
+        };
+        void (async () => {
+            try {
+                const options = await evaluateExternalUrls(
+                    activeOpenSource,
+                    data,
+                    new AbortController().signal,
+                );
+                if (
+                    updateId !== externalUrlUpdateId ||
+                    selectedDraft !== draft
+                ) {
+                    return;
+                }
+                for (const option of options) {
+                    const url = new URL(option.url, document.baseURI);
+                    if (url.protocol !== "http:" && url.protocol !== "https:") {
+                        throw new Error(
+                            `Unsupported external URL protocol: ${url.protocol}`,
+                        );
+                    }
+                    const link = (
+                        <a
+                            href={url.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class={classNames["external-url-menu-item"]}
+                        >
+                            {option.label}
+                        </a>
+                    ) as HTMLAnchorElement;
+                    link.setAttribute("role", "menuitem");
+                    externalUrlMenu.append(link);
+                }
+                externalUrlButton.disabled = options.length === 0;
+            } catch (error) {
+                if (updateId === externalUrlUpdateId) {
+                    externalUrlButton.disabled = true;
+                    handleAsyncError(error);
+                }
+            }
+        })();
     };
 
     const deleteButton = (
@@ -636,6 +780,7 @@ export async function createDraftList({
                         {openNewDraftButton}
                         {openUpdateDraftButton}
                         {openMapButton}
+                        {externalUrlControl}
                     </div>
                     {descriptionEditor.element}
                     {noteEditor.element}
@@ -713,6 +858,7 @@ export async function createDraftList({
             openNewDraftButton.style.display = "";
             openUpdateDraftButton.style.display = "";
             openMapButton.style.display = "";
+            externalUrlControl.style.display = "";
             deleteButton.style.display = "";
             templateToggleButton.style.display = "";
             if (getDraftIsTemplate(selectedDraft)) {
@@ -737,6 +883,11 @@ export async function createDraftList({
             openUpdateDraftButton.style.display = "none";
             openMapButton.removeAttribute("href");
             openMapButton.style.display = "none";
+            externalUrlUpdateId++;
+            externalUrlMenu.replaceChildren();
+            externalUrlMenu.hidden = true;
+            externalUrlButton.disabled = true;
+            externalUrlControl.style.display = "none";
             deleteButton.style.display = "none";
             templateToggleButton.style.display = "none";
         }

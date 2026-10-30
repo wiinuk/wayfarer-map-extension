@@ -214,10 +214,12 @@ export async function createEditor({
     initialFileName,
     initialText,
     initialActiveSalActionSourceId,
+    initialActiveSalOpenSourceId,
 }: {
     initialFileName: string;
     initialText: string;
     initialActiveSalActionSourceId: string | null;
+    initialActiveSalOpenSourceId: string | null;
 }) {
     setStyle();
     const fileErrors = new Map<string, readonly SalDiagnostic[]>();
@@ -246,6 +248,7 @@ export async function createEditor({
     const events = createTypedEventTarget<{
         input: string;
         "sal-action-source-changed": { sourceId: string | null };
+        "sal-open-source-changed": { sourceId: string | null };
     }>();
 
     let isDispatching = false;
@@ -268,10 +271,19 @@ export async function createEditor({
     });
 
     let activeSalActionSource: string | null = initialActiveSalActionSourceId;
+    let activeSalOpenSource: string | null = initialActiveSalOpenSourceId;
 
     function updateSalActionButton() {
         const isActive = currentFileName === activeSalActionSource;
         salActionButton.classList.toggle(
+            classNames["active-sal-action-button"],
+            isActive,
+        );
+    }
+
+    function updateSalOpenButton() {
+        const isActive = currentFileName === activeSalOpenSource;
+        salOpenButton.classList.toggle(
             classNames["active-sal-action-button"],
             isActive,
         );
@@ -299,7 +311,34 @@ export async function createEditor({
         </button>
     );
 
-    const toolbar = <div class={classNames.toolbar}>{salActionButton}</div>;
+    const salOpenButton = (
+        <button
+            class={classNames["sal-action-button"]}
+            onclick={() => {
+                if (activeSalOpenSource === currentFileName) {
+                    activeSalOpenSource = null;
+                } else {
+                    activeSalOpenSource = currentFileName;
+                }
+                updateSalOpenButton();
+
+                events.dispatchEvent(
+                    createTypedCustomEvent("sal-open-source-changed", {
+                        sourceId: activeSalOpenSource,
+                    }),
+                );
+            }}
+        >
+            外部URL化指定
+        </button>
+    );
+
+    const toolbar = (
+        <div class={classNames.toolbar}>
+            {salActionButton}
+            {salOpenButton}
+        </div>
+    );
     // --- end of plan 2.1 implementation ---
 
     const basicSetup: Extension = [
@@ -393,6 +432,7 @@ export async function createEditor({
         parent: editorHost,
     });
     updateSalActionButton();
+    updateSalOpenButton();
 
     const fileStates = new Map<string, EditorState>();
     function switchFile(newFileName: string, newContent: string) {
@@ -438,6 +478,7 @@ export async function createEditor({
         currentFileName = fileName;
         switchFile(fileName, value);
         updateSalActionButton();
+        updateSalOpenButton();
     }
     function setErrors(
         fileName: string,
