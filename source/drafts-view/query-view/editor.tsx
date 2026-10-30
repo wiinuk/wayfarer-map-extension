@@ -307,7 +307,7 @@ export async function createEditor({
                 );
             }}
         >
-            アクション化指定
+            アクション設定
         </button>
     );
 
@@ -329,7 +329,7 @@ export async function createEditor({
                 );
             }}
         >
-            外部URL化指定
+            外部URL設定
         </button>
     );
 
