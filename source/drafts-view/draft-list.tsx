@@ -535,12 +535,12 @@ export async function createDraftList({
                     }
                     return;
                 }
-                const isHidden = externalUrlMenu.hidden;
-                externalUrlMenu.hidden = !isHidden;
-                externalUrlButton.setAttribute(
-                    "aria-expanded",
-                    String(isHidden),
-                );
+                if (externalUrlMenu.hidden) {
+                    externalUrlMenu.hidden = false;
+                    externalUrlButton.setAttribute("aria-expanded", "true");
+                } else {
+                    closeExternalUrlMenu();
+                }
             }}
         >
             ↗
@@ -554,6 +554,20 @@ export async function createDraftList({
             {externalUrlMenu}
         </div>
     ) as HTMLDivElement;
+    const closeExternalUrlMenu = () => {
+        externalUrlMenu.hidden = true;
+        externalUrlButton.setAttribute("aria-expanded", "false");
+    };
+    document.addEventListener("pointerdown", (event) => {
+        if (
+            !externalUrlMenu.hidden &&
+            event.target instanceof Node &&
+            !externalUrlControl.contains(event.target)
+        ) {
+            closeExternalUrlMenu();
+        }
+    });
+    externalUrlMenu.addEventListener("click", closeExternalUrlMenu);
 
     const openNewDraftButton = (
         <a
@@ -613,8 +627,7 @@ export async function createDraftList({
     const updateExternalUrlOptions = () => {
         const updateId = ++externalUrlUpdateId;
         externalUrlMenu.replaceChildren();
-        externalUrlMenu.hidden = true;
-        externalUrlButton.setAttribute("aria-expanded", "false");
+        closeExternalUrlMenu();
         externalUrlButton.disabled = !selectedDraft || !activeOpenSource;
         if (!selectedDraft || !activeOpenSource) return;
 
@@ -885,7 +898,7 @@ export async function createDraftList({
             openMapButton.style.display = "none";
             externalUrlUpdateId++;
             externalUrlMenu.replaceChildren();
-            externalUrlMenu.hidden = true;
+            closeExternalUrlMenu();
             externalUrlButton.disabled = true;
             externalUrlControl.style.display = "none";
             deleteButton.style.display = "none";
