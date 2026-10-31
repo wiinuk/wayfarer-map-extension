@@ -46,7 +46,7 @@
     "estree-walker": "^3.0.3",
     "expect-type": "^1.3.0",
     "fdir": "^6.5.0",
-    "glob": "^13.0.1",
+    "glob": "^14.0.3",
     "magic-string": "^0.30.21",
     "nanoid": "^3.3.11",
     "obug": "^2.1.1",
@@ -77,10 +77,5 @@
       }
     ]
   },
-  "description": "",
-  "overrides": {
-    "minimatch@9": {
-      "brace-expansion": "^2.1.7"
-    }
-  }
+  "description": ""
 }
