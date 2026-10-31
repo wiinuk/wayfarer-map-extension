@@ -6,18 +6,8 @@ import globals from "globals";
 import js from "@eslint/js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { pathToFileURL } from "node:url";
 import PackageJson from "./package.json" with { type: "json" };
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const compat = new FlatCompat({
-    baseDirectory: __dirname,
-    recommendedConfig: js.configs.recommended,
-    allConfig: js.configs.all,
-});
 
 /**
  * @param {string} dirPath
@@ -39,6 +29,8 @@ async function loadLocalRulesAsPlugin(dirPath) {
 }
 
 export default defineConfig([
+    js.configs.recommended,
+    ...typescriptEslint.configs["flat/recommended"],
     {
         languageOptions: {
             parser: tsParser,
@@ -60,10 +52,6 @@ export default defineConfig([
             local: await loadLocalRulesAsPlugin("./eslint/rules"),
         },
 
-        extends: compat.extends(
-            "eslint:recommended",
-            "plugin:@typescript-eslint/recommended",
-        ),
         rules: {
             "@typescript-eslint/no-floating-promises": [
                 "warn",
