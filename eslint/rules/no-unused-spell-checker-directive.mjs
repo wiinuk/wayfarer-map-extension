@@ -217,7 +217,7 @@ const rule = {
     },
     defaultOptions: [],
     create(context) {
-        const sourceCode = context.getSourceCode();
+        const sourceCode = context.sourceCode;
         const comments = sourceCode.getAllComments();
         const sourceText = sourceCode.text;
         const nonTrivialCommentPattern = /[^*\/\s]/gi;
