@@ -869,12 +869,15 @@ export async function createDraftList({
                     },
                 );
                 editor.setErrors(queryId, diagnostics);
+                filterInput.setErrors(diagnostics);
             } catch (e) {
                 if (e instanceof Error) {
-                    editor.setErrors(queryId, [
+                    const errors = [
                         ...diagnostics,
                         errorToDiagnostic(e),
-                    ]);
+                    ];
+                    editor.setErrors(queryId, errors);
+                    filterInput.setErrors(errors);
                 }
                 throw e;
             } finally {

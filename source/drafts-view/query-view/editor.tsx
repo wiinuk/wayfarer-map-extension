@@ -18,6 +18,7 @@ import {
     crosshairCursor,
     highlightActiveLine,
     highlightActiveLineGutter,
+    placeholder,
 } from "@codemirror/view";
 import {
     EditorState,
@@ -41,7 +42,12 @@ import {
 } from "@codemirror/language";
 import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
+import {
+    forceLinting,
+    linter,
+    lintKeymap,
+    type Diagnostic,
+} from "@codemirror/lint";
 import { SalLexer } from "../../sal/.antlr-generated/SalLexer";
 import { CharStreams, Token } from "antlr4ts";
 
@@ -208,6 +214,122 @@ export interface SalDiagnostic {
     readonly start: number;
     readonly stop: number;
     readonly source?: string;
+}
+
+export function createInlineQueryEditor({
+    parent,
+    initialText,
+    onInput,
+}: {
+    parent: HTMLElement;
+    initialText: string;
+    onInput: (text: string) => void;
+}) {
+    let diagnostics: readonly SalDiagnostic[] = [];
+    let isSettingValue = false;
+    const errorLinter = linter((view) => {
+        const text = view.state.doc.toString();
+        const slicePositionMap = new PosConverter(text);
+        const visibleLength = Array.from(text).length;
+        return diagnostics.flatMap((error) => {
+            if (error.start > visibleLength) return [];
+            let from = slicePositionMap.toCodeUnit(error.start);
+            let to = Math.min(
+                slicePositionMap.toCodeUnit(error.stop + 1),
+                text.length,
+            );
+            if (from === to && text.length > 0) {
+                from = Math.min(from, text.length - 1);
+                to = from + 1;
+            }
+            return [
+                {
+                    severity: "error",
+                    from,
+                    to,
+                    message: error.message,
+                    source: error.source,
+                },
+            ];
+        });
+    });
+
+    const view = new EditorView({
+        doc: initialText,
+        parent,
+        extensions: [
+            syntaxHighlighting(defaultHighlightStyle),
+            createSalTokenHighlighter(),
+            errorLinter,
+            placeholder("🔍キーワードで絞り込み…"),
+            EditorState.changeFilter.of((transaction) =>
+                transaction.newDoc.lines === 1,
+            ),
+            EditorView.inputHandler.of((view, from, to, text) => {
+                if (!/[\r\n]/.test(text)) return false;
+                view.dispatch({
+                    changes: { from, to, insert: text.replace(/[\r\n]/g, "") },
+                });
+                return true;
+            }),
+            keymap.of([{ key: "Enter", run: () => true }]),
+            EditorView.updateListener.of((update) => {
+                if (isSettingValue || !update.docChanged) return;
+                diagnostics = [];
+                onInput(update.state.doc.toString());
+            }),
+            EditorView.contentAttributes.of({
+                "aria-label": "検索クエリ",
+            }),
+            EditorView.theme({
+                "&": {
+                    flex: "1",
+                    minWidth: "3em",
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontSize: "15px",
+                    padding: "10px 8px",
+                },
+                "&.cm-focused": { outline: "none" },
+                ".cm-scroller": { overflow: "hidden" },
+                ".cm-content": {
+                    minHeight: "unset",
+                    padding: "0",
+                    whiteSpace: "pre",
+                },
+                ".cm-line": { padding: "0" },
+                ".cm-cursor": { borderLeftColor: "currentColor" },
+            }),
+        ],
+    });
+
+    function setValue(value: string) {
+        const firstLine = value.split("\n", 1)[0] ?? "";
+        if (view.state.doc.toString() !== firstLine) {
+            isSettingValue = true;
+            try {
+                view.dispatch({
+                    changes: {
+                        from: 0,
+                        to: view.state.doc.length,
+                        insert: firstLine,
+                    },
+                });
+            } finally {
+                isSettingValue = false;
+            }
+        }
+        diagnostics = [];
+        forceLinting(view);
+    }
+
+    function setErrors(errors: readonly SalDiagnostic[]) {
+        diagnostics = errors;
+        forceLinting(view);
+    }
+
+    return { view, setValue, setErrors };
 }
 
 export async function createEditor({

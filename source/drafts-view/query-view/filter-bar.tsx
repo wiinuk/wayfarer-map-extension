@@ -3,6 +3,10 @@ import {
     createTypedCustomEvent,
     createTypedEventTarget,
 } from "../../typed-event-target";
+import {
+    createInlineQueryEditor,
+    type SalDiagnostic,
+} from "./editor";
 import classNames, { cssText } from "./filter-bar.module.css";
 
 const setStyle = styleSetter(cssText);
@@ -17,13 +21,8 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
     }>();
 
     const input = (
-        <input
-            type="text"
-            oninput={onInput}
-            classList={[classNames.input]}
-            placeholder="🔍キーワードで絞り込み…"
-        />
-    ) as HTMLInputElement;
+        <div classList={[classNames.input]} />
+    ) as HTMLDivElement;
 
     const clearButton = (
         <button
@@ -81,11 +80,18 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
         </div>
     );
 
-    let value = "";
+    let value = initialValue;
+    const queryEditor = createInlineQueryEditor({
+        parent: input,
+        initialText: initialValue.split("\n", 1)[0] ?? "",
+        onInput,
+    });
+
     function getValue() {
         const index = value.indexOf("\n");
-        if (index < 0) return input.value;
-        return input.value + "\n" + value.slice(index + 1);
+        const firstLine = queryEditor.view.state.doc.toString();
+        if (index < 0) return firstLine;
+        return firstLine + "\n" + value.slice(index + 1);
     }
     function setValue(newValue: string) {
         value = newValue;
@@ -95,13 +101,14 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
         } else {
             multiLineIndicator.classList.add(classNames.hidden);
         }
-        input.value = newValue.split("\n")[0] ?? "";
+        queryEditor.setValue(newValue);
+        updateErrorState([]);
         updateClearButtonVisibility();
     }
 
     function updateClearButtonVisibility() {
         const isMultiLine = value.includes("\n");
-        const hasValue = input.value.length > 0;
+        const hasValue = queryEditor.view.state.doc.length > 0;
         if (!isMultiLine && hasValue) {
             clearButton.classList.remove(classNames.hidden);
         } else {
@@ -110,6 +117,7 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
     }
 
     function onInput() {
+        updateErrorState([]);
         events.dispatchEvent(
             createTypedCustomEvent("input-changed", undefined),
         );
@@ -118,13 +126,25 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
 
     function onClickClear() {
         setValue("");
-        input.focus();
+        queryEditor.view.focus();
         events.dispatchEvent(
             createTypedCustomEvent("input-changed", undefined),
         );
     }
 
+    function setErrors(errors: readonly SalDiagnostic[]) {
+        queryEditor.setErrors(errors);
+        updateErrorState(errors);
+    }
+
+    function updateErrorState(errors: readonly SalDiagnostic[]) {
+        const hasErrors = errors.length > 0;
+        input.classList.toggle(classNames.error, hasErrors);
+        input.setAttribute("aria-invalid", String(hasErrors));
+        input.title = errors.map((error) => error.message).join("\n");
+    }
+
     setValue(initialValue);
 
-    return { element, events, getValue, setValue };
+    return { element, events, getValue, setValue, setErrors };
 }
