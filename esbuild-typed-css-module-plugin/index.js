@@ -1,7 +1,7 @@
 // @ts-check
 const path = require("node:path");
 const fs = require("node:fs/promises"); // for esbuild's fs
-const Glob = require("glob"); // Still useful for initial globbing
+const { globSync } = require("glob");
 
 // Re-use existing modules
 const { writeDeclarationAndMapFile } = require("./declaration-writer");
@@ -52,7 +52,7 @@ module.exports = function typedCssModulePlugin(options = {}) {
 
             // 1. Initial Type Generation)
             build.onStart(async () => {
-                const files = Glob.sync(filledOptions.pattern, {
+                const files = globSync(filledOptions.pattern, {
                     cwd: rootPath,
                     absolute: true,
                     ignore: "node_modules/**", // Assuming node_modules should be ignored
