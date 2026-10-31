@@ -202,23 +202,20 @@ export async function createPoiRecordsCanvasOverlay(
                 this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
             }
 
-            let needsRedraw = false;
-            if (
-                !this.renderedViewport ||
-                this.renderedViewport.zoom !== currentZoom
-            ) {
-                needsRedraw = true;
-            } else {
-                const { paddedBounds: bounds } = padBoundsRelative(
-                    map,
-                    currentBounds,
-                    bufferRatio / 2,
+            const renderedViewport = this.renderedViewport;
+            const needsRedraw =
+                !renderedViewport ||
+                renderedViewport.zoom !== currentZoom ||
+                !Bounds.containsBounds(
+                    renderedViewport.bounds,
+                    Bounds.fromClass(
+                        padBoundsRelative(
+                            map,
+                            currentBounds,
+                            bufferRatio / 2,
+                        ).paddedBounds,
+                    ),
                 );
-                needsRedraw = !Bounds.containsBounds(
-                    this.renderedViewport.bounds,
-                    Bounds.fromClass(bounds),
-                );
-            }
             if (needsRedraw) {
                 this.notifyDrawNeeded();
             }
