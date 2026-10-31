@@ -1,7 +1,7 @@
 declare module "https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm" {
     export * from "comlink";
 }
-declare module "https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm" {
+declare module "https://cdn.jsdelivr.net/npm/zod@4.6.7/+esm" {
     export * from "zod";
 }
 declare module "https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm" {

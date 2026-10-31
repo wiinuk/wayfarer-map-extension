@@ -10,7 +10,7 @@ export type LocalConfigAccessor = Awaited<
 >;
 
 export async function createConfigAccessor(key: string) {
-    const zod = await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm");
+    const zod = await import("https://cdn.jsdelivr.net/npm/zod@4.6.7/+esm");
 
     const QuerySourceSchema = zod
         .strictObject({

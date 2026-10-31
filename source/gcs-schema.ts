@@ -16,7 +16,7 @@ export type Result = Infer<"ResultSchema">;
 export type GcsResponse = Infer<"GcsResponseSchema">;
 
 export async function createGcsSchemas() {
-    const z = await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm");
+    const z = await import("https://cdn.jsdelivr.net/npm/zod@4.6.7/+esm");
 
     const FormatSchema = z.enum(["DETAILED"]);
     const EntityKindSchema = z.enum(["GYM", "POKESTOP", "POWERSPOT"]);
