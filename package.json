@@ -26,12 +26,12 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "ws": "^8.19.0",
-    "zod": "4.3.6"
+    "zod": "4.6.7"
   },
   "scripts": {
     "build": "node build.mjs",
     "debug": "node build.mjs --watch",
-    "test": "vitest run",
+    "test": "vitest run --disableConsoleIntercept",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "check": "tsc --noEmit"
@@ -77,5 +77,10 @@
       }
     ]
   },
-  "description": ""
+  "description": "",
+  "overrides": {
+    "minimatch@9": {
+      "brace-expansion": "^2.1.7"
+    }
+  }
 }
