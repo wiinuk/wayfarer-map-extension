@@ -7,7 +7,6 @@
     "@codemirror/state": "6.5.4",
     "@csstools/tokenizer": "^3.1.1",
     "@eslint/core": "^1.2.1",
-    "@eslint/eslintrc": "^3.3.7",
     "@eslint/js": "^10.0.1",
     "@types/google.maps": "^3.58.1",
     "@types/node": "^25.1.0",
@@ -70,6 +69,9 @@
     "tinyrainbow": "^3.0.3",
     "vite": "^7.3.1",
     "why-is-node-running": "^2.3.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.3"
   },
   "cdnOnly": {
     "comlink": "auto",
