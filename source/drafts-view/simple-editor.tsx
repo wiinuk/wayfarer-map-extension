@@ -14,9 +14,8 @@ import {
     type DecorationSet,
 } from "@codemirror/view";
 import {
-    forceLinting,
     lintKeymap,
-    linter,
+    setDiagnostics,
     type Diagnostic as CodeMirrorDiagnostic,
 } from "@codemirror/lint";
 import {
@@ -565,45 +564,41 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         },
     });
 
-    const lintExtension = linter(
-        (): CodeMirrorDiagnostic[] =>
-            lintDiagnostics
-                .filter((diagnostic) => diagnostic.location === options.location)
-                    .map((diagnostic) => {
-                        const actions: NonNullable<
-                            CodeMirrorDiagnostic["actions"]
-                        >[number][] = [];
-                        const fix = diagnostic.fix;
-                        if (fix != null) {
-                            actions.push({
-                                name: "自動修正",
-                                apply: () => dispatchLintEdits(fix),
-                            });
-                        }
-                        for (const suggestion of diagnostic.suggestions ?? []) {
-                            actions.push({
-                                name: suggestion.label,
-                                apply: () =>
-                                    dispatchLintEdits(suggestion.edits),
-                            });
-                        }
-                        return {
-                            from: diagnostic.from,
-                            to: diagnostic.to,
-                            severity: diagnostic.severity,
-                            message: diagnostic.message,
-                            source: "Sal Lint",
-                            actions,
-                        };
-                    }),
-        { delay: 0 },
-    );
+    function toCodeMirrorDiagnostics(): CodeMirrorDiagnostic[] {
+        return lintDiagnostics
+            .filter((diagnostic) => diagnostic.location === options.location)
+            .map((diagnostic) => {
+                const actions: NonNullable<
+                    CodeMirrorDiagnostic["actions"]
+                >[number][] = [];
+                const fix = diagnostic.fix;
+                if (fix != null) {
+                    actions.push({
+                        name: "自動修正",
+                        apply: () => dispatchLintEdits(fix),
+                    });
+                }
+                for (const suggestion of diagnostic.suggestions ?? []) {
+                    actions.push({
+                        name: suggestion.label,
+                        apply: () => dispatchLintEdits(suggestion.edits),
+                    });
+                }
+                return {
+                    from: diagnostic.from,
+                    to: diagnostic.to,
+                    severity: diagnostic.severity,
+                    message: diagnostic.message,
+                    source: "Sal Lint",
+                    actions,
+                };
+            });
+    }
 
     const extensions: Extension[] = [
         EditorView.lineWrapping,
         history(),
         keymap.of([...lintKeymap, ...defaultKeymap, ...historyKeymap]),
-        lintExtension,
         lintTheme,
         EditorView.updateListener.of((update) => {
             if (update.docChanged && hasUserChange(update)) {
@@ -659,7 +654,9 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         ) {
             lintDiagnostics = diagnostics;
             applyLintEdits = applyEdits;
-            forceLinting(editor);
+            editor.dispatch(
+                setDiagnostics(editor.state, toCodeMirrorDiagnostics()),
+            );
         },
         updateRuleSource(newRuleSource: string) {
             const plugin = editor.plugin(actionDecorator);
