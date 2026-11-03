@@ -541,6 +541,30 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         class: options.classNames?.join(" ") ?? "",
     });
 
+    const lintTheme = EditorView.theme({
+        ".cm-lintRange-error": {
+            backgroundImage: "none",
+            textDecoration: "underline wavy #e74c3c",
+            textUnderlineOffset: "2px",
+        },
+        ".cm-lintRange-warning": {
+            backgroundImage: "none",
+            textDecoration: "underline wavy #d97706",
+            textUnderlineOffset: "2px",
+        },
+        ".cm-lintPoint-error:after": {
+            borderBottomColor: "#e74c3c",
+        },
+        ".cm-lintPoint-warning:after": {
+            borderBottomColor: "#d97706",
+        },
+        ".cm-tooltip-lint": {
+            maxWidth: "min(360px, calc(100vw - 24px))",
+            whiteSpace: "normal",
+            overflowWrap: "anywhere",
+        },
+    });
+
     const lintExtension = linter(
         (): CodeMirrorDiagnostic[] =>
             lintDiagnostics
@@ -580,6 +604,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         history(),
         keymap.of([...lintKeymap, ...defaultKeymap, ...historyKeymap]),
         lintExtension,
+        lintTheme,
         EditorView.updateListener.of((update) => {
             if (update.docChanged && hasUserChange(update)) {
                 options.onInput(update.state.doc.toString());
