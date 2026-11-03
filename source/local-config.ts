@@ -28,6 +28,7 @@ export async function createConfigAccessor(key: string) {
                 .readonly(),
             activeSalActionSourceId: zod.string().nullable().optional(),
             activeSalOpenSourceId: zod.string().nullable().optional(),
+            activeSalLintSourceId: zod.string().nullable().optional(),
         })
         .readonly();
 

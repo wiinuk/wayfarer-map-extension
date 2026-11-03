@@ -27,6 +27,13 @@ import { SalEvaluationError } from "../sal/evaluator";
 import { createSimpleEditor } from "./simple-editor";
 import type { Geo } from "../geo";
 import { evaluateExternalUrls, type ExternalUrlData } from "./external-url";
+import {
+    evaluateLint,
+    type LintDiagnostic,
+    type LintInput,
+    type LintLocation,
+    type LintTextEdit,
+} from "./lint";
 
 interface DraftListOptions {
     readonly overlay: DraftsOverlay;
@@ -54,6 +61,7 @@ export interface SourcesWithSelection {
     readonly selectedIndex: number | null;
     readonly activeSalActionSourceId?: string | null;
     readonly activeSalOpenSourceId?: string | null;
+    readonly activeSalLintSourceId?: string | null;
 }
 
 function newFreshId(baseName: string, definedIds: readonly string[]) {
@@ -158,6 +166,10 @@ export async function createDraftList({
     let activeOpenSource =
         currentSources.sources.find((s) => s.id === activeOpenSourceId)
             ?.contents ?? "";
+    let activeLintSourceId = currentSources.activeSalLintSourceId ?? null;
+    let activeLintSource =
+        currentSources.sources.find((s) => s.id === activeLintSourceId)
+            ?.contents ?? "";
 
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
@@ -169,6 +181,7 @@ export async function createDraftList({
         initialText: getSelectedSource() ?? "",
         initialActiveSalActionSourceId: activeRuleSourceId,
         initialActiveSalOpenSourceId: activeOpenSourceId,
+        initialActiveSalLintSourceId: activeLintSourceId,
     });
     const editorDialog = createDialog(editor.element, {
         title: "検索ワードを編集",
@@ -274,6 +287,19 @@ export async function createDraftList({
         local.setConfig({ ...local.getConfig(), sources: currentSources });
         updateOpenMapLinks();
     });
+    editor.events.addEventListener("sal-lint-source-changed", ({ detail }) => {
+        activeLintSourceId = detail.sourceId;
+        currentSources = {
+            ...currentSources,
+            activeSalLintSourceId: activeLintSourceId,
+        };
+        activeLintSource =
+            currentSources.sources.find(
+                (source) => source.id === activeLintSourceId,
+            )?.contents ?? "";
+        local.setConfig({ ...local.getConfig(), sources: currentSources });
+        updateLint();
+    });
 
     function setCurrentSourcesAndNotify(
         newSources: typeof currentSources,
@@ -287,6 +313,10 @@ export async function createDraftList({
         activeOpenSource =
             currentSources.sources.find(
                 (source) => source.id === activeOpenSourceId,
+            )?.contents ?? "";
+        activeLintSource =
+            currentSources.sources.find(
+                (source) => source.id === activeLintSourceId,
             )?.contents ?? "";
         sourceList.setSources(currentSources);
         const selectedSourceId = getSelectedSourceId() ?? "";
@@ -302,6 +332,7 @@ export async function createDraftList({
         descriptionEditor.updateRuleSource(activeRuleSource);
         noteEditor.updateRuleSource(activeRuleSource);
         updateOpenMapLinks();
+        updateLint();
         local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
@@ -407,6 +438,7 @@ export async function createDraftList({
                 updateOpenMapLinks();
                 updateVirtualList();
                 saveDraftChanges(selectedDraft);
+                updateLint();
             }}
         />
     ) as HTMLInputElement;
@@ -418,6 +450,7 @@ export async function createDraftList({
             selectedDraft.description = value;
             updateOpenMapLinks();
             saveDraftChanges(selectedDraft);
+            updateLint();
         },
         location: "description",
         handleAsyncError,
@@ -432,12 +465,332 @@ export async function createDraftList({
             selectedDraft.note = value;
             updateOpenMapLinks();
             saveDraftChanges(selectedDraft);
+            updateLint();
         },
         location: "note",
         handleAsyncError,
         ruleSource: activeRuleSource,
         classNames: [classNames["detail"], classNames["input-field"]],
     });
+
+    let lintDiagnostics: readonly LintDiagnostic[] = [];
+    let lintGeneration = 0;
+    const lintRun = createAsyncCancelScope(handleAsyncError);
+    const lintSummary = document.createElement("div");
+    lintSummary.style.display = "flex";
+    lintSummary.style.flexDirection = "column";
+    const lintControls = document.createElement("div");
+    lintControls.style.display = "flex";
+    lintControls.style.flexDirection = "column";
+    lintControls.style.gap = "6px";
+    lintControls.style.width = "100%";
+    const autoFixButton = document.createElement("button");
+    autoFixButton.type = "button";
+    autoFixButton.className = classNames.button;
+    autoFixButton.textContent = "Lintを自動修正";
+    autoFixButton.addEventListener("click", () => {
+        void applyAllLintFixes().catch(handleAsyncError);
+    });
+    lintControls.append(autoFixButton, lintSummary);
+
+    function currentLintInput(): LintInput | undefined {
+        if (!selectedDraft) return;
+        return {
+            fields: {
+                title: selectedDraft.name,
+                description: selectedDraft.description,
+                note: selectedDraft.note,
+            },
+        };
+    }
+
+    function validateLintDiagnostics(
+        diagnostics: readonly LintDiagnostic[],
+        input: LintInput,
+    ) {
+        for (const diagnostic of diagnostics) {
+            const text = input.fields[diagnostic.location];
+            if (
+                text === undefined ||
+                !Number.isInteger(diagnostic.from) ||
+                !Number.isInteger(diagnostic.to) ||
+                diagnostic.from < 0 ||
+                diagnostic.to < diagnostic.from ||
+                diagnostic.to > text.length
+            ) {
+                throw new Error(
+                    `Lint returned an invalid range for ${diagnostic.location}`,
+                );
+            }
+        }
+    }
+
+    function updateLintSummary() {
+        lintSummary.replaceChildren();
+        lintControls.hidden = !activeLintSource || !selectedDraft;
+        detailName.style.boxShadow = lintDiagnostics.some(
+            (diagnostic) => diagnostic.location === "title",
+        )
+            ? "0 0 0 2px #e74c3c"
+            : "";
+        if (!activeLintSource || !selectedDraft) return;
+
+        for (const diagnostic of lintDiagnostics) {
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.flexWrap = "wrap";
+            row.style.alignItems = "center";
+            row.style.gap = "4px";
+            row.style.padding = "4px 0";
+            const message = document.createElement("button");
+            message.type = "button";
+            message.className = classNames.button;
+            message.textContent = `${diagnostic.location} (${diagnostic.severity}): ${diagnostic.message}`;
+            message.style.padding = "4px 6px";
+            message.style.color = "#1f2937";
+            message.style.background = "#f1f5f9";
+            message.style.textAlign = "left";
+            message.style.textDecoration = "underline dotted";
+            message.addEventListener("click", () => {
+                if (diagnostic.location === "title") {
+                    detailName.focus();
+                    detailName.setSelectionRange(
+                        diagnostic.from,
+                        diagnostic.to,
+                    );
+                } else {
+                    const target =
+                        diagnostic.location === "description"
+                            ? descriptionEditor
+                            : noteEditor;
+                    target.selectRange(diagnostic.from, diagnostic.to);
+                }
+            });
+            row.append(message);
+            if (diagnostic.fix != null) {
+                row.append(
+                    createLintActionButton("自動修正", () =>
+                        applyLintEdits(diagnostic.fix ?? []),
+                    ),
+                );
+            }
+            for (const suggestion of diagnostic.suggestions ?? []) {
+                row.append(
+                    createLintActionButton(suggestion.label, () =>
+                        applyLintEdits(suggestion.edits),
+                    ),
+                );
+            }
+            lintSummary.append(row);
+        }
+    }
+
+    function createLintActionButton(
+        label: string,
+        apply: () => void,
+    ): HTMLButtonElement {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = classNames.button;
+        button.textContent = label;
+        button.style.padding = "4px 6px";
+        button.style.color = "#1f2937";
+        button.style.background = "#f1f5f9";
+        button.addEventListener("click", () => {
+            try {
+                apply();
+            } catch (reason) {
+                handleAsyncError(reason);
+            }
+        });
+        return button;
+    }
+
+    function updateLint() {
+        const generation = ++lintGeneration;
+        const input = currentLintInput();
+        if (!activeLintSource || input == null) {
+            lintRun(async () => undefined);
+            lintDiagnostics = [];
+            descriptionEditor.setLintDiagnostics([], applyLintEdits);
+            noteEditor.setLintDiagnostics([], applyLintEdits);
+            updateLintSummary();
+            return;
+        }
+        lintDiagnostics = [];
+        descriptionEditor.setLintDiagnostics([], applyLintEdits);
+        noteEditor.setLintDiagnostics([], applyLintEdits);
+        updateLintSummary();
+        lintRun(async (signal) => {
+            const diagnostics = await evaluateLint(
+                activeLintSource,
+                input,
+                signal,
+            );
+            if (
+                signal.aborted ||
+                generation !== lintGeneration ||
+                selectedDraft == null
+            ) {
+                return;
+            }
+            validateLintDiagnostics(diagnostics, input);
+            lintDiagnostics = diagnostics;
+            descriptionEditor.setLintDiagnostics(
+                diagnostics,
+                applyLintEdits,
+            );
+            noteEditor.setLintDiagnostics(diagnostics, applyLintEdits);
+            updateLintSummary();
+        });
+    }
+
+    function validateTextEdits(
+        edits: readonly LintTextEdit[],
+        input: LintInput,
+    ) {
+        if (edits.length === 0) {
+            throw new Error("A Lint edit must contain at least one change");
+        }
+        for (let index = 0; index < edits.length; index++) {
+            const edit = edits[index]!;
+            const text = input.fields[edit.location];
+            if (
+                text === undefined ||
+                !Number.isInteger(edit.from) ||
+                !Number.isInteger(edit.to) ||
+                edit.from < 0 ||
+                edit.to < edit.from ||
+                edit.to > text.length
+            ) {
+                throw new Error(
+                    `Lint returned an invalid edit for ${edit.location}`,
+                );
+            }
+            for (const other of edits.slice(index + 1)) {
+                if (edit.location !== other.location) continue;
+                if (doEditsConflict(edit, other)) {
+                    throw new Error("Lint edit group contains overlapping edits");
+                }
+            }
+        }
+    }
+
+    function doEditsConflict(
+        edit: LintTextEdit,
+        other: LintTextEdit,
+    ): boolean {
+        if (edit.from === edit.to) {
+            return other.from === other.to
+                ? edit.from === other.from
+                : other.from <= edit.from && edit.from <= other.to;
+        }
+        if (other.from === other.to) {
+            return edit.from <= other.from && other.from <= edit.to;
+        }
+        return edit.from < other.to && other.from < edit.to;
+    }
+
+    function applyLintEdits(
+        edits: readonly LintTextEdit[],
+        refreshLint = true,
+    ) {
+        const draft = selectedDraft;
+        const input = currentLintInput();
+        if (!draft || !input) return;
+        validateTextEdits(edits, input);
+
+        const nextFields: Record<LintLocation, string> = {
+            title: draft.name,
+            description: draft.description,
+            note: draft.note,
+        };
+        for (const location of ["title", "description", "note"] as const) {
+            const locationEdits = edits
+                .filter((edit) => edit.location === location)
+                .sort((left, right) => right.from - left.from);
+            for (const edit of locationEdits) {
+                const text = nextFields[location];
+                nextFields[location] =
+                    text.slice(0, edit.from) +
+                    edit.insert +
+                    text.slice(edit.to);
+            }
+        }
+
+        draft.name = nextFields.title;
+        draft.description = nextFields.description;
+        draft.note = nextFields.note;
+        detailName.value = draft.name;
+        descriptionEditor.dispatchSource(draft.description);
+        noteEditor.dispatchSource(draft.note);
+        overlay.updateDraftTitle(draft);
+        updateOpenMapLinks();
+        if (refreshLint) updateLint();
+        updateVirtualList();
+        saveDraftChanges(draft);
+        updateLint();
+    }
+
+    function editsConflict(
+        first: readonly LintTextEdit[],
+        second: readonly LintTextEdit[],
+    ) {
+        return         first.some((edit) =>
+            second.some(
+                (other) =>
+                    edit.location === other.location &&
+                    doEditsConflict(edit, other),
+            ),
+        );
+    }
+
+    async function applyAllLintFixes() {
+        const targetDraft = selectedDraft;
+        const source = activeLintSource;
+        if (!source || !targetDraft) return;
+        for (let iteration = 0; iteration < 10; iteration++) {
+            if (selectedDraft !== targetDraft || activeLintSource !== source) {
+                return;
+            }
+            const input = currentLintInput();
+            if (!input) return;
+            const diagnostics = await evaluateLint(
+                source,
+                input,
+                new AbortController().signal,
+            );
+            if (selectedDraft !== targetDraft || activeLintSource !== source) {
+                return;
+            }
+            if (
+                JSON.stringify(currentLintInput()?.fields) !==
+                JSON.stringify(input.fields)
+            ) {
+                updateLint();
+                return;
+            }
+            validateLintDiagnostics(diagnostics, input);
+            const accepted: LintTextEdit[] = [];
+            const candidates = diagnostics.flatMap((diagnostic) =>
+                diagnostic.fix == null ? [] : [diagnostic.fix],
+            );
+            for (const candidate of candidates) {
+                validateTextEdits(candidate, input);
+                if (editsConflict(accepted, candidate)) continue;
+                accepted.push(...candidate);
+            }
+            if (accepted.length === 0) break;
+            const previousFields = JSON.stringify(input.fields);
+            applyLintEdits(accepted, false);
+            if (
+                JSON.stringify(currentLintInput()?.fields) === previousFields
+            ) {
+                break;
+            }
+        }
+        updateLint();
+    }
 
     const detailCoordinates = (
         <input
@@ -721,6 +1074,7 @@ export async function createDraftList({
                     </div>
                     {descriptionEditor.element}
                     {noteEditor.element}
+                    {lintControls}
                     {deleteButton}
                     {mapButton}
                     {templateToggleButton}
@@ -792,6 +1146,7 @@ export async function createDraftList({
             detailCoordinates.classList.remove(classNames["input-error"]);
             mapButton.style.display = "";
             updateOpenMapLinks();
+            updateLint();
             openMapButton.style.display = "";
             externalUrlControl.style.display = "";
             deleteButton.style.display = "";
@@ -821,6 +1176,7 @@ export async function createDraftList({
             externalUrlControl.style.display = "none";
             deleteButton.style.display = "none";
             templateToggleButton.style.display = "none";
+            updateLint();
         }
     };
     updateDetailPane();

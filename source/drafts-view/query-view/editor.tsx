@@ -337,11 +337,13 @@ export async function createEditor({
     initialText,
     initialActiveSalActionSourceId,
     initialActiveSalOpenSourceId,
+    initialActiveSalLintSourceId,
 }: {
     initialFileName: string;
     initialText: string;
     initialActiveSalActionSourceId: string | null;
     initialActiveSalOpenSourceId: string | null;
+    initialActiveSalLintSourceId: string | null;
 }) {
     setStyle();
     const fileErrors = new Map<string, readonly SalDiagnostic[]>();
@@ -371,6 +373,7 @@ export async function createEditor({
         input: string;
         "sal-action-source-changed": { sourceId: string | null };
         "sal-open-source-changed": { sourceId: string | null };
+        "sal-lint-source-changed": { sourceId: string | null };
     }>();
 
     let isDispatching = false;
@@ -394,6 +397,7 @@ export async function createEditor({
 
     let activeSalActionSource: string | null = initialActiveSalActionSourceId;
     let activeSalOpenSource: string | null = initialActiveSalOpenSourceId;
+    let activeSalLintSource: string | null = initialActiveSalLintSourceId;
 
     function updateSalActionButton() {
         const isActive = currentFileName === activeSalActionSource;
@@ -406,6 +410,14 @@ export async function createEditor({
     function updateSalOpenButton() {
         const isActive = currentFileName === activeSalOpenSource;
         salOpenButton.classList.toggle(
+            classNames["active-sal-action-button"],
+            isActive,
+        );
+    }
+
+    function updateSalLintButton() {
+        const isActive = currentFileName === activeSalLintSource;
+        salLintButton.classList.toggle(
             classNames["active-sal-action-button"],
             isActive,
         );
@@ -455,10 +467,31 @@ export async function createEditor({
         </button>
     );
 
+    const salLintButton = (
+        <button
+            class={classNames["sal-action-button"]}
+            onclick={() => {
+                activeSalLintSource =
+                    activeSalLintSource === currentFileName
+                        ? null
+                        : currentFileName;
+                updateSalLintButton();
+                events.dispatchEvent(
+                    createTypedCustomEvent("sal-lint-source-changed", {
+                        sourceId: activeSalLintSource,
+                    }),
+                );
+            }}
+        >
+            Lint設定
+        </button>
+    );
+
     const toolbar = (
         <div class={classNames.toolbar}>
             {salActionButton}
             {salOpenButton}
+            {salLintButton}
         </div>
     );
     // --- end of plan 2.1 implementation ---
@@ -555,6 +588,7 @@ export async function createEditor({
     });
     updateSalActionButton();
     updateSalOpenButton();
+    updateSalLintButton();
 
     const fileStates = new Map<string, EditorState>();
     function switchFile(newFileName: string, newContent: string) {
@@ -601,6 +635,7 @@ export async function createEditor({
         switchFile(fileName, value);
         updateSalActionButton();
         updateSalOpenButton();
+        updateSalLintButton();
     }
     function setErrors(
         fileName: string,

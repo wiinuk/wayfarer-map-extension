@@ -14,6 +14,12 @@ import {
     type DecorationSet,
 } from "@codemirror/view";
 import {
+    forceLinting,
+    lintKeymap,
+    linter,
+    type Diagnostic as CodeMirrorDiagnostic,
+} from "@codemirror/lint";
+import {
     RangeSetBuilder,
     EditorState,
     type Extension,
@@ -37,6 +43,10 @@ import {
     type ActionCommand,
     createCopyCommand,
 } from "./simple-editor-actions";
+import type {
+    LintDiagnostic,
+    LintTextEdit,
+} from "./lint";
 
 function openUrlAction(text: string): Effective<ActionCommand> {
     return done({
@@ -311,6 +321,17 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     let actionMatches: ActionMatchRange[] = [];
     let visibleMatches: ActionMatchRange[] = [];
     let menuPosition = 0;
+    let lintDiagnostics: readonly LintDiagnostic[] = [];
+    let applyLintEdits:
+        | ((edits: readonly LintTextEdit[]) => void)
+        | undefined;
+
+    function dispatchLintEdits(edits: readonly LintTextEdit[]) {
+        if (applyLintEdits == null) {
+            throw new Error("Lint edit handler is unavailable");
+        }
+        applyLintEdits(edits);
+    }
 
     function closeActionMenu() {
         visibleMatches = [];
@@ -520,10 +541,45 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         class: options.classNames?.join(" ") ?? "",
     });
 
+    const lintExtension = linter(
+        (): CodeMirrorDiagnostic[] =>
+            lintDiagnostics
+                .filter((diagnostic) => diagnostic.location === options.location)
+                    .map((diagnostic) => {
+                        const actions: NonNullable<
+                            CodeMirrorDiagnostic["actions"]
+                        >[number][] = [];
+                        const fix = diagnostic.fix;
+                        if (fix != null) {
+                            actions.push({
+                                name: "自動修正",
+                                apply: () => dispatchLintEdits(fix),
+                            });
+                        }
+                        for (const suggestion of diagnostic.suggestions ?? []) {
+                            actions.push({
+                                name: suggestion.label,
+                                apply: () =>
+                                    dispatchLintEdits(suggestion.edits),
+                            });
+                        }
+                        return {
+                            from: diagnostic.from,
+                            to: diagnostic.to,
+                            severity: diagnostic.severity,
+                            message: diagnostic.message,
+                            source: "Sal Lint",
+                            actions,
+                        };
+                    }),
+        { delay: 0 },
+    );
+
     const extensions: Extension[] = [
         EditorView.lineWrapping,
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        keymap.of([...lintKeymap, ...defaultKeymap, ...historyKeymap]),
+        lintExtension,
         EditorView.updateListener.of((update) => {
             if (update.docChanged && hasUserChange(update)) {
                 options.onInput(update.state.doc.toString());
@@ -568,6 +624,18 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         editor,
         element: editorShell,
         dispatchSource,
+        selectRange(from: number, to: number) {
+            editor.dispatch({ selection: { anchor: from, head: to } });
+            editor.focus();
+        },
+        setLintDiagnostics(
+            diagnostics: readonly LintDiagnostic[],
+            applyEdits: (edits: readonly LintTextEdit[]) => void,
+        ) {
+            lintDiagnostics = diagnostics;
+            applyLintEdits = applyEdits;
+            forceLinting(editor);
+        },
         updateRuleSource(newRuleSource: string) {
             const plugin = editor.plugin(actionDecorator);
             if (!plugin) return;
