@@ -587,6 +587,9 @@ export async function createDraftList({
         );
         titleLintTooltip.hidden =
             !titleTooltipRequested || diagnostics.length === 0;
+        autoFixButton.disabled = !lintDiagnostics.some(
+            (diagnostic) => (diagnostic.fix?.length ?? 0) > 0,
+        );
         detailName.setAttribute(
             "aria-invalid",
             diagnostics.length > 0 ? "true" : "false",
