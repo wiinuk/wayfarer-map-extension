@@ -476,22 +476,77 @@ export async function createDraftList({
     let lintDiagnostics: readonly LintDiagnostic[] = [];
     let lintGeneration = 0;
     const lintRun = createAsyncCancelScope(handleAsyncError);
-    const lintSummary = document.createElement("div");
-    lintSummary.style.display = "flex";
-    lintSummary.style.flexDirection = "column";
     const lintControls = document.createElement("div");
-    lintControls.style.display = "flex";
-    lintControls.style.flexDirection = "column";
-    lintControls.style.gap = "6px";
-    lintControls.style.width = "100%";
     const autoFixButton = document.createElement("button");
     autoFixButton.type = "button";
     autoFixButton.className = classNames.button;
-    autoFixButton.textContent = "Lintを自動修正";
+    autoFixButton.textContent = "Lintを一括修正";
     autoFixButton.addEventListener("click", () => {
         void applyAllLintFixes().catch(handleAsyncError);
     });
-    lintControls.append(autoFixButton, lintSummary);
+    lintControls.append(autoFixButton);
+    lintControls.hidden = true;
+
+    const titleLintField = document.createElement("div");
+    const titleLintTooltip = document.createElement("div");
+    titleLintField.style.position = "relative";
+    titleLintField.style.display = "flex";
+    titleLintField.style.flex = "1";
+    titleLintField.style.minWidth = "0";
+    detailName.style.flex = "1";
+    detailName.style.width = "100%";
+    detailName.style.minWidth = "0";
+    titleLintTooltip.hidden = true;
+    titleLintTooltip.style.position = "absolute";
+    titleLintTooltip.style.zIndex = "30";
+    titleLintTooltip.style.top = "calc(100% + 4px)";
+    titleLintTooltip.style.right = "0";
+    titleLintTooltip.style.display = "flex";
+    titleLintTooltip.style.flexDirection = "column";
+    titleLintTooltip.style.gap = "6px";
+    titleLintTooltip.style.width = "max-content";
+    titleLintTooltip.style.maxWidth = "min(360px, calc(100vw - 24px))";
+    titleLintTooltip.style.maxHeight = "min(50vh, 320px)";
+    titleLintTooltip.style.overflowY = "auto";
+    titleLintTooltip.style.padding = "8px";
+    titleLintTooltip.style.border = "1px solid #ccc";
+    titleLintTooltip.style.borderRadius = "6px";
+    titleLintTooltip.style.background = "white";
+    titleLintTooltip.style.color = "#1f2937";
+    titleLintTooltip.style.boxShadow = "0 4px 14px rgb(0 0 0 / 22%)";
+    titleLintTooltip.setAttribute("role", "group");
+    titleLintTooltip.setAttribute("aria-label", "タイトルのLint診断");
+    titleLintField.append(detailName, titleLintTooltip);
+
+    let titlePointerInside = false;
+    let titleFocusWithin = false;
+    let titleTooltipRequested = false;
+    function updateTitleTooltipVisibility() {
+        titleTooltipRequested = titlePointerInside || titleFocusWithin;
+        updateTitleLintTooltip();
+    }
+    titleLintField.addEventListener("pointerenter", () => {
+        titlePointerInside = true;
+        updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("pointerleave", () => {
+        titlePointerInside = false;
+        updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("focusin", () => {
+        titleFocusWithin = true;
+        updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("focusout", (event) => {
+        if (
+            event.relatedTarget instanceof Node &&
+            titleLintField.contains(event.relatedTarget)
+        ) {
+            return;
+        }
+        titleFocusWithin = false;
+        updateTitleTooltipVisibility();
+    });
 
     function currentLintInput(): LintInput | undefined {
         if (!selectedDraft) return;
@@ -525,47 +580,40 @@ export async function createDraftList({
         }
     }
 
-    function updateLintSummary() {
-        lintSummary.replaceChildren();
+    function updateTitleLintTooltip() {
+        titleLintTooltip.replaceChildren();
+        const diagnostics = lintDiagnostics.filter(
+            (diagnostic) => diagnostic.location === "title",
+        );
+        titleLintTooltip.hidden =
+            !titleTooltipRequested || diagnostics.length === 0;
+        detailName.setAttribute(
+            "aria-invalid",
+            diagnostics.length > 0 ? "true" : "false",
+        );
+        titleLintTooltip.id = "title-lint-tooltip";
+        if (diagnostics.length > 0) {
+            detailName.setAttribute("aria-describedby", titleLintTooltip.id);
+        } else {
+            detailName.removeAttribute("aria-describedby");
+        }
         lintControls.hidden = !activeLintSource || !selectedDraft;
         detailName.style.boxShadow = lintDiagnostics.some(
             (diagnostic) => diagnostic.location === "title",
         )
             ? "0 0 0 2px #e74c3c"
             : "";
-        if (!activeLintSource || !selectedDraft) return;
-
-        for (const diagnostic of lintDiagnostics) {
+        if (!activeLintSource || !selectedDraft || !titleTooltipRequested) {
+            return;
+        }
+        for (const diagnostic of diagnostics) {
             const row = document.createElement("div");
             row.style.display = "flex";
             row.style.flexWrap = "wrap";
             row.style.alignItems = "center";
             row.style.gap = "4px";
-            row.style.padding = "4px 0";
-            const message = document.createElement("button");
-            message.type = "button";
-            message.className = classNames.button;
-            message.textContent = `${diagnostic.location} (${diagnostic.severity}): ${diagnostic.message}`;
-            message.style.padding = "4px 6px";
-            message.style.color = "#1f2937";
-            message.style.background = "#f1f5f9";
-            message.style.textAlign = "left";
-            message.style.textDecoration = "underline dotted";
-            message.addEventListener("click", () => {
-                if (diagnostic.location === "title") {
-                    detailName.focus();
-                    detailName.setSelectionRange(
-                        diagnostic.from,
-                        diagnostic.to,
-                    );
-                } else {
-                    const target =
-                        diagnostic.location === "description"
-                            ? descriptionEditor
-                            : noteEditor;
-                    target.selectRange(diagnostic.from, diagnostic.to);
-                }
-            });
+            const message = document.createElement("span");
+            message.textContent = `${diagnostic.severity}: ${diagnostic.message}`;
             row.append(message);
             if (diagnostic.fix != null) {
                 row.append(
@@ -581,7 +629,7 @@ export async function createDraftList({
                     ),
                 );
             }
-            lintSummary.append(row);
+            titleLintTooltip.append(row);
         }
     }
 
@@ -614,13 +662,13 @@ export async function createDraftList({
             lintDiagnostics = [];
             descriptionEditor.setLintDiagnostics([], applyLintEdits);
             noteEditor.setLintDiagnostics([], applyLintEdits);
-            updateLintSummary();
+            updateTitleLintTooltip();
             return;
         }
         lintDiagnostics = [];
         descriptionEditor.setLintDiagnostics([], applyLintEdits);
         noteEditor.setLintDiagnostics([], applyLintEdits);
-        updateLintSummary();
+        updateTitleLintTooltip();
         lintRun(async (signal) => {
             const diagnostics = await evaluateLint(
                 activeLintSource,
@@ -641,7 +689,7 @@ export async function createDraftList({
                 applyLintEdits,
             );
             noteEditor.setLintDiagnostics(diagnostics, applyLintEdits);
-            updateLintSummary();
+            updateTitleLintTooltip();
         });
     }
 
@@ -1058,7 +1106,7 @@ export async function createDraftList({
             <div class={classNames["list-container"]}>{virtualListElement}</div>
             <details class={classNames["detail-pane"]}>
                 <summary class={classNames["detail-summary"]}>
-                    {detailName}
+                    {titleLintField}
                     <button
                         class={classNames.button}
                         onclick={() => addNewDraft()}
