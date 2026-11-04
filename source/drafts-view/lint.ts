@@ -301,7 +301,7 @@ function matchesForPattern(
             `Lint pattern exceeds the ${maxPatternLength} character limit`,
         );
     }
-    new RegExp(source, "gm");
+    new RegExp(source, "gmu");
     return createMatcher(
         (text, signal) => runRegex(source, text, signal),
         containsNamedCaptureGroup(source),

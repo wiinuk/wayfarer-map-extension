@@ -22,7 +22,7 @@ self.addEventListener(
     ({ data }: MessageEvent<RegexRequest>) => {
         const { id, pattern, text } = data;
         try {
-            const regex = new RegExp(pattern, "gm");
+            const regex = new RegExp(pattern, "gmu");
             const matches: RegexMatch[] = [];
             for (const match of text.matchAll(regex)) {
                 const captures: Record<string, string> = Object.create(null);
