@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.8.3
+// @version      0.8.4
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -21687,20 +21687,13 @@
           );
           this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
         }
-        let needsRedraw = false;
-        if (!this.renderedViewport || this.renderedViewport.zoom !== currentZoom) {
-          needsRedraw = true;
-        } else {
-          const { paddedBounds: bounds } = padBoundsRelative(
-            map,
-            currentBounds,
-            bufferRatio / 2
-          );
-          needsRedraw = !containsBounds(
-            this.renderedViewport.bounds,
-            fromClass(bounds)
-          );
-        }
+        const renderedViewport = this.renderedViewport;
+        const needsRedraw = !renderedViewport || renderedViewport.zoom !== currentZoom || !containsBounds(
+          renderedViewport.bounds,
+          fromClass(
+            padBoundsRelative(map, currentBounds, bufferRatio / 2).paddedBounds
+          )
+        );
         if (needsRedraw) {
           this.notifyDrawNeeded();
         }
@@ -21793,7 +21786,7 @@
 
   // source/local-config.ts
   async function createConfigAccessor(key) {
-    const zod = await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm");
+    const zod = await import("https://cdn.jsdelivr.net/npm/zod@4.6.7/+esm");
     const QuerySourceSchema = zod.strictObject({
       id: zod.string(),
       contents: zod.string()
@@ -21802,7 +21795,8 @@
       selectedIndex: zod.number().nullable(),
       sources: zod.tuple([QuerySourceSchema]).rest(QuerySourceSchema).readonly(),
       activeSalActionSourceId: zod.string().nullable().optional(),
-      activeSalOpenSourceId: zod.string().nullable().optional()
+      activeSalOpenSourceId: zod.string().nullable().optional(),
+      activeSalLintSourceId: zod.string().nullable().optional()
     }).readonly();
     const ConfigSchema = zod.strictObject({
       version: zod.literal("1"),
@@ -23005,7 +22999,7 @@ ${formatRemoteFailure(error)}`;
 
   // source/poi-records.worker.ts?worker
   function Worker3() {
-    return inlineWorker('var Ce=Object.defineProperty,we=Object.defineProperties;var Re=Object.getOwnPropertyDescriptors;var U=Object.getOwnPropertySymbols;var ke=Object.prototype.hasOwnProperty,Ee=Object.prototype.propertyIsEnumerable;var M=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),De=t=>{throw TypeError(t)};var P=(t,e,o)=>e in t?Ce(t,e,{enumerable:!0,configurable:!0,writable:!0,value:o}):t[e]=o,W=(t,e)=>{for(var o in e||(e={}))ke.call(e,o)&&P(t,o,e[o]);if(U)for(var o of U(e))Ee.call(e,o)&&P(t,o,e[o]);return t},j=(t,e)=>we(t,Re(e));var Y=(t,e,o)=>P(t,typeof e!="symbol"?e+"":e,o);var Ne=function(t,e){this[0]=t,this[1]=e};var v=t=>{var e=t[M("asyncIterator")],o=!1,s,c={};return e==null?(e=t[M("iterator")](),s=l=>c[l]=d=>e[l](d)):(e=e.call(t),s=l=>c[l]=d=>{if(o){if(o=!1,l==="throw")throw d;return d}return o=!0,{done:!1,value:new Ne(new Promise(u=>{var n=e[l](d);n instanceof Object||De("Object expected"),u(n)}),1)}}),c[M("iterator")]=()=>c,s("next"),"throw"in e?s("throw"):c.throw=l=>{throw l},"return"in e&&s("return"),c};function X(t,e,{batchSize:o=10,delayMilliseconds:s=1e3}={}){let c=[],l=!1,d=null;function u(i){c.push(i),d!==null&&clearTimeout(d),n()}function n(){l||(d=setTimeout(()=>{d=null,r().catch(e)},s))}async function r(){if(l||c.length===0)return;l=!0;let i=c.splice(0,o);try{await t(i)}catch(m){throw c.unshift(...i),e(m),m}finally{l=!1,c.length>0&&n()}}function a(){d!==null&&(clearTimeout(d),d=null),c.length=0}return{push:u,close:a}}function H(){return typeof window=="undefined"&&typeof self!="undefined"}function Ke(t,e){let o=performance.now(),s=null;return t.addEventListener("abort",()=>{s!=null&&(cancelAnimationFrame(s),s=null)},{once:!0}),{get isYieldRequested(){var l,d;return(d=(l=navigator.scheduling)==null?void 0:l.isInputPending)!=null&&d.call(l)?!0:performance.now()-o>=e},yield(){return this.isYieldRequested?new Promise(c=>{s=requestAnimationFrame(()=>{o=performance.now(),c()})}):null}}}function Me(){return{isYieldRequested:!1,yield(){return null}}}function J(t,e=10){return H()?Me():Ke(t,e)}function Z(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function Pe(t,e,o,s){return{sw:{lat:t,lng:e},ne:{lat:o,lng:s}}}function $(t,e){return Pe(t.lat,t.lng,e.lat,e.lng)}function z(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function ee(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function te(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?Ae(t,e):!1}function Ae(t,e){let o=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!o&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:w(t,e.sw.lng)||w(t,e.ne.lng)||w(e,t.sw.lng)||w(e,t.ne.lng)||o&&s}function w(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function I(t){return t}function re(...t){}var A=class extends Error{constructor(o){super(o);Y(this,"name","AbortError")}};function oe(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new A(t)}function Fe(t,e){for(let[o,s]of Object.entries(e)){let c=t.createObjectStore(o,{keyPath:s.key.slice()});for(let[l,d]of Object.entries(s.indexes))c.createIndex(l,d.key,d)}}function ae(t,e,o){return new Promise((s,c)=>{let l=indexedDB.open(t,e);l.addEventListener("upgradeneeded",()=>Fe(l.result,o)),l.addEventListener("blocked",()=>c(new Error("database blocked"))),l.addEventListener("error",()=>c(l.error)),l.addEventListener("success",()=>s(l.result))})}var B=class{constructor(e,o,s){this.source=e;this.query=o;this.action=s}};function se(t,{mode:e,signal:o},s,...c){return new Promise((l,d)=>{if(o!=null&&o.aborted){d(oe());return}let u=!1,n,r=t.transaction(c,e),a=o?()=>{u||r.abort()}:re;r.addEventListener("complete",()=>{o==null||o.removeEventListener("abort",a),u?l(n):d(new Error("internal error"))}),r.addEventListener("error",g=>{o==null||o.removeEventListener("abort",a),d(g.target.error)}),o==null||o.addEventListener("abort",a);let i={};for(let g of c)i[g]=r.objectStore(g);let m=s(i),T,p,y,f,S,h;function b(){let g;switch(T){case void 0:g=m.next();break;case"Request":{let x=p.result;T=void 0,p=void 0,g=m.next(x);break}case"WaitRequests":{let x=y,_=f,Ie=_[x.length].result;if(x.push(Ie),x.length!==_.length)return;T=void 0,f=void 0,y=void 0,g=m.next(x);break}case"OpenCursor":{let x=S.result;if(x===null||h(x.value)==="break")T=void 0,S=void 0,h=void 0,g=m.next(void 0);else{x.continue();return}break}default:{d(new Error(`Invalid resolving kind: ${T}`));return}}if(g.done){u=!0,n=g.value;return}let L=g.value;if(L instanceof IDBRequest){T="Request",p=L,L.onsuccess=b;return}if(L instanceof B){T="OpenCursor",S=L.source.openCursor(L.query),h=L.action,S.onsuccess=b;return}T="WaitRequests",f=L,y=[];for(let x of L)x.onsuccess=b}b()})}function R(t,e){return t.index(e)}function Ge(t,e){let o=[];for(let s of e)o.push(t.get(s));return o}function*ie(t,e){let o=Ge(t,e);return o.length===0?[]:yield o}function*le(t,e,o){return yield t.getAll(e,o)}function*F(t,e){let o;for(let s of e)o=t.put(s);o!=null&&(yield o)}function*ce(t,e){let o;for(let s of e)o=t.delete(s);o!=null&&(yield o)}function qe(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(n,r,a){var i=parseFloat(n,10),m=parseFloat(r,10);if(isNaN(i)||isNaN(m))throw new Error("Invalid LatLng object: ("+n+", "+r+")");return a!==!0&&(i=Math.max(Math.min(i,90),-90),m=(m+180)%360+(m<-180||m===180?180:-180)),{lat:i,lng:m}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(n){var r=e.L.LatLng.DEG_TO_RAD,a=n.lat*r,i=n.lng*r,m=Math.cos(a);return[Math.cos(i)*m,Math.sin(i)*m,Math.sin(a)]},e.XYZToLatLng=function(n){var r=e.L.LatLng.RAD_TO_DEG,a=Math.atan2(n[2],Math.sqrt(n[0]*n[0]+n[1]*n[1])),i=Math.atan2(n[1],n[0]);return e.L.LatLng(a*r,i*r)};var o=function(n){var r=[Math.abs(n[0]),Math.abs(n[1]),Math.abs(n[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(n,r){var a,i;switch(n){case 0:a=r[1]/r[0],i=r[2]/r[0];break;case 1:a=-r[0]/r[1],i=r[2]/r[1];break;case 2:a=-r[0]/r[2],i=-r[1]/r[2];break;case 3:a=r[2]/r[0],i=r[1]/r[0];break;case 4:a=r[2]/r[1],i=-r[0]/r[1];break;case 5:a=-r[1]/r[2],i=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[a,i]};e.XYZToFaceUV=function(n){var r=o(n);n[r]<0&&(r+=3);var a=s(r,n);return[r,a]},e.FaceUVToXYZ=function(n,r){var a=r[0],i=r[1];switch(n){case 0:return[1,a,i];case 1:return[-a,1,i];case 2:return[-a,-i,1];case 3:return[-1,-i,-a];case 4:return[i,-1,-a];case 5:return[i,a,-1];default:throw{error:"Invalid face"}}};var c=function(n){return n>=.5?1/3*(4*n*n-1):1/3*(1-4*(1-n)*(1-n))};e.STToUV=function(n){return[c(n[0]),c(n[1])]};var l=function(n){return n>=0?.5*Math.sqrt(1+3*n):1-.5*Math.sqrt(1-3*n)};e.UVToST=function(n){return[l(n[0]),l(n[1])]},e.STToIJ=function(n,r){var a=1<<r,i=function(m){var T=Math.floor(m*a);return Math.max(0,Math.min(a-1,T))};return[i(n[0]),i(n[1])]},e.IJToST=function(n,r,a){var i=1<<r;return[(n[0]+a[0])/i,(n[1]+a[1])/i]};var d=function(n,r,a,i){var m,T;if(i==0){a==1&&(r.x=n-1-r.x,r.y=n-1-r.y);var p=r.x;r.x=r.y,r.y=p}},u=function(n,r,a,i){var m={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof i!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var T=i%2?"d":"a",p=[],y=a-1;y>=0;y--){var f=1<<y,S=n&f?1:0,h=r&f?1:0,b=m[T][S*2+h];p.push(b[0]),T=b[1]}return p};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(n){var r=n.split("/"),a=parseInt(r[0]),i=r[1],m=i.length,T={x:0,y:0},p,y,f,S,h,b;for(p=m-1;p>=0;p--)y=m-p,f=i[p],S=0,h=0,f==="1"?h=1:f==="2"?(S=1,h=1):f==="3"&&(S=1),b=Math.pow(2,y-1),d(b,T,S,h),T.x+=b*S,T.y+=b*h;if(a%2===1){var g=T.x;T.x=T.y,T.y=g}return e.S2Cell.FromFaceIJ(parseInt(a),[T.x,T.y],y)},e.S2Cell.FromLatLng=function(n,r){if(!n.lat&&n.lat!==0||!n.lng&&n.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var a=e.LatLngToXYZ(n),i=e.XYZToFaceUV(a),m=e.UVToST(i[1]),T=e.STToIJ(m,r);return e.S2Cell.FromFaceIJ(i[0],T,r)},e.S2Cell.FromFaceIJ=function(n,r,a){var i=new e.S2Cell;return i.face=n,i.ij=r,i.level=a,i},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var n=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(n),a=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(a)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var n=[],r=[[0,0],[0,1],[1,1],[1,0]],a=0;a<4;a++){var i=e.IJToST(this.ij,this.level,r[a]),m=e.STToUV(i),T=e.FaceUVToXYZ(this.face,m);n.push(e.XYZToLatLng(T))}return n},e.S2Cell.prototype.getFaceAndQuads=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return[this.face,n]},e.S2Cell.prototype.toHilbertQuadkey=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+n.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(n,r,a){return e.S2Cell.FromLatLng({lat:n,lng:r},a).getNeighbors().map(function(i){return i.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var n=function(T,p,y){var f=1<<y;if(p[0]>=0&&p[1]>=0&&p[0]<f&&p[1]<f)return e.S2Cell.FromFaceIJ(T,p,y);var S=e.IJToST(p,y,[.5,.5]),h=e.STToUV(S),b=e.FaceUVToXYZ(T,h),g=e.XYZToFaceUV(b);return T=g[0],h=g[1],S=e.UVToST(h),p=e.STToIJ(S,y),e.S2Cell.FromFaceIJ(T,p,y)},r=this.face,a=this.ij[0],i=this.ij[1],m=this.level;return[n(r,[a-1,i],m),n(r,[a,i-1],m),n(r,[a+1,i],m),n(r,[a,i+1],m)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(n,r,a){var i=t.dcodeIO&&t.dcodeIO.Long,m,T,p;for(a||(a=r.length),r.length>a&&(r=r.substr(0,a)),m=i.fromString(n.toString(10),!0,10).toString(2);m.length<e.FACE_BITS;)m="0"+m;for(T=i.fromString(r,!0,4).toString(2);T.length<2*a;)T="0"+T;for(p=m+T,p+="1";p.length<e.FACE_BITS+e.POS_BITS;)p+="0";return i.fromString(p,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(n){var r=n.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(n){for(var r=t.dcodeIO&&t.dcodeIO.Long,a=r.fromString(n,!0,10).toString(2);a.length<e.FACE_BITS+e.POS_BITS;)a="0"+a;for(var i=a.lastIndexOf("1"),m=a.substring(0,3),T=a.substring(3,i),p=T.length/2,y=r.fromString(m,!0,2).toString(10),f=r.fromString(T,!0,2).toString(4);f.length<p;)f="0"+f;return y+"/"+f},e.keyToLatLng=e.S2Cell.keyToLatLng=function(n){var r=e.S2Cell.FromHilbertQuadKey(n);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(n){var r=e.idToKey(n);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(n,r,a){if(isNaN(a)||a<1||a>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:n,lng:r},a).toHilbertQuadkey()},e.stepKey=function(n,r){var a=t.dcodeIO&&t.dcodeIO.Long,i=n.split("/"),m=i[0],T=i[1],p=i[1].length,y=a.fromString(T,!0,4),f;r>0?f=y.add(Math.abs(r)):r<0&&(f=y.subtract(Math.abs(r)));var S=f.toString(4);for(S==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));S.length<p;)S="0"+S;return m+"/"+S},e.S2Cell.prevKey=e.prevKey=function(n){return e.stepKey(n,-1)},e.S2Cell.nextKey=e.nextKey=function(n){return e.stepKey(n,1)},e}var C=qe(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function G(t,e){return C.S2Cell.FromLatLng(t,e)}function Ve(t){return C.S2Cell.FromHilbertQuadKey(t)}function D(t,e){return G(t,e).toString()}var Qe=Object.freeze(["0","1","2","3"]);function N(t){let e=t.level;if(C.MAX_LEVEL<=e)throw new Error("Cannot get children for a cell at MAX_LEVEL (30).");let o=t.toHilbertQuadkey(),s=[];for(let c of Qe){let l=o+c;s.push(Ve(l))}return s}function de(t){let e=t.padEnd(16,"0"),o=BigInt(`0x${e}`),s=Ue(o);return C.S2Cell.FromHilbertQuadKey(s)}var O=new BigUint64Array(1),E=new Uint32Array(O.buffer);function _e(t){O[0]=t;let e=E[0],o=E[1];return e!==0?31-Math.clz32(e&-e):o!==0?32+(31-Math.clz32(o&-o)):64}var k=[];function Ue(t){O[0]=t;let e=E[0],o=E[1],s=o>>>29,c=We(t);k.length=0,k.push(s,"/");for(let l=1;l<=c;l++){let d=61-2*l,u;d>=32?u=o>>>d-32&3:d===31?u=(o&1)<<1|e>>>31:u=e>>>d&3,k.push(u)}return k.join("")}function We(t){let e=_e(t);if(e>60||(e&1)!==0)throw new Error("Invalid S2CellID");return 60-e>>1}function ue(t=1024){let e=new Array(t),o=t-1,s=0,c=0;return{enqueue(l){e[c&o]=l,c++},dequeue(){if(s===c)return;let l=e[s&o];return s++,l}}}var je={pois:{recordType:I,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:I,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},K=Symbol("_pois"),me=Symbol("_cells"),Ye=Symbol("_coordinatesIndex"),Te=Symbol("_cellIdsIndex"),Xe=Symbol("_ancestorIdsIndexSymbol");var He="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",Je=1,pe=Symbol("_database");async function fe(){return{[pe]:await ae(He,Je,je)}}function ye(t,e,o,s){return se(t[pe],{mode:e,signal:o==null?void 0:o.signal},({pois:c,cells:l})=>{let d={[K]:c,[me]:l,[Ye]:R(c,"coordinates"),[Te]:R(c,"cellIds"),[Xe]:R(l,"ancestorIds")};return s(d)},"pois","cells")}function Ze(t,e){let o=[],s=new Set,c=ue();c.enqueue(G(z(t),e));for(let l;l=c.dequeue();){let d=l.toString();if(s.has(d))continue;s.add(d);let u=Z();for(let n of l.getCornerLatLngs())u=ee(u,n);if(te(t,u)){o.push(l);for(let n of l.getNeighbors())c.enqueue(n)}}return o}function $e(t,e,o,s){let c=o.latE6/1e6,l=o.lngE6/1e6,d=o.title,u={lat:c,lng:l},n=[D(u,14),D(u,15)],r=t!=null?t:{guid:e,lat:c,lng:l,name:d,data:o,cellIds:n,firstFetchDate:s,lastFetchDate:s};return j(W({},r),{name:d!==""?d:r.name,lat:c,lng:l,data:o,cellIds:n,lastFetchDate:s})}async function Se(t,e,o,s,c){for(let[l,{cell:d,pois:u}]of e)await ze(t,l,d,u,s,c);for(let l of o)for(let d of Ze(l,q)){let u=d.toString();e.has(u)||await ye(t,"readwrite",{signal:c},function*(n){yield*v(ge(n,d,s))})}}async function ze(t,e,o,s,c,l){await ye(t,"readwrite",{signal:l},function*(d){yield*v(et(d,e,s)),yield*v(tt(d,e,s,c)),yield*v(ge(d,o,c))})}function*et(t,e,o){let s=[],c=new Set;for(let d of o)c.add(d.poiId);let l=yield*v(le(t[Te],e));for(let{guid:d}of l)c.has(d)||s.push(d);yield*v(ce(t[K],s))}function*tt(t,e,o,s){let c=[];for(let{poiId:u}of o)c.push(u);let d=(yield*v(ie(t[K],c))).map((u,n)=>{let r=o[n];return $e(u,r.poiId,r,s)});yield*v(F(t[K],d))}function*ge(t,e,o){let s=[];for(let c of N(e))for(let l of N(c))for(let d of N(l)){let u=d.getLatLng();s.push({cellId:d.toString(),centerLat:u.lat,centerLng:u.lng,level:d.level,ancestorIds:[D(u,14)],firstFetchDate:o,lastFetchDate:o})}yield*v(F(t[me],s))}function he(){return new EventTarget}function be(t,e){return new CustomEvent(t,{detail:e})}function nt(t){let e={};return t.searchParams.forEach((o,s)=>{e[s]=o}),e}async function rt(t,e,{cells:o,bounds:s},c){await Se(t,o,s,Date.now(),c),e.dispatchEvent(be("gcs-saved",void 0))}var q=14;async function ot(t,e,o){let s=new Map,c=[];for(let{queries:l,responseText:d}of e){await o.yield();let u=t.parseGcsResponse(d);if(u.captcha||!u.result.success||u.result.cellLevel!==q)continue;let n=t.parseGcsQueries(l);c.push($(n.sw,n.ne));for(let{cellId:r,pois:a}of u.result.data){let i=de(r),m=i.toString();s.set(m,{pois:a,cell:i})}}return{cells:s,bounds:c}}async function xe(t,e,o){let s=await fe(),c=X(async l=>{let{signal:d}=new AbortController,u=J(d),n=await ot(t,l,u);await rt(s,e,n,d)},o,{delayMilliseconds:0});return(l,d)=>{c.push({queries:nt(l),responseText:d})}}function V(t,e){return t}var at=[V("config-changed",I),V("gcs-received",I),V("gcs-saved",I)],ve=at;async function Le(){let t=await import("https://cdn.jsdelivr.net/npm/zod@4.3.6/+esm"),e=t.enum(["DETAILED"]),o=t.enum(["GYM","POKESTOP","POWERSPOT"]),s=t.enum(["HOLOHOLO"]),c=t.enum(["ACTIVE","INACTIVE"]),l=/^\\(\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)$/,d=t.string().transform((p,y)=>{let f=l.exec(p);return f?{lat:Number(f[1]),lng:Number(f[2])}:(y.addIssue({code:"invalid_format",message:"Invalid point format. Expected `(${number},${number})",format:"custom",pattern:l.source,input:p}),t.NEVER)}),u=t.object({ne:d,sw:d}),n=t.object({s2CellLevel:t.number(),s2CellId:t.string(),generatedTimestamp:t.string(),count:t.number(),format:e}),r=t.object({gameBrand:s,entity:o,status:c}),a=t.object({poiId:t.string(),latE6:t.number(),lngE6:t.number(),title:t.string(),description:t.string(),address:t.string(),categoryTags:t.array(t.unknown()),mainImage:t.string(),hasAdditionalImages:t.boolean(),gmo:t.array(r),isCommunityContributed:t.boolean()}),i=t.object({cellId:t.string(),metadata:n.optional(),pois:t.array(a)}),m=t.object({success:t.boolean(),data:t.array(i),cellsQueried:t.number(),cellsLoaded:t.number(),snapshot:t.string(),cellLevel:t.number()}),T=t.object({result:m,message:t.unknown(),code:t.string(),errorsWithIcon:t.unknown(),fieldErrors:t.unknown(),errorDetails:t.unknown(),version:t.string(),captcha:t.boolean()});return{FormatSchema:e,EntityKindSchema:o,GameBrandSchema:s,StatusSchema:c,MetadataSchema:n,GmoSchema:r,PoiSchema:a,DatumSchema:i,ResultSchema:m,GcsQueriesSchema:u,GcsResponseSchema:T,parseGcsResponse(p){return T.parse(JSON.parse(p))},parseGcsQueries(p){return u.parse(p)}}}function Q(t){console.error("An error occurred during asynchronous processing:",t)}async function st(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self),o=await Le(),s=he(),c=u=>{e.dispatchEvent(u.type,u.detail).catch(Q)};ve.forEach(u=>s.addEventListener(u,c));let l=await xe(o,s,Q),d={onGcsReceived(u,n){l(new URL(u),n)}};t.expose(d)}st().catch(Q);\n');
+    return inlineWorker('var Ce=Object.defineProperty,we=Object.defineProperties;var Re=Object.getOwnPropertyDescriptors;var U=Object.getOwnPropertySymbols;var ke=Object.prototype.hasOwnProperty,Ee=Object.prototype.propertyIsEnumerable;var M=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),De=t=>{throw TypeError(t)};var P=(t,e,o)=>e in t?Ce(t,e,{enumerable:!0,configurable:!0,writable:!0,value:o}):t[e]=o,W=(t,e)=>{for(var o in e||(e={}))ke.call(e,o)&&P(t,o,e[o]);if(U)for(var o of U(e))Ee.call(e,o)&&P(t,o,e[o]);return t},j=(t,e)=>we(t,Re(e));var Y=(t,e,o)=>P(t,typeof e!="symbol"?e+"":e,o);var Ne=function(t,e){this[0]=t,this[1]=e};var v=t=>{var e=t[M("asyncIterator")],o=!1,s,c={};return e==null?(e=t[M("iterator")](),s=l=>c[l]=d=>e[l](d)):(e=e.call(t),s=l=>c[l]=d=>{if(o){if(o=!1,l==="throw")throw d;return d}return o=!0,{done:!1,value:new Ne(new Promise(u=>{var n=e[l](d);n instanceof Object||De("Object expected"),u(n)}),1)}}),c[M("iterator")]=()=>c,s("next"),"throw"in e?s("throw"):c.throw=l=>{throw l},"return"in e&&s("return"),c};function X(t,e,{batchSize:o=10,delayMilliseconds:s=1e3}={}){let c=[],l=!1,d=null;function u(i){c.push(i),d!==null&&clearTimeout(d),n()}function n(){l||(d=setTimeout(()=>{d=null,r().catch(e)},s))}async function r(){if(l||c.length===0)return;l=!0;let i=c.splice(0,o);try{await t(i)}catch(m){throw c.unshift(...i),e(m),m}finally{l=!1,c.length>0&&n()}}function a(){d!==null&&(clearTimeout(d),d=null),c.length=0}return{push:u,close:a}}function H(){return typeof window=="undefined"&&typeof self!="undefined"}function Ke(t,e){let o=performance.now(),s=null;return t.addEventListener("abort",()=>{s!=null&&(cancelAnimationFrame(s),s=null)},{once:!0}),{get isYieldRequested(){var l,d;return(d=(l=navigator.scheduling)==null?void 0:l.isInputPending)!=null&&d.call(l)?!0:performance.now()-o>=e},yield(){return this.isYieldRequested?new Promise(c=>{s=requestAnimationFrame(()=>{o=performance.now(),c()})}):null}}}function Me(){return{isYieldRequested:!1,yield(){return null}}}function J(t,e=10){return H()?Me():Ke(t,e)}function Z(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function Pe(t,e,o,s){return{sw:{lat:t,lng:e},ne:{lat:o,lng:s}}}function $(t,e){return Pe(t.lat,t.lng,e.lat,e.lng)}function z(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function ee(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function te(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?Ae(t,e):!1}function Ae(t,e){let o=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!o&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:w(t,e.sw.lng)||w(t,e.ne.lng)||w(e,t.sw.lng)||w(e,t.ne.lng)||o&&s}function w(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function I(t){return t}function re(...t){}var A=class extends Error{constructor(o){super(o);Y(this,"name","AbortError")}};function oe(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new A(t)}function Fe(t,e){for(let[o,s]of Object.entries(e)){let c=t.createObjectStore(o,{keyPath:s.key.slice()});for(let[l,d]of Object.entries(s.indexes))c.createIndex(l,d.key,d)}}function ae(t,e,o){return new Promise((s,c)=>{let l=indexedDB.open(t,e);l.addEventListener("upgradeneeded",()=>Fe(l.result,o)),l.addEventListener("blocked",()=>c(new Error("database blocked"))),l.addEventListener("error",()=>c(l.error)),l.addEventListener("success",()=>s(l.result))})}var B=class{constructor(e,o,s){this.source=e;this.query=o;this.action=s}};function se(t,{mode:e,signal:o},s,...c){return new Promise((l,d)=>{if(o!=null&&o.aborted){d(oe());return}let u=!1,n,r=t.transaction(c,e),a=o?()=>{u||r.abort()}:re;r.addEventListener("complete",()=>{o==null||o.removeEventListener("abort",a),u?l(n):d(new Error("internal error"))}),r.addEventListener("error",g=>{o==null||o.removeEventListener("abort",a),d(g.target.error)}),o==null||o.addEventListener("abort",a);let i={};for(let g of c)i[g]=r.objectStore(g);let m=s(i),T,p,y,f,S,h;function b(){let g;switch(T){case void 0:g=m.next();break;case"Request":{let x=p.result;T=void 0,p=void 0,g=m.next(x);break}case"WaitRequests":{let x=y,_=f,Ie=_[x.length].result;if(x.push(Ie),x.length!==_.length)return;T=void 0,f=void 0,y=void 0,g=m.next(x);break}case"OpenCursor":{let x=S.result;if(x===null||h(x.value)==="break")T=void 0,S=void 0,h=void 0,g=m.next(void 0);else{x.continue();return}break}default:{d(new Error(`Invalid resolving kind: ${T}`));return}}if(g.done){u=!0,n=g.value;return}let L=g.value;if(L instanceof IDBRequest){T="Request",p=L,L.onsuccess=b;return}if(L instanceof B){T="OpenCursor",S=L.source.openCursor(L.query),h=L.action,S.onsuccess=b;return}T="WaitRequests",f=L,y=[];for(let x of L)x.onsuccess=b}b()})}function R(t,e){return t.index(e)}function Ge(t,e){let o=[];for(let s of e)o.push(t.get(s));return o}function*ie(t,e){let o=Ge(t,e);return o.length===0?[]:yield o}function*le(t,e,o){return yield t.getAll(e,o)}function*F(t,e){let o;for(let s of e)o=t.put(s);o!=null&&(yield o)}function*ce(t,e){let o;for(let s of e)o=t.delete(s);o!=null&&(yield o)}function qe(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(n,r,a){var i=parseFloat(n,10),m=parseFloat(r,10);if(isNaN(i)||isNaN(m))throw new Error("Invalid LatLng object: ("+n+", "+r+")");return a!==!0&&(i=Math.max(Math.min(i,90),-90),m=(m+180)%360+(m<-180||m===180?180:-180)),{lat:i,lng:m}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(n){var r=e.L.LatLng.DEG_TO_RAD,a=n.lat*r,i=n.lng*r,m=Math.cos(a);return[Math.cos(i)*m,Math.sin(i)*m,Math.sin(a)]},e.XYZToLatLng=function(n){var r=e.L.LatLng.RAD_TO_DEG,a=Math.atan2(n[2],Math.sqrt(n[0]*n[0]+n[1]*n[1])),i=Math.atan2(n[1],n[0]);return e.L.LatLng(a*r,i*r)};var o=function(n){var r=[Math.abs(n[0]),Math.abs(n[1]),Math.abs(n[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(n,r){var a,i;switch(n){case 0:a=r[1]/r[0],i=r[2]/r[0];break;case 1:a=-r[0]/r[1],i=r[2]/r[1];break;case 2:a=-r[0]/r[2],i=-r[1]/r[2];break;case 3:a=r[2]/r[0],i=r[1]/r[0];break;case 4:a=r[2]/r[1],i=-r[0]/r[1];break;case 5:a=-r[1]/r[2],i=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[a,i]};e.XYZToFaceUV=function(n){var r=o(n);n[r]<0&&(r+=3);var a=s(r,n);return[r,a]},e.FaceUVToXYZ=function(n,r){var a=r[0],i=r[1];switch(n){case 0:return[1,a,i];case 1:return[-a,1,i];case 2:return[-a,-i,1];case 3:return[-1,-i,-a];case 4:return[i,-1,-a];case 5:return[i,a,-1];default:throw{error:"Invalid face"}}};var c=function(n){return n>=.5?1/3*(4*n*n-1):1/3*(1-4*(1-n)*(1-n))};e.STToUV=function(n){return[c(n[0]),c(n[1])]};var l=function(n){return n>=0?.5*Math.sqrt(1+3*n):1-.5*Math.sqrt(1-3*n)};e.UVToST=function(n){return[l(n[0]),l(n[1])]},e.STToIJ=function(n,r){var a=1<<r,i=function(m){var T=Math.floor(m*a);return Math.max(0,Math.min(a-1,T))};return[i(n[0]),i(n[1])]},e.IJToST=function(n,r,a){var i=1<<r;return[(n[0]+a[0])/i,(n[1]+a[1])/i]};var d=function(n,r,a,i){var m,T;if(i==0){a==1&&(r.x=n-1-r.x,r.y=n-1-r.y);var p=r.x;r.x=r.y,r.y=p}},u=function(n,r,a,i){var m={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof i!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var T=i%2?"d":"a",p=[],y=a-1;y>=0;y--){var f=1<<y,S=n&f?1:0,h=r&f?1:0,b=m[T][S*2+h];p.push(b[0]),T=b[1]}return p};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(n){var r=n.split("/"),a=parseInt(r[0]),i=r[1],m=i.length,T={x:0,y:0},p,y,f,S,h,b;for(p=m-1;p>=0;p--)y=m-p,f=i[p],S=0,h=0,f==="1"?h=1:f==="2"?(S=1,h=1):f==="3"&&(S=1),b=Math.pow(2,y-1),d(b,T,S,h),T.x+=b*S,T.y+=b*h;if(a%2===1){var g=T.x;T.x=T.y,T.y=g}return e.S2Cell.FromFaceIJ(parseInt(a),[T.x,T.y],y)},e.S2Cell.FromLatLng=function(n,r){if(!n.lat&&n.lat!==0||!n.lng&&n.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var a=e.LatLngToXYZ(n),i=e.XYZToFaceUV(a),m=e.UVToST(i[1]),T=e.STToIJ(m,r);return e.S2Cell.FromFaceIJ(i[0],T,r)},e.S2Cell.FromFaceIJ=function(n,r,a){var i=new e.S2Cell;return i.face=n,i.ij=r,i.level=a,i},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var n=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(n),a=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(a)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var n=[],r=[[0,0],[0,1],[1,1],[1,0]],a=0;a<4;a++){var i=e.IJToST(this.ij,this.level,r[a]),m=e.STToUV(i),T=e.FaceUVToXYZ(this.face,m);n.push(e.XYZToLatLng(T))}return n},e.S2Cell.prototype.getFaceAndQuads=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return[this.face,n]},e.S2Cell.prototype.toHilbertQuadkey=function(){var n=u(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+n.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(n,r,a){return e.S2Cell.FromLatLng({lat:n,lng:r},a).getNeighbors().map(function(i){return i.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var n=function(T,p,y){var f=1<<y;if(p[0]>=0&&p[1]>=0&&p[0]<f&&p[1]<f)return e.S2Cell.FromFaceIJ(T,p,y);var S=e.IJToST(p,y,[.5,.5]),h=e.STToUV(S),b=e.FaceUVToXYZ(T,h),g=e.XYZToFaceUV(b);return T=g[0],h=g[1],S=e.UVToST(h),p=e.STToIJ(S,y),e.S2Cell.FromFaceIJ(T,p,y)},r=this.face,a=this.ij[0],i=this.ij[1],m=this.level;return[n(r,[a-1,i],m),n(r,[a,i-1],m),n(r,[a+1,i],m),n(r,[a,i+1],m)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(n,r,a){var i=t.dcodeIO&&t.dcodeIO.Long,m,T,p;for(a||(a=r.length),r.length>a&&(r=r.substr(0,a)),m=i.fromString(n.toString(10),!0,10).toString(2);m.length<e.FACE_BITS;)m="0"+m;for(T=i.fromString(r,!0,4).toString(2);T.length<2*a;)T="0"+T;for(p=m+T,p+="1";p.length<e.FACE_BITS+e.POS_BITS;)p+="0";return i.fromString(p,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(n){var r=n.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(n){for(var r=t.dcodeIO&&t.dcodeIO.Long,a=r.fromString(n,!0,10).toString(2);a.length<e.FACE_BITS+e.POS_BITS;)a="0"+a;for(var i=a.lastIndexOf("1"),m=a.substring(0,3),T=a.substring(3,i),p=T.length/2,y=r.fromString(m,!0,2).toString(10),f=r.fromString(T,!0,2).toString(4);f.length<p;)f="0"+f;return y+"/"+f},e.keyToLatLng=e.S2Cell.keyToLatLng=function(n){var r=e.S2Cell.FromHilbertQuadKey(n);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(n){var r=e.idToKey(n);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(n,r,a){if(isNaN(a)||a<1||a>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:n,lng:r},a).toHilbertQuadkey()},e.stepKey=function(n,r){var a=t.dcodeIO&&t.dcodeIO.Long,i=n.split("/"),m=i[0],T=i[1],p=i[1].length,y=a.fromString(T,!0,4),f;r>0?f=y.add(Math.abs(r)):r<0&&(f=y.subtract(Math.abs(r)));var S=f.toString(4);for(S==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));S.length<p;)S="0"+S;return m+"/"+S},e.S2Cell.prevKey=e.prevKey=function(n){return e.stepKey(n,-1)},e.S2Cell.nextKey=e.nextKey=function(n){return e.stepKey(n,1)},e}var C=qe(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function G(t,e){return C.S2Cell.FromLatLng(t,e)}function Ve(t){return C.S2Cell.FromHilbertQuadKey(t)}function D(t,e){return G(t,e).toString()}var Qe=Object.freeze(["0","1","2","3"]);function N(t){let e=t.level;if(C.MAX_LEVEL<=e)throw new Error("Cannot get children for a cell at MAX_LEVEL (30).");let o=t.toHilbertQuadkey(),s=[];for(let c of Qe){let l=o+c;s.push(Ve(l))}return s}function de(t){let e=t.padEnd(16,"0"),o=BigInt(`0x${e}`),s=Ue(o);return C.S2Cell.FromHilbertQuadKey(s)}var O=new BigUint64Array(1),E=new Uint32Array(O.buffer);function _e(t){O[0]=t;let e=E[0],o=E[1];return e!==0?31-Math.clz32(e&-e):o!==0?32+(31-Math.clz32(o&-o)):64}var k=[];function Ue(t){O[0]=t;let e=E[0],o=E[1],s=o>>>29,c=We(t);k.length=0,k.push(s,"/");for(let l=1;l<=c;l++){let d=61-2*l,u;d>=32?u=o>>>d-32&3:d===31?u=(o&1)<<1|e>>>31:u=e>>>d&3,k.push(u)}return k.join("")}function We(t){let e=_e(t);if(e>60||(e&1)!==0)throw new Error("Invalid S2CellID");return 60-e>>1}function ue(t=1024){let e=new Array(t),o=t-1,s=0,c=0;return{enqueue(l){e[c&o]=l,c++},dequeue(){if(s===c)return;let l=e[s&o];return s++,l}}}var je={pois:{recordType:I,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:I,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},K=Symbol("_pois"),me=Symbol("_cells"),Ye=Symbol("_coordinatesIndex"),Te=Symbol("_cellIdsIndex"),Xe=Symbol("_ancestorIdsIndexSymbol");var He="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",Je=1,pe=Symbol("_database");async function fe(){return{[pe]:await ae(He,Je,je)}}function ye(t,e,o,s){return se(t[pe],{mode:e,signal:o==null?void 0:o.signal},({pois:c,cells:l})=>{let d={[K]:c,[me]:l,[Ye]:R(c,"coordinates"),[Te]:R(c,"cellIds"),[Xe]:R(l,"ancestorIds")};return s(d)},"pois","cells")}function Ze(t,e){let o=[],s=new Set,c=ue();c.enqueue(G(z(t),e));for(let l;l=c.dequeue();){let d=l.toString();if(s.has(d))continue;s.add(d);let u=Z();for(let n of l.getCornerLatLngs())u=ee(u,n);if(te(t,u)){o.push(l);for(let n of l.getNeighbors())c.enqueue(n)}}return o}function $e(t,e,o,s){let c=o.latE6/1e6,l=o.lngE6/1e6,d=o.title,u={lat:c,lng:l},n=[D(u,14),D(u,15)],r=t!=null?t:{guid:e,lat:c,lng:l,name:d,data:o,cellIds:n,firstFetchDate:s,lastFetchDate:s};return j(W({},r),{name:d!==""?d:r.name,lat:c,lng:l,data:o,cellIds:n,lastFetchDate:s})}async function Se(t,e,o,s,c){for(let[l,{cell:d,pois:u}]of e)await ze(t,l,d,u,s,c);for(let l of o)for(let d of Ze(l,q)){let u=d.toString();e.has(u)||await ye(t,"readwrite",{signal:c},function*(n){yield*v(ge(n,d,s))})}}async function ze(t,e,o,s,c,l){await ye(t,"readwrite",{signal:l},function*(d){yield*v(et(d,e,s)),yield*v(tt(d,e,s,c)),yield*v(ge(d,o,c))})}function*et(t,e,o){let s=[],c=new Set;for(let d of o)c.add(d.poiId);let l=yield*v(le(t[Te],e));for(let{guid:d}of l)c.has(d)||s.push(d);yield*v(ce(t[K],s))}function*tt(t,e,o,s){let c=[];for(let{poiId:u}of o)c.push(u);let d=(yield*v(ie(t[K],c))).map((u,n)=>{let r=o[n];return $e(u,r.poiId,r,s)});yield*v(F(t[K],d))}function*ge(t,e,o){let s=[];for(let c of N(e))for(let l of N(c))for(let d of N(l)){let u=d.getLatLng();s.push({cellId:d.toString(),centerLat:u.lat,centerLng:u.lng,level:d.level,ancestorIds:[D(u,14)],firstFetchDate:o,lastFetchDate:o})}yield*v(F(t[me],s))}function he(){return new EventTarget}function be(t,e){return new CustomEvent(t,{detail:e})}function nt(t){let e={};return t.searchParams.forEach((o,s)=>{e[s]=o}),e}async function rt(t,e,{cells:o,bounds:s},c){await Se(t,o,s,Date.now(),c),e.dispatchEvent(be("gcs-saved",void 0))}var q=14;async function ot(t,e,o){let s=new Map,c=[];for(let{queries:l,responseText:d}of e){await o.yield();let u=t.parseGcsResponse(d);if(u.captcha||!u.result.success||u.result.cellLevel!==q)continue;let n=t.parseGcsQueries(l);c.push($(n.sw,n.ne));for(let{cellId:r,pois:a}of u.result.data){let i=de(r),m=i.toString();s.set(m,{pois:a,cell:i})}}return{cells:s,bounds:c}}async function xe(t,e,o){let s=await fe(),c=X(async l=>{let{signal:d}=new AbortController,u=J(d),n=await ot(t,l,u);await rt(s,e,n,d)},o,{delayMilliseconds:0});return(l,d)=>{c.push({queries:nt(l),responseText:d})}}function V(t,e){return t}var at=[V("config-changed",I),V("gcs-received",I),V("gcs-saved",I)],ve=at;async function Le(){let t=await import("https://cdn.jsdelivr.net/npm/zod@4.6.7/+esm"),e=t.enum(["DETAILED"]),o=t.enum(["GYM","POKESTOP","POWERSPOT"]),s=t.enum(["HOLOHOLO"]),c=t.enum(["ACTIVE","INACTIVE"]),l=/^\\(\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\)$/,d=t.string().transform((p,y)=>{let f=l.exec(p);return f?{lat:Number(f[1]),lng:Number(f[2])}:(y.addIssue({code:"invalid_format",message:"Invalid point format. Expected `(${number},${number})",format:"custom",pattern:l.source,input:p}),t.NEVER)}),u=t.object({ne:d,sw:d}),n=t.object({s2CellLevel:t.number(),s2CellId:t.string(),generatedTimestamp:t.string(),count:t.number(),format:e}),r=t.object({gameBrand:s,entity:o,status:c}),a=t.object({poiId:t.string(),latE6:t.number(),lngE6:t.number(),title:t.string(),description:t.string(),address:t.string(),categoryTags:t.array(t.unknown()),mainImage:t.string(),hasAdditionalImages:t.boolean(),gmo:t.array(r),isCommunityContributed:t.boolean()}),i=t.object({cellId:t.string(),metadata:n.optional(),pois:t.array(a)}),m=t.object({success:t.boolean(),data:t.array(i),cellsQueried:t.number(),cellsLoaded:t.number(),snapshot:t.string(),cellLevel:t.number()}),T=t.object({result:m,message:t.unknown(),code:t.string(),errorsWithIcon:t.unknown(),fieldErrors:t.unknown(),errorDetails:t.unknown(),version:t.string(),captcha:t.boolean()});return{FormatSchema:e,EntityKindSchema:o,GameBrandSchema:s,StatusSchema:c,MetadataSchema:n,GmoSchema:r,PoiSchema:a,DatumSchema:i,ResultSchema:m,GcsQueriesSchema:u,GcsResponseSchema:T,parseGcsResponse(p){return T.parse(JSON.parse(p))},parseGcsQueries(p){return u.parse(p)}}}function Q(t){console.error("An error occurred during asynchronous processing:",t)}async function st(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self),o=await Le(),s=he(),c=u=>{e.dispatchEvent(u.type,u.detail).catch(Q)};ve.forEach(u=>s.addEventListener(u,c));let l=await xe(o,s,Q),d={onGcsReceived(u,n){l(new URL(u),n)}};t.expose(d)}st().catch(Q);\n');
   }
 
   // source/drafts-view/dialog.module.css
@@ -46271,7 +46265,8 @@ ${formatRemoteFailure(error)}`;
     initialFileName,
     initialText,
     initialActiveSalActionSourceId,
-    initialActiveSalOpenSourceId
+    initialActiveSalOpenSourceId,
+    initialActiveSalLintSourceId
   }) {
     setStyle7();
     const fileErrors = /* @__PURE__ */ new Map();
@@ -46315,6 +46310,7 @@ ${formatRemoteFailure(error)}`;
     });
     let activeSalActionSource = initialActiveSalActionSourceId;
     let activeSalOpenSource = initialActiveSalOpenSourceId;
+    let activeSalLintSource = initialActiveSalLintSourceId;
     function updateSalActionButton() {
       const isActive = currentFileName === activeSalActionSource;
       salActionButton.classList.toggle(
@@ -46325,6 +46321,13 @@ ${formatRemoteFailure(error)}`;
     function updateSalOpenButton() {
       const isActive = currentFileName === activeSalOpenSource;
       salOpenButton.classList.toggle(
+        editor_default["active-sal-action-button"],
+        isActive
+      );
+    }
+    function updateSalLintButton() {
+      const isActive = currentFileName === activeSalLintSource;
+      salLintButton.classList.toggle(
         editor_default["active-sal-action-button"],
         isActive
       );
@@ -46369,9 +46372,26 @@ ${formatRemoteFailure(error)}`;
         children: "\u5916\u90E8URL\u8A2D\u5B9A"
       }
     );
+    const salLintButton = /* @__PURE__ */ jsx(
+      "button",
+      {
+        class: editor_default["sal-action-button"],
+        onclick: () => {
+          activeSalLintSource = activeSalLintSource === currentFileName ? null : currentFileName;
+          updateSalLintButton();
+          events.dispatchEvent(
+            createTypedCustomEvent("sal-lint-source-changed", {
+              sourceId: activeSalLintSource
+            })
+          );
+        },
+        children: "Lint\u8A2D\u5B9A"
+      }
+    );
     const toolbar = /* @__PURE__ */ jsxs("div", { class: editor_default.toolbar, children: [
       salActionButton,
-      salOpenButton
+      salOpenButton,
+      salLintButton
     ] });
     const basicSetup = [
       // lineNumbers()
@@ -46452,6 +46472,7 @@ ${formatRemoteFailure(error)}`;
     });
     updateSalActionButton();
     updateSalOpenButton();
+    updateSalLintButton();
     const fileStates = /* @__PURE__ */ new Map();
     function switchFile(newFileName, newContent) {
       const cachedState = fileStates.get(newFileName);
@@ -46494,6 +46515,7 @@ ${formatRemoteFailure(error)}`;
       switchFile(fileName, value);
       updateSalActionButton();
       updateSalOpenButton();
+      updateSalLintButton();
     }
     function setErrors(fileName, diagnostics) {
       fileErrors.set(fileName, diagnostics);
@@ -46507,16 +46529,16 @@ ${formatRemoteFailure(error)}`;
   }
 
   // source/drafts-view/query-view/filter-bar.module.css
-  var cssText8 = ".wrapper-b9dc6e50232912b6e824f14f4eac01be1484641d {\n    display: flex;\n    align-items: center;\n    border-radius: 14px;\n    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);\n    padding: 6px 8px 6px 14px;\n    transition:\n        box-shadow 0.2s ease,\n        transform 0.15s ease;\n}\n\n.wrapper-b9dc6e50232912b6e824f14f4eac01be1484641d:focus-within {\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);\n    background: #ffffff;\n    transform: translateY(-1px);\n}\n\n.input-1be3fd42cb7e6f5c71632f356df6995b35291b75 {\n    flex: 1;\n    min-width: 3em;\n    background: transparent;\n}\n\n.error-da7f98424d99f1abcb06e954b9512e9227e8277a {\n    border-radius: 4px;\n    box-shadow: inset 0 0 0 1px #e74c3c;\n}\n\n.buttons-de6d210b7c461313c4c06ace10592ea456be75ac {\n    display: flex;\n    gap: 6px;\n}\n\n.button-eab71d8ebf51bf9531bee9dacbb9c1fc027ac348 {\n    border: none;\n    background: #f1f3f4;\n    border-radius: 10px;\n    padding: 8px 10px;\n    cursor: pointer;\n    font-size: 16px;\n    transition:\n        background 0.2s ease,\n        transform 0.1s ease;\n}\n\n.button-eab71d8ebf51bf9531bee9dacbb9c1fc027ac348:hover {\n    background: #e3e6e8;\n}\n\n.button-eab71d8ebf51bf9531bee9dacbb9c1fc027ac348:active {\n    transform: scale(0.96);\n}\n\n.clear-button-ff9971678e0702c1915000e99a71ce9f6839b6dc {\n    border: none;\n    background: transparent;\n    border-radius: 50%;\n    padding: 4px;\n    margin: 0 4px;\n    cursor: pointer;\n    font-size: 14px;\n    color: #5f6368;\n    line-height: 1;\n    width: 24px;\n    height: 24px;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n}\n\n.clear-button-ff9971678e0702c1915000e99a71ce9f6839b6dc:hover {\n    background: #f1f3f4;\n}\n\n.multi-line-indicator-8955dc2631075dfcab79f005c0f11bbd08bf4df6 {\n    margin-left: 5px;\n    font-weight: bold;\n    color: #888;\n}\n\n.hidden-4b7088619f84e8d8bfc321befdec12955838ba51 {\n    display: none;\n}\n";
+  var cssText8 = ".wrapper-0aa3157ecd75275167a3746e6b3422063b2bd885 {\n    display: flex;\n    align-items: center;\n    border-radius: 14px;\n    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);\n    padding: 6px 0;\n    transition:\n        box-shadow 0.2s ease,\n        transform 0.15s ease;\n}\n\n.wrapper-0aa3157ecd75275167a3746e6b3422063b2bd885:focus-within {\n    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);\n    background: #ffffff;\n    transform: translateY(-1px);\n}\n\n.input-b36b7639f889e5f33f3a6c54d53f3bb957247524 {\n    flex: 1;\n    min-width: 3em;\n    background: transparent;\n}\n\n.error-5b335ede642ec607e15e7013c5e5604251203b3d {\n    border-radius: 4px;\n    box-shadow: inset 0 0 0 1px #e74c3c;\n}\n\n.buttons-ab14a1d4259e0b083023a3a2475c4dc666b879ba {\n    display: flex;\n    gap: 6px;\n}\n\n.button-f91b4d1ba4699aaa0276de915b1cd640662a2a2f {\n    border: none;\n    background: #f1f3f4;\n    border-radius: 10px;\n    padding: 8px 10px;\n    cursor: pointer;\n    font-size: 16px;\n    transition:\n        background 0.2s ease,\n        transform 0.1s ease;\n}\n\n.button-f91b4d1ba4699aaa0276de915b1cd640662a2a2f:hover {\n    background: #e3e6e8;\n}\n\n.button-f91b4d1ba4699aaa0276de915b1cd640662a2a2f:active {\n    transform: scale(0.96);\n}\n\n.clear-button-fc139b5caeb9c2268ff86c0ddaf2c55ae10ebdba {\n    border: none;\n    background: transparent;\n    border-radius: 50%;\n    padding: 4px;\n    margin: 0 4px;\n    cursor: pointer;\n    font-size: 14px;\n    color: #5f6368;\n    line-height: 1;\n    width: 24px;\n    height: 24px;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n}\n\n.clear-button-fc139b5caeb9c2268ff86c0ddaf2c55ae10ebdba:hover {\n    background: #f1f3f4;\n}\n\n.multi-line-indicator-f1bb8078b2d4a9023413dcbc732777fe0ecf1bdb {\n    margin-left: 5px;\n    font-weight: bold;\n    color: #888;\n}\n\n.hidden-b33c7659ee69a1490d4dede360f8817ed9b01fbb {\n    display: none;\n}\n";
   var filter_bar_default = {
-    wrapper: "wrapper-b9dc6e50232912b6e824f14f4eac01be1484641d",
-    input: "input-1be3fd42cb7e6f5c71632f356df6995b35291b75",
-    error: "error-da7f98424d99f1abcb06e954b9512e9227e8277a",
-    buttons: "buttons-de6d210b7c461313c4c06ace10592ea456be75ac",
-    button: "button-eab71d8ebf51bf9531bee9dacbb9c1fc027ac348",
-    "clear-button": "clear-button-ff9971678e0702c1915000e99a71ce9f6839b6dc",
-    "multi-line-indicator": "multi-line-indicator-8955dc2631075dfcab79f005c0f11bbd08bf4df6",
-    hidden: "hidden-4b7088619f84e8d8bfc321befdec12955838ba51"
+    wrapper: "wrapper-0aa3157ecd75275167a3746e6b3422063b2bd885",
+    input: "input-b36b7639f889e5f33f3a6c54d53f3bb957247524",
+    error: "error-5b335ede642ec607e15e7013c5e5604251203b3d",
+    buttons: "buttons-ab14a1d4259e0b083023a3a2475c4dc666b879ba",
+    button: "button-f91b4d1ba4699aaa0276de915b1cd640662a2a2f",
+    "clear-button": "clear-button-fc139b5caeb9c2268ff86c0ddaf2c55ae10ebdba",
+    "multi-line-indicator": "multi-line-indicator-f1bb8078b2d4a9023413dcbc732777fe0ecf1bdb",
+    hidden: "hidden-b33c7659ee69a1490d4dede360f8817ed9b01fbb"
   };
 
   // source/drafts-view/query-view/filter-bar.tsx
@@ -46642,14 +46664,14 @@ ${formatRemoteFailure(error)}`;
   }
 
   // source/drafts-view/query-view/source-list.module.css
-  var cssText9 = ".wrapper-12ea3675915522e27cfe3356addfb9ac5a8e4fe2 {\r\n    flex: 1;\r\n    display: flex;\r\n    flex-direction: column;\r\n    height: 100%;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91 {\r\n    height: 100%;\r\n    display: flex;\r\n    align-items: center;\r\n    justify-content: space-between;\r\n    padding: 12px 14px;\r\n    border-radius: 12px;\r\n    cursor: pointer;\r\n    user-select: none;\r\n    transition:\r\n        background 0.15s ease,\r\n        transform 0.05s ease;\r\n    font-size: 14px;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91:hover {\r\n    background: #f1f3f4;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91.active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b {\r\n    background: #e8f0fe;\r\n    font-weight: 600;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91:active {\r\n    transform: scale(0.98);\r\n}\r\n\r\n.item-label-aa6d3639738d866205ef3f6db063315d6b23659f {\r\n    pointer-events: none;\r\n    overflow: hidden;\r\n    text-overflow: ellipsis;\r\n    white-space: nowrap;\r\n}\r\n\r\n.delete-button-04b39470f8b9cde6122641ba127dae02e389ce94 {\r\n    display: none;\r\n    border: none;\r\n    background: #ffdede;\r\n    color: #b00020;\r\n    border-radius: 8px;\r\n    padding: 4px 8px;\r\n    font-size: 12px;\r\n    cursor: pointer;\r\n}\r\n\r\n.item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91.active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b .delete-button-04b39470f8b9cde6122641ba127dae02e389ce94 {\r\n    display: inline-block;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50 {\r\n    margin-top: 10px;\r\n    border: none;\r\n    background: #f1f3f4;\r\n    border-radius: 12px;\r\n    padding: 12px;\r\n    cursor: pointer;\r\n    font-size: 14px;\r\n    transition:\r\n        background 0.2s ease,\r\n        transform 0.1s ease;\r\n    flex-shrink: 0;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50:hover {\r\n    background: #e3e6e8;\r\n}\r\n\r\n.add-button-a69146193c33e23bae778ebbed5c56d136253b50:active {\r\n    transform: scale(0.97);\r\n}\r\n";
+  var cssText9 = ".wrapper-753ec4ae264999f9b772dc56e96ecf638ad8fc33 {\n    flex: 1;\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n}\n\n.item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce {\n    height: 100%;\n    display: flex;\n    align-items: center;\n    justify-content: space-between;\n    padding: 12px 14px;\n    border-radius: 12px;\n    cursor: pointer;\n    user-select: none;\n    transition:\n        background 0.15s ease,\n        transform 0.05s ease;\n    font-size: 14px;\n}\n\n.item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce:hover {\n    background: #f1f3f4;\n}\n\n.item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce.active-daefb19e8bbdce4f6a098e2b1d7adcce93eb244d {\n    background: #e8f0fe;\n    font-weight: 600;\n}\n\n.item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce:active {\n    transform: scale(0.98);\n}\n\n.item-label-5c67a4ee6f07634d56dfb176e816a58bc66a127d {\n    pointer-events: none;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.delete-button-69c773d2f549e8db05a1e1e931e72e245934f4cd {\n    display: none;\n    border: none;\n    background: #ffdede;\n    color: #b00020;\n    border-radius: 8px;\n    padding: 4px 8px;\n    font-size: 12px;\n    cursor: pointer;\n}\n\n.item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce.active-daefb19e8bbdce4f6a098e2b1d7adcce93eb244d .delete-button-69c773d2f549e8db05a1e1e931e72e245934f4cd {\n    display: inline-block;\n}\n\n.add-button-0002fb20bba3c1be762e87da57c289dcdbadf356 {\n    margin-top: 10px;\n    border: none;\n    background: #f1f3f4;\n    border-radius: 12px;\n    padding: 12px;\n    cursor: pointer;\n    font-size: 14px;\n    transition:\n        background 0.2s ease,\n        transform 0.1s ease;\n    flex-shrink: 0;\n}\n\n.add-button-0002fb20bba3c1be762e87da57c289dcdbadf356:hover {\n    background: #e3e6e8;\n}\n\n.add-button-0002fb20bba3c1be762e87da57c289dcdbadf356:active {\n    transform: scale(0.97);\n}\n";
   var source_list_default = {
-    wrapper: "wrapper-12ea3675915522e27cfe3356addfb9ac5a8e4fe2",
-    item: "item-6f81a84ee10d38ca107998be1d9a5cf01d0eed91",
-    active: "active-5cfd7acb0e1f0f2c1ae1509ff7114f29aecf222b",
-    "item-label": "item-label-aa6d3639738d866205ef3f6db063315d6b23659f",
-    "delete-button": "delete-button-04b39470f8b9cde6122641ba127dae02e389ce94",
-    "add-button": "add-button-a69146193c33e23bae778ebbed5c56d136253b50"
+    wrapper: "wrapper-753ec4ae264999f9b772dc56e96ecf638ad8fc33",
+    item: "item-7b169b39cf79ca4667b7e5967fcb08b3ba29e0ce",
+    active: "active-daefb19e8bbdce4f6a098e2b1d7adcce93eb244d",
+    "item-label": "item-label-5c67a4ee6f07634d56dfb176e816a58bc66a127d",
+    "delete-button": "delete-button-69c773d2f549e8db05a1e1e931e72e245934f4cd",
+    "add-button": "add-button-0002fb20bba3c1be762e87da57c289dcdbadf356"
   };
 
   // source/drafts-view/query-view/source-list.tsx
@@ -49137,10 +49159,7 @@ ${formatRemoteFailure(error)}`;
       const matchedText = text.slice(start, end);
       let command2;
       try {
-        command2 = await forceAsPromise(
-          action.execute(matchedText),
-          signal
-        );
+        command2 = await forceAsPromise(action.execute(matchedText), signal);
       } catch (error) {
         if (signal.aborted) throw error;
         handleAsyncError2(error);
@@ -49213,6 +49232,14 @@ ${formatRemoteFailure(error)}`;
     let actionMatches = [];
     let visibleMatches = [];
     let menuPosition = 0;
+    let lintDiagnostics = [];
+    let applyLintEdits;
+    function dispatchLintEdits(edits) {
+      if (applyLintEdits == null) {
+        throw new Error("Lint edit handler is unavailable");
+      }
+      applyLintEdits(edits);
+    }
     function closeActionMenu() {
       visibleMatches = [];
       actionMenu.hidden = true;
@@ -49391,10 +49418,60 @@ ${formatRemoteFailure(error)}`;
     const CustomClassName = EditorView.editorAttributes.of({
       class: options.classNames?.join(" ") ?? ""
     });
+    const lintTheme = EditorView.theme({
+      ".cm-lintRange-error": {
+        backgroundImage: "none",
+        textDecoration: "underline wavy #e74c3c",
+        textUnderlineOffset: "2px"
+      },
+      ".cm-lintRange-warning": {
+        backgroundImage: "none",
+        textDecoration: "underline wavy #d97706",
+        textUnderlineOffset: "2px"
+      },
+      ".cm-lintPoint-error:after": {
+        borderBottomColor: "#e74c3c"
+      },
+      ".cm-lintPoint-warning:after": {
+        borderBottomColor: "#d97706"
+      },
+      ".cm-tooltip-lint": {
+        maxWidth: "min(360px, calc(100vw - 24px))",
+        whiteSpace: "normal",
+        overflowWrap: "anywhere"
+      }
+    });
+    function toCodeMirrorDiagnostics() {
+      return lintDiagnostics.filter((diagnostic) => diagnostic.location === options.location).map((diagnostic) => {
+        const actions = [];
+        const fix = diagnostic.fix;
+        if (fix != null) {
+          actions.push({
+            name: "\u4FEE\u6B63",
+            apply: () => dispatchLintEdits(fix)
+          });
+        }
+        for (const suggestion of diagnostic.suggestions ?? []) {
+          actions.push({
+            name: suggestion.label,
+            apply: () => dispatchLintEdits(suggestion.edits)
+          });
+        }
+        return {
+          from: diagnostic.from,
+          to: diagnostic.to,
+          severity: diagnostic.severity,
+          message: diagnostic.message,
+          source: "Sal Lint",
+          actions
+        };
+      });
+    }
     const extensions = [
       EditorView.lineWrapping,
       history2(),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      keymap.of([...lintKeymap, ...defaultKeymap, ...historyKeymap]),
+      lintTheme,
       EditorView.updateListener.of((update) => {
         if (update.docChanged && hasUserChange(update)) {
           options.onInput(update.state.doc.toString());
@@ -49432,6 +49509,17 @@ ${formatRemoteFailure(error)}`;
       editor,
       element: editorShell,
       dispatchSource,
+      selectRange(from, to) {
+        editor.dispatch({ selection: { anchor: from, head: to } });
+        editor.focus();
+      },
+      setLintDiagnostics(diagnostics, applyEdits) {
+        lintDiagnostics = diagnostics;
+        applyLintEdits = applyEdits;
+        editor.dispatch(
+          setDiagnostics(editor.state, toCodeMirrorDiagnostics())
+        );
+      },
       updateRuleSource(newRuleSource) {
         const plugin = editor.plugin(actionDecorator);
         if (!plugin) return;
@@ -49563,10 +49651,7 @@ ${formatRemoteFailure(error)}`;
     const payload = data;
     const options = [];
     for (const definition of definitions) {
-      const url = await forceAsPromise(
-        definition.buildUrl(payload),
-        signal
-      );
+      const url = await forceAsPromise(definition.buildUrl(payload), signal);
       if (typeof url !== "string") {
         throw new Error(
           `URL generator "${definition.label}" must return a string`
@@ -49575,6 +49660,497 @@ ${formatRemoteFailure(error)}`;
       options.push({ label: definition.label, url });
     }
     return options;
+  }
+
+  // source/drafts-view/lint-regex.worker.ts?worker
+  function Worker4() {
+    return inlineWorker('self.addEventListener("message",({data:o})=>{var s;let{id:n,pattern:i,text:c}=o;try{let t=new RegExp(i,"gmu"),r=[];for(let e of c.matchAll(t)){let a=Object.create(null);for(let[g,l]of Object.entries((s=e.groups)!=null?s:{}))a[g]=l;if(r.push({from:e.index,to:e.index+e[0].length,text:e[0],captures:a}),r.length>1e3)throw new Error("Lint matcher exceeds the 1000 match limit")}self.postMessage({id:n,matches:r})}catch(t){self.postMessage({id:n,error:t instanceof Error?t.message:"Lint regular expression failed"})}});\n');
+  }
+
+  // source/drafts-view/lint.ts
+  var matcherTag = /* @__PURE__ */ Symbol("lint-matcher");
+  var ruleTag = /* @__PURE__ */ Symbol("lint-rule");
+  var maxPatternLength = 2048;
+  var maxTextLength = 1e5;
+  var maxMatches = 1e3;
+  var regexExecutionTimeoutMs = 250;
+  function createRegexRunner(signal) {
+    const worker = new Worker4();
+    const pending = /* @__PURE__ */ new Map();
+    let nextId = 0;
+    let terminated = false;
+    function terminate(reason) {
+      if (terminated) return;
+      terminated = true;
+      worker.terminate();
+      for (const request of pending.values()) {
+        clearTimeout(request.timeout);
+        request.reject(reason);
+      }
+      pending.clear();
+    }
+    worker.addEventListener(
+      "message",
+      ({ data }) => {
+        const request = pending.get(data.id);
+        if (!request) return;
+        pending.delete(data.id);
+        clearTimeout(request.timeout);
+        if (data.error != null) {
+          request.reject(new Error(data.error));
+        } else if (data.matches != null) {
+          request.resolve(data.matches);
+        } else {
+          request.reject(
+            new Error("Lint worker returned an invalid response")
+          );
+        }
+      }
+    );
+    worker.addEventListener("error", (event) => {
+      terminate(event.error ?? new Error(event.message));
+    });
+    const onAbort = () => terminate(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    return {
+      run(pattern2, text, requestSignal) {
+        if (requestSignal.aborted) {
+          return Promise.reject(requestSignal.reason);
+        }
+        if (terminated) {
+          return Promise.reject(new Error("Lint worker is unavailable"));
+        }
+        const id2 = nextId++;
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            terminate(
+              new Error(
+                `Lint regular expression exceeded the ${regexExecutionTimeoutMs}ms execution limit`
+              )
+            );
+          }, regexExecutionTimeoutMs);
+          pending.set(id2, { resolve, reject, timeout });
+          try {
+            worker.postMessage({
+              id: id2,
+              pattern: pattern2,
+              text
+            });
+          } catch (reason) {
+            clearTimeout(timeout);
+            pending.delete(id2);
+            reject(reason);
+          }
+        });
+      },
+      dispose() {
+        signal.removeEventListener("abort", onAbort);
+        terminate(new Error("Lint worker disposed"));
+      }
+    };
+  }
+  function asValue(value) {
+    return value;
+  }
+  function isRecord(value) {
+    return value != null && typeof value === "object" && !Array.isArray(value);
+  }
+  function requireString(value, name2) {
+    if (typeof value !== "string") {
+      throw new Error(`${name2} must be a string`);
+    }
+    return value;
+  }
+  function requireMatcher(value) {
+    if (value != null && typeof value === "object" && matcherTag in value) {
+      return value;
+    }
+    throw new Error("Expected a Lint Matcher");
+  }
+  function requireRule(value) {
+    if (value != null && typeof value === "object" && ruleTag in value) {
+      return value;
+    }
+    throw new Error("Expected a Lint Rule");
+  }
+  function createMatcher(match, hasNamedCaptures = false) {
+    return {
+      [matcherTag]: true,
+      hasNamedCaptures,
+      async match(text, signal) {
+        if (text.length > maxTextLength) {
+          throw new Error(
+            `Lint input exceeds the ${maxTextLength} character limit`
+          );
+        }
+        const matches = await match(text, signal);
+        if (matches.length > maxMatches) {
+          throw new Error(
+            `Lint matcher exceeds the ${maxMatches} match limit`
+          );
+        }
+        return matches;
+      }
+    };
+  }
+  function containsNamedCaptureGroup(pattern2) {
+    let inCharacterClass = false;
+    for (let index = 0; index < pattern2.length; index++) {
+      const char = pattern2[index];
+      if (char === "\\") {
+        index++;
+        continue;
+      }
+      if (char === "[") {
+        inCharacterClass = true;
+        continue;
+      }
+      if (char === "]" && inCharacterClass) {
+        inCharacterClass = false;
+        continue;
+      }
+      if (!inCharacterClass && char === "(" && pattern2[index + 1] === "?" && pattern2[index + 2] === "<" && pattern2[index + 3] !== "=" && pattern2[index + 3] !== "!") {
+        return true;
+      }
+    }
+    return false;
+  }
+  function createRule(matcher, message, options = {}) {
+    return {
+      [ruleTag]: true,
+      matcher,
+      message,
+      severity: options.severity,
+      locations: options.locations,
+      fix: options.fix,
+      suggestionProvider: options.suggestionProvider
+    };
+  }
+  function cloneRule(rule, update) {
+    return { ...rule, ...update };
+  }
+  function matchesForPattern(source, runRegex) {
+    if (source.length > maxPatternLength) {
+      throw new Error(
+        `Lint pattern exceeds the ${maxPatternLength} character limit`
+      );
+    }
+    new RegExp(source, "gmu");
+    return createMatcher(
+      (text, signal) => runRegex(source, text, signal),
+      containsNamedCaptureGroup(source)
+    );
+  }
+  function matchesMissingSuffix(suffix) {
+    if (suffix === "") {
+      throw new Error("missing-suffix requires a non-empty suffix");
+    }
+    return createMatcher((text) => {
+      const matches = [];
+      let lineStart = 0;
+      for (let index = 0; index <= text.length; index++) {
+        const char = text[index];
+        if (char !== "\r" && char !== "\n" && index !== text.length) {
+          continue;
+        }
+        const line = text.slice(lineStart, index);
+        if (line.length > 0 && !line.endsWith(suffix)) {
+          matches.push({
+            from: index,
+            to: index,
+            text: "",
+            captures: {}
+          });
+        }
+        if (char === "\r" && text[index + 1] === "\n") index++;
+        lineStart = index + 1;
+      }
+      return matches;
+    });
+  }
+  function captureKeys(match) {
+    const entries = Object.entries(match.captures);
+    if (entries.length === 0) {
+      throw new Error(
+        "unmatched and duplicates require named captures in every match"
+      );
+    }
+    return entries.map(([name2, value]) => JSON.stringify([name2, value]));
+  }
+  function requireCaptureMatcher(matcher) {
+    if (!matcher.hasNamedCaptures) {
+      throw new Error(
+        "unmatched and duplicates require a named capture in every Matcher"
+      );
+    }
+  }
+  function allLocations() {
+    return /* @__PURE__ */ new Set(["title", "description", "note"]);
+  }
+  function createSalFunction(callback) {
+    return (value) => done(asValue(callback(value)));
+  }
+  function createSalBinary(callback) {
+    return (left) => done((right) => done(asValue(callback(left, right))));
+  }
+  function createSalGlobals2(runRegex) {
+    const globals = createStandardGlobals();
+    const additions = {
+      fromString: (value) => done(value),
+      fromWord: (value) => done(value),
+      pattern: createSalFunction(
+        (source) => asValue(
+          matchesForPattern(requireString(source, "pattern"), runRegex)
+        )
+      ),
+      "missing-suffix": createSalFunction(
+        (suffix) => asValue(
+          matchesMissingSuffix(requireString(suffix, "missing-suffix"))
+        )
+      ),
+      both: createSalBinary((left, right) => {
+        const first = requireMatcher(left);
+        const second = requireMatcher(right);
+        return asValue(
+          createMatcher(async (text, signal) => {
+            const firstMatches = await first.match(text, signal);
+            const secondMatches = await second.match(text, signal);
+            return firstMatches.length > 0 && secondMatches.length > 0 ? [...firstMatches, ...secondMatches] : [];
+          }, first.hasNamedCaptures && second.hasNamedCaptures)
+        );
+      }),
+      unmatched: createSalBinary((left, right) => {
+        const first = requireMatcher(left);
+        const second = requireMatcher(right);
+        requireCaptureMatcher(first);
+        requireCaptureMatcher(second);
+        return asValue(
+          createMatcher(async (text, signal) => {
+            const rightKeys = new Set(
+              (await second.match(text, signal)).flatMap(captureKeys)
+            );
+            return (await first.match(text, signal)).filter(
+              (match) => captureKeys(match).some((key) => !rightKeys.has(key))
+            );
+          }, true)
+        );
+      }),
+      duplicates: createSalFunction((value) => {
+        const matcher = requireMatcher(value);
+        requireCaptureMatcher(matcher);
+        return asValue(
+          createMatcher(async (text, signal) => {
+            const seen = /* @__PURE__ */ new Set();
+            const duplicates = [];
+            for (const match of await matcher.match(text, signal)) {
+              const keys2 = captureKeys(match);
+              if (keys2.some((key) => seen.has(key))) {
+                duplicates.push(match);
+              }
+              for (const key of keys2) seen.add(key);
+            }
+            return duplicates;
+          }, true)
+        );
+      })
+    };
+    additions["_and_"] = createSalBinary((left, right) => {
+      const first = requireRule(left);
+      const second = requireRule(right);
+      return asValue({
+        [ruleTag]: true,
+        children: [first, second]
+      });
+    });
+    additions["report"] = createSalBinary((matcherValue, messageValue) => {
+      return asValue(
+        createRule(
+          requireMatcher(matcherValue),
+          requireString(messageValue, "/report message")
+        )
+      );
+    });
+    additions["fix"] = createSalBinary(
+      (ruleValue, fixValue) => asValue(
+        cloneRule(requireRule(ruleValue), {
+          fix: requireString(fixValue, "/fix")
+        })
+      )
+    );
+    additions["in"] = createSalBinary((ruleValue, locationValue) => {
+      const rule = requireRule(ruleValue);
+      const location2 = requireString(locationValue, "/in location");
+      if (!isLocation(location2)) {
+        throw new Error(`Unknown Lint location: ${location2}`);
+      }
+      return asValue(
+        cloneRule(rule, {
+          locations: /* @__PURE__ */ new Set([...rule.locations ?? [], location2])
+        })
+      );
+    });
+    additions["severity"] = createSalBinary((ruleValue, severityValue) => {
+      const severity = requireString(severityValue, "/severity");
+      if (severity !== "error" && severity !== "warning") {
+        throw new Error(`Unknown Lint severity: ${severity}`);
+      }
+      return asValue(cloneRule(requireRule(ruleValue), { severity }));
+    });
+    additions["suggest"] = createSalBinary((ruleValue, provider) => {
+      if (typeof provider !== "function") {
+        throw new Error("/suggest requires a suggestion provider function");
+      }
+      return asValue(
+        cloneRule(requireRule(ruleValue), {
+          suggestionProvider: provider
+        })
+      );
+    });
+    for (const [name2, value] of Object.entries(additions)) {
+      globals.set(name2, value);
+    }
+    return (name2) => globals.get(name2);
+  }
+  function isLocation(value) {
+    return value === "title" || value === "description" || value === "note";
+  }
+  function runRule(rule, input, signal) {
+    return runRuleAsync(rule, input, signal);
+  }
+  async function runRuleAsync(rule, input, signal) {
+    let diagnostics;
+    if (rule.children != null) {
+      diagnostics = (await Promise.all(
+        rule.children.map(
+          (child) => runRuleAsync(child, input, signal)
+        )
+      )).flat();
+    } else {
+      const matcher = rule.matcher;
+      if (matcher == null || rule.message == null) {
+        throw new Error("Invalid Lint Rule");
+      }
+      const found = [];
+      for (const location2 of allLocations()) {
+        const text = input.fields[location2];
+        if (text === void 0 || rule.locations != null && !rule.locations.has(location2)) {
+          continue;
+        }
+        for (const match of await matcher.match(text, signal)) {
+          found.push({
+            location: location2,
+            from: match.from,
+            to: match.to,
+            message: rule.message,
+            severity: rule.severity ?? "error"
+          });
+        }
+      }
+      diagnostics = found;
+    }
+    const filtered = diagnostics.filter(
+      (diagnostic) => rule.locations == null || rule.locations.has(diagnostic.location)
+    );
+    const result = [];
+    for (const diagnostic of filtered) {
+      const severity = rule.severity ?? diagnostic.severity;
+      const fix = rule.fix === void 0 ? diagnostic.fix : [
+        {
+          location: diagnostic.location,
+          from: diagnostic.from,
+          to: diagnostic.to,
+          insert: rule.fix
+        }
+      ];
+      let suggestions = diagnostic.suggestions;
+      if (rule.suggestionProvider !== void 0) {
+        suggestions = await getSuggestions(
+          rule.suggestionProvider,
+          input,
+          { ...diagnostic, severity, fix: void 0 },
+          signal
+        );
+      }
+      result.push({
+        ...diagnostic,
+        severity,
+        fix,
+        suggestions
+      });
+    }
+    return result;
+  }
+  async function getSuggestions(provider, input, diagnostic, signal) {
+    const inputValue = asValue({
+      fields: Object.fromEntries(
+        Object.entries(input.fields).filter(
+          (entry) => typeof entry[1] === "string"
+        )
+      )
+    });
+    const diagnosticValue = asValue(diagnostic);
+    if (typeof provider !== "function") {
+      throw new Error("/suggest requires a suggestion provider function");
+    }
+    const next = await forceAsPromise(provider(inputValue), signal);
+    if (typeof next !== "function") {
+      throw new Error("/suggest provider must accept a diagnostic");
+    }
+    const value = await forceAsPromise(next(diagnosticValue), signal);
+    if (!Array.isArray(value)) {
+      throw new Error("/suggest provider must return a list");
+    }
+    return value.map(parseSuggestion);
+  }
+  function parseSuggestion(value) {
+    if (!isRecord(value)) {
+      throw new Error("Suggestion must be a record");
+    }
+    const label = value["label"];
+    const edits = value["edits"];
+    if (typeof label !== "string" || label.trim() === "" || !Array.isArray(edits) || edits.length === 0) {
+      throw new Error("Suggestion requires a label and edits list");
+    }
+    return {
+      label,
+      edits: edits.map(parseEdit)
+    };
+  }
+  function parseEdit(value) {
+    if (!isRecord(value)) {
+      throw new Error("Text edit must be a record");
+    }
+    const { location: location2, from, to, insert: insert2 } = value;
+    if (typeof location2 !== "string" || !isLocation(location2) || typeof from !== "number" || typeof to !== "number" || typeof insert2 !== "string") {
+      throw new Error("Text edit has invalid fields");
+    }
+    return { location: location2, from, to, insert: insert2 };
+  }
+  async function evaluateLint(source, input, signal, regexRunner) {
+    const worker = regexRunner == null ? createRegexRunner(signal) : void 0;
+    try {
+      const runRegex = regexRunner ?? worker?.run;
+      if (runRegex == null) {
+        throw new Error("Lint regular expression runner is unavailable");
+      }
+      const syntaxErrors = [];
+      const expression = evaluateExpression(
+        source,
+        createSalGlobals2(runRegex),
+        (message) => syntaxErrors.push(message)
+      );
+      if (syntaxErrors.length > 0) {
+        throw new Error(
+          `Invalid Sal Lint configuration: ${syntaxErrors.join("; ")}`
+        );
+      }
+      const value = await forceAsPromise(expression, signal);
+      const rule = requireRule(value);
+      return await runRule(rule, input, signal);
+    } finally {
+      worker?.dispose();
+    }
   }
 
   // source/drafts-view/draft-list.tsx
@@ -49630,6 +50206,8 @@ ${formatRemoteFailure(error)}`;
     let activeRuleSource = currentSources.sources.find((s) => s.id === activeRuleSourceId)?.contents ?? defaultSalSource;
     let activeOpenSourceId = currentSources.activeSalOpenSourceId ?? null;
     let activeOpenSource = currentSources.sources.find((s) => s.id === activeOpenSourceId)?.contents ?? "";
+    let activeLintSourceId = currentSources.activeSalLintSourceId ?? null;
+    let activeLintSource = currentSources.sources.find((s) => s.id === activeLintSourceId)?.contents ?? "";
     const sourceList = createSourceList({ initialList: currentSources });
     const sourceListDialog = createDialog(sourceList.element, {
       title: "\u691C\u7D22\u4E00\u89A7"
@@ -49638,7 +50216,8 @@ ${formatRemoteFailure(error)}`;
       initialFileName: getSelectedSourceId() ?? "",
       initialText: getSelectedSource() ?? "",
       initialActiveSalActionSourceId: activeRuleSourceId,
-      initialActiveSalOpenSourceId: activeOpenSourceId
+      initialActiveSalOpenSourceId: activeOpenSourceId,
+      initialActiveSalLintSourceId: activeLintSourceId
     });
     const editorDialog = createDialog(editor.element, {
       title: "\u691C\u7D22\u30EF\u30FC\u30C9\u3092\u7DE8\u96C6"
@@ -49721,6 +50300,18 @@ ${formatRemoteFailure(error)}`;
       local.setConfig({ ...local.getConfig(), sources: currentSources });
       updateOpenMapLinks();
     });
+    editor.events.addEventListener("sal-lint-source-changed", ({ detail }) => {
+      activeLintSourceId = detail.sourceId;
+      currentSources = {
+        ...currentSources,
+        activeSalLintSourceId: activeLintSourceId
+      };
+      activeLintSource = currentSources.sources.find(
+        (source) => source.id === activeLintSourceId
+      )?.contents ?? "";
+      local.setConfig({ ...local.getConfig(), sources: currentSources });
+      updateLint();
+    });
     function setCurrentSourcesAndNotify(newSources, updateEditor = true) {
       currentSources = newSources;
       activeRuleSource = currentSources.sources.find(
@@ -49728,6 +50319,9 @@ ${formatRemoteFailure(error)}`;
       )?.contents ?? defaultSalSource;
       activeOpenSource = currentSources.sources.find(
         (source) => source.id === activeOpenSourceId
+      )?.contents ?? "";
+      activeLintSource = currentSources.sources.find(
+        (source) => source.id === activeLintSourceId
       )?.contents ?? "";
       sourceList.setSources(currentSources);
       const selectedSourceId = getSelectedSourceId() ?? "";
@@ -49740,6 +50334,7 @@ ${formatRemoteFailure(error)}`;
       descriptionEditor.updateRuleSource(activeRuleSource);
       noteEditor.updateRuleSource(activeRuleSource);
       updateOpenMapLinks();
+      updateLint();
       local.setConfig({ ...local.getConfig(), sources: currentSources });
     }
     function getSelectedSource() {
@@ -49829,6 +50424,7 @@ ${formatRemoteFailure(error)}`;
           updateOpenMapLinks();
           updateVirtualList();
           saveDraftChanges(selectedDraft);
+          updateLint();
         }
       }
     );
@@ -49839,6 +50435,7 @@ ${formatRemoteFailure(error)}`;
         selectedDraft.description = value;
         updateOpenMapLinks();
         saveDraftChanges(selectedDraft);
+        updateLint();
       },
       location: "description",
       handleAsyncError: handleAsyncError2,
@@ -49852,12 +50449,310 @@ ${formatRemoteFailure(error)}`;
         selectedDraft.note = value;
         updateOpenMapLinks();
         saveDraftChanges(selectedDraft);
+        updateLint();
       },
       location: "note",
       handleAsyncError: handleAsyncError2,
       ruleSource: activeRuleSource,
       classNames: [draft_list_default["detail"], draft_list_default["input-field"]]
     });
+    let lintDiagnostics = [];
+    let lintGeneration = 0;
+    const lintRun = createAsyncCancelScope(handleAsyncError2);
+    const lintControls = document.createElement("div");
+    const autoFixButton = document.createElement("button");
+    autoFixButton.type = "button";
+    autoFixButton.className = draft_list_default.button;
+    autoFixButton.textContent = "\u4E00\u62EC\u4FEE\u6B63";
+    autoFixButton.addEventListener("click", () => {
+      void applyAllLintFixes().catch(handleAsyncError2);
+    });
+    lintControls.append(autoFixButton);
+    lintControls.hidden = true;
+    const titleLintField = document.createElement("div");
+    const titleLintTooltip = document.createElement("div");
+    titleLintField.style.position = "relative";
+    titleLintField.style.display = "flex";
+    titleLintField.style.flex = "1";
+    titleLintField.style.minWidth = "0";
+    detailName.style.flex = "1";
+    detailName.style.width = "100%";
+    detailName.style.minWidth = "0";
+    titleLintTooltip.hidden = true;
+    titleLintTooltip.style.position = "absolute";
+    titleLintTooltip.style.zIndex = "30";
+    titleLintTooltip.style.top = "calc(100% + 4px)";
+    titleLintTooltip.style.right = "0";
+    titleLintTooltip.style.display = "flex";
+    titleLintTooltip.style.flexDirection = "column";
+    titleLintTooltip.style.gap = "6px";
+    titleLintTooltip.style.width = "max-content";
+    titleLintTooltip.style.maxWidth = "min(360px, calc(100vw - 24px))";
+    titleLintTooltip.style.maxHeight = "min(50vh, 320px)";
+    titleLintTooltip.style.overflowY = "auto";
+    titleLintTooltip.style.padding = "8px";
+    titleLintTooltip.style.border = "1px solid #ccc";
+    titleLintTooltip.style.borderRadius = "6px";
+    titleLintTooltip.style.background = "white";
+    titleLintTooltip.style.color = "#1f2937";
+    titleLintTooltip.style.boxShadow = "0 4px 14px rgb(0 0 0 / 22%)";
+    titleLintTooltip.setAttribute("role", "group");
+    titleLintTooltip.setAttribute("aria-label", "\u30BF\u30A4\u30C8\u30EB\u306ELint\u8A3A\u65AD");
+    titleLintField.append(detailName, titleLintTooltip);
+    let titlePointerInside = false;
+    let titleFocusWithin = false;
+    let titleTooltipRequested = false;
+    function updateTitleTooltipVisibility() {
+      titleTooltipRequested = titlePointerInside || titleFocusWithin;
+      updateTitleLintTooltip();
+    }
+    titleLintField.addEventListener("pointerenter", () => {
+      titlePointerInside = true;
+      updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("pointerleave", () => {
+      titlePointerInside = false;
+      updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("focusin", () => {
+      titleFocusWithin = true;
+      updateTitleTooltipVisibility();
+    });
+    titleLintField.addEventListener("focusout", (event) => {
+      if (event.relatedTarget instanceof Node && titleLintField.contains(event.relatedTarget)) {
+        return;
+      }
+      titleFocusWithin = false;
+      updateTitleTooltipVisibility();
+    });
+    function currentLintInput() {
+      if (!selectedDraft) return;
+      return {
+        fields: {
+          title: selectedDraft.name,
+          description: selectedDraft.description,
+          note: selectedDraft.note
+        }
+      };
+    }
+    function validateLintDiagnostics(diagnostics, input) {
+      for (const diagnostic of diagnostics) {
+        const text = input.fields[diagnostic.location];
+        if (text === void 0 || !Number.isInteger(diagnostic.from) || !Number.isInteger(diagnostic.to) || diagnostic.from < 0 || diagnostic.to < diagnostic.from || diagnostic.to > text.length) {
+          throw new Error(
+            `Lint returned an invalid range for ${diagnostic.location}`
+          );
+        }
+      }
+    }
+    function updateTitleLintTooltip() {
+      titleLintTooltip.replaceChildren();
+      const diagnostics = lintDiagnostics.filter(
+        (diagnostic) => diagnostic.location === "title"
+      );
+      titleLintTooltip.hidden = !titleTooltipRequested || diagnostics.length === 0;
+      detailName.setAttribute(
+        "aria-invalid",
+        diagnostics.length > 0 ? "true" : "false"
+      );
+      titleLintTooltip.id = "title-lint-tooltip";
+      if (diagnostics.length > 0) {
+        detailName.setAttribute("aria-describedby", titleLintTooltip.id);
+      } else {
+        detailName.removeAttribute("aria-describedby");
+      }
+      lintControls.hidden = !activeLintSource || !selectedDraft;
+      detailName.style.boxShadow = lintDiagnostics.some(
+        (diagnostic) => diagnostic.location === "title"
+      ) ? "0 0 0 2px #e74c3c" : "";
+      if (!activeLintSource || !selectedDraft || !titleTooltipRequested) {
+        return;
+      }
+      for (const diagnostic of diagnostics) {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.flexWrap = "wrap";
+        row.style.alignItems = "center";
+        row.style.gap = "4px";
+        const message = document.createElement("span");
+        message.textContent = `${diagnostic.severity}: ${diagnostic.message}`;
+        row.append(message);
+        if (diagnostic.fix != null) {
+          row.append(
+            createLintActionButton(
+              "\u4FEE\u6B63",
+              () => applyLintEdits(diagnostic.fix ?? [])
+            )
+          );
+        }
+        for (const suggestion of diagnostic.suggestions ?? []) {
+          row.append(
+            createLintActionButton(
+              suggestion.label,
+              () => applyLintEdits(suggestion.edits)
+            )
+          );
+        }
+        titleLintTooltip.append(row);
+      }
+    }
+    function createLintActionButton(label, apply) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = draft_list_default.button;
+      button.textContent = label;
+      button.style.padding = "4px 6px";
+      button.style.color = "#1f2937";
+      button.style.background = "#f1f5f9";
+      button.addEventListener("click", () => {
+        try {
+          apply();
+        } catch (reason) {
+          handleAsyncError2(reason);
+        }
+      });
+      return button;
+    }
+    function updateLint() {
+      const generation = ++lintGeneration;
+      const input = currentLintInput();
+      if (!activeLintSource || input == null) {
+        lintRun(async () => void 0);
+        lintDiagnostics = [];
+        descriptionEditor.setLintDiagnostics([], applyLintEdits);
+        noteEditor.setLintDiagnostics([], applyLintEdits);
+        updateTitleLintTooltip();
+        return;
+      }
+      lintDiagnostics = [];
+      descriptionEditor.setLintDiagnostics([], applyLintEdits);
+      noteEditor.setLintDiagnostics([], applyLintEdits);
+      updateTitleLintTooltip();
+      lintRun(async (signal) => {
+        const diagnostics = await evaluateLint(
+          activeLintSource,
+          input,
+          signal
+        );
+        if (signal.aborted || generation !== lintGeneration || selectedDraft == null) {
+          return;
+        }
+        validateLintDiagnostics(diagnostics, input);
+        lintDiagnostics = diagnostics;
+        descriptionEditor.setLintDiagnostics(diagnostics, applyLintEdits);
+        noteEditor.setLintDiagnostics(diagnostics, applyLintEdits);
+        updateTitleLintTooltip();
+      });
+    }
+    function validateTextEdits(edits, input) {
+      if (edits.length === 0) {
+        throw new Error("A Lint edit must contain at least one change");
+      }
+      for (let index = 0; index < edits.length; index++) {
+        const edit = edits[index];
+        const text = input.fields[edit.location];
+        if (text === void 0 || !Number.isInteger(edit.from) || !Number.isInteger(edit.to) || edit.from < 0 || edit.to < edit.from || edit.to > text.length) {
+          throw new Error(
+            `Lint returned an invalid edit for ${edit.location}`
+          );
+        }
+        for (const other of edits.slice(index + 1)) {
+          if (edit.location !== other.location) continue;
+          if (doEditsConflict(edit, other)) {
+            throw new Error(
+              "Lint edit group contains overlapping edits"
+            );
+          }
+        }
+      }
+    }
+    function doEditsConflict(edit, other) {
+      if (edit.from === edit.to) {
+        return other.from === other.to ? edit.from === other.from : other.from <= edit.from && edit.from <= other.to;
+      }
+      if (other.from === other.to) {
+        return edit.from <= other.from && other.from <= edit.to;
+      }
+      return edit.from < other.to && other.from < edit.to;
+    }
+    function applyLintEdits(edits, refreshLint = true) {
+      const draft = selectedDraft;
+      const input = currentLintInput();
+      if (!draft || !input) return;
+      validateTextEdits(edits, input);
+      const nextFields = {
+        title: draft.name,
+        description: draft.description,
+        note: draft.note
+      };
+      for (const location2 of ["title", "description", "note"]) {
+        const locationEdits = edits.filter((edit) => edit.location === location2).sort((left, right) => right.from - left.from);
+        for (const edit of locationEdits) {
+          const text = nextFields[location2];
+          nextFields[location2] = text.slice(0, edit.from) + edit.insert + text.slice(edit.to);
+        }
+      }
+      draft.name = nextFields.title;
+      draft.description = nextFields.description;
+      draft.note = nextFields.note;
+      detailName.value = draft.name;
+      descriptionEditor.dispatchSource(draft.description);
+      noteEditor.dispatchSource(draft.note);
+      overlay.updateDraftTitle(draft);
+      updateOpenMapLinks();
+      if (refreshLint) updateLint();
+      updateVirtualList();
+      saveDraftChanges(draft);
+      updateLint();
+    }
+    function editsConflict(first, second) {
+      return first.some(
+        (edit) => second.some(
+          (other) => edit.location === other.location && doEditsConflict(edit, other)
+        )
+      );
+    }
+    async function applyAllLintFixes() {
+      const targetDraft = selectedDraft;
+      const source = activeLintSource;
+      if (!source || !targetDraft) return;
+      for (let iteration = 0; iteration < 10; iteration++) {
+        if (selectedDraft !== targetDraft || activeLintSource !== source) {
+          return;
+        }
+        const input = currentLintInput();
+        if (!input) return;
+        const diagnostics = await evaluateLint(
+          source,
+          input,
+          new AbortController().signal
+        );
+        if (selectedDraft !== targetDraft || activeLintSource !== source) {
+          return;
+        }
+        if (JSON.stringify(currentLintInput()?.fields) !== JSON.stringify(input.fields)) {
+          updateLint();
+          return;
+        }
+        validateLintDiagnostics(diagnostics, input);
+        const accepted = [];
+        const candidates = diagnostics.flatMap(
+          (diagnostic) => diagnostic.fix == null ? [] : [diagnostic.fix]
+        );
+        for (const candidate of candidates) {
+          validateTextEdits(candidate, input);
+          if (editsConflict(accepted, candidate)) continue;
+          accepted.push(...candidate);
+        }
+        if (accepted.length === 0) break;
+        const previousFields = JSON.stringify(input.fields);
+        applyLintEdits(accepted, false);
+        if (JSON.stringify(currentLintInput()?.fields) === previousFields) {
+          break;
+        }
+      }
+      updateLint();
+    }
     const detailCoordinates = /* @__PURE__ */ jsx(
       "input",
       {
@@ -50093,7 +50988,7 @@ ${formatRemoteFailure(error)}`;
       /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"], children: virtualListElement }),
       /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], children: [
         /* @__PURE__ */ jsxs("summary", { class: draft_list_default["detail-summary"], children: [
-          detailName,
+          titleLintField,
           /* @__PURE__ */ jsx(
             "button",
             {
@@ -50111,6 +51006,7 @@ ${formatRemoteFailure(error)}`;
           ] }),
           descriptionEditor.element,
           noteEditor.element,
+          lintControls,
           deleteButton,
           mapButton,
           templateToggleButton,
@@ -50175,6 +51071,7 @@ ${formatRemoteFailure(error)}`;
         detailCoordinates.classList.remove(draft_list_default["input-error"]);
         mapButton.style.display = "";
         updateOpenMapLinks();
+        updateLint();
         openMapButton.style.display = "";
         externalUrlControl.style.display = "";
         deleteButton.style.display = "";
@@ -50204,6 +51101,7 @@ ${formatRemoteFailure(error)}`;
         externalUrlControl.style.display = "none";
         deleteButton.style.display = "none";
         templateToggleButton.style.display = "none";
+        updateLint();
       }
     };
     updateDetailPane();
@@ -50252,10 +51150,7 @@ ${formatRemoteFailure(error)}`;
         filterInput.setErrors(diagnostics);
       } catch (e) {
         if (e instanceof Error) {
-          const errors = [
-            ...diagnostics,
-            errorToDiagnostic(e)
-          ];
+          const errors = [...diagnostics, errorToDiagnostic(e)];
           editor.setErrors(queryId, errors);
           filterInput.setErrors(errors);
         }
