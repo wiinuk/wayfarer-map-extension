@@ -684,10 +684,7 @@ export async function createDraftList({
             }
             validateLintDiagnostics(diagnostics, input);
             lintDiagnostics = diagnostics;
-            descriptionEditor.setLintDiagnostics(
-                diagnostics,
-                applyLintEdits,
-            );
+            descriptionEditor.setLintDiagnostics(diagnostics, applyLintEdits);
             noteEditor.setLintDiagnostics(diagnostics, applyLintEdits);
             updateTitleLintTooltip();
         });
@@ -718,16 +715,15 @@ export async function createDraftList({
             for (const other of edits.slice(index + 1)) {
                 if (edit.location !== other.location) continue;
                 if (doEditsConflict(edit, other)) {
-                    throw new Error("Lint edit group contains overlapping edits");
+                    throw new Error(
+                        "Lint edit group contains overlapping edits",
+                    );
                 }
             }
         }
     }
 
-    function doEditsConflict(
-        edit: LintTextEdit,
-        other: LintTextEdit,
-    ): boolean {
+    function doEditsConflict(edit: LintTextEdit, other: LintTextEdit): boolean {
         if (edit.from === edit.to) {
             return other.from === other.to
                 ? edit.from === other.from
@@ -784,7 +780,7 @@ export async function createDraftList({
         first: readonly LintTextEdit[],
         second: readonly LintTextEdit[],
     ) {
-        return         first.some((edit) =>
+        return first.some((edit) =>
             second.some(
                 (other) =>
                     edit.location === other.location &&
@@ -831,9 +827,7 @@ export async function createDraftList({
             if (accepted.length === 0) break;
             const previousFields = JSON.stringify(input.fields);
             applyLintEdits(accepted, false);
-            if (
-                JSON.stringify(currentLintInput()?.fields) === previousFields
-            ) {
+            if (JSON.stringify(currentLintInput()?.fields) === previousFields) {
                 break;
             }
         }
@@ -1276,10 +1270,7 @@ export async function createDraftList({
                 filterInput.setErrors(diagnostics);
             } catch (e) {
                 if (e instanceof Error) {
-                    const errors = [
-                        ...diagnostics,
-                        errorToDiagnostic(e),
-                    ];
+                    const errors = [...diagnostics, errorToDiagnostic(e)];
                     editor.setErrors(queryId, errors);
                     filterInput.setErrors(errors);
                 }

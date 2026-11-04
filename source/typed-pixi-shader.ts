@@ -3,8 +3,7 @@ import type { Id } from "./standard-extensions";
 type PixiModule = typeof import("pixi.js");
 
 type ShaderTypeName =
-    | keyof Float32ShaderTypeToVertexFormat
-    | keyof ShaderTypeToUniformTypeMap;
+    keyof Float32ShaderTypeToVertexFormat | keyof ShaderTypeToUniformTypeMap;
 
 type ShaderType = ShaderTypeName | `${ShaderTypeName}[${number}]`;
 
@@ -59,10 +58,7 @@ interface TypedAttribute<T extends ShaderType> extends Omit<
     format: shaderTypeToVertexFormat<T>;
 }
 type TypedAttributeOption<T extends ShaderType> =
-    | TypedAttribute<T>
-    | Buffer
-    | shaderTypeToTypedArray<T>
-    | number[];
+    TypedAttribute<T> | Buffer | shaderTypeToTypedArray<T> | number[];
 
 export interface ShaderTypeToUniformTypeMap {
     // スカラー型

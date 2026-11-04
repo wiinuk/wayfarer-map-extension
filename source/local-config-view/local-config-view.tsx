@@ -79,8 +79,7 @@ export function createLocalConfigView(configAccessor: LocalConfigAccessor) {
             newConfig = {
                 ...newConfig,
                 dictionaries: dictionariesInput.getValue() as
-                    | Record<string, Record<string, string>>
-                    | undefined,
+                    Record<string, Record<string, string>> | undefined,
             };
 
             configAccessor.schema.parse(newConfig);

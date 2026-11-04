@@ -136,17 +136,20 @@ async function runTsc() {
 async function runVitest() {
     console.log("[test] Running vitest...");
     return new Promise((resolve) => {
-        exec("vitest run --disableConsoleIntercept", (error, stdout, stderr) => {
-            if (stdout) console.log(stdout);
-            if (stderr) console.error(stderr);
-            if (error) {
-                console.error("[test] vitest found errors!");
-                resolve(false);
-            } else {
-                console.log("[test] vitest passed.");
-                resolve(true);
-            }
-        });
+        exec(
+            "vitest run --disableConsoleIntercept",
+            (error, stdout, stderr) => {
+                if (stdout) console.log(stdout);
+                if (stderr) console.error(stderr);
+                if (error) {
+                    console.error("[test] vitest found errors!");
+                    resolve(false);
+                } else {
+                    console.log("[test] vitest passed.");
+                    resolve(true);
+                }
+            },
+        );
     });
 }
 

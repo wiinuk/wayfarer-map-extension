@@ -94,19 +94,24 @@ function createRegexRunner(signal: AbortSignal): {
         pending.clear();
     }
 
-    worker.addEventListener("message", ({ data }: MessageEvent<RegexResponse>) => {
-        const request = pending.get(data.id);
-        if (!request) return;
-        pending.delete(data.id);
-        clearTimeout(request.timeout);
-        if (data.error != null) {
-            request.reject(new Error(data.error));
-        } else if (data.matches != null) {
-            request.resolve(data.matches);
-        } else {
-            request.reject(new Error("Lint worker returned an invalid response"));
-        }
-    });
+    worker.addEventListener(
+        "message",
+        ({ data }: MessageEvent<RegexResponse>) => {
+            const request = pending.get(data.id);
+            if (!request) return;
+            pending.delete(data.id);
+            clearTimeout(request.timeout);
+            if (data.error != null) {
+                request.reject(new Error(data.error));
+            } else if (data.matches != null) {
+                request.resolve(data.matches);
+            } else {
+                request.reject(
+                    new Error("Lint worker returned an invalid response"),
+                );
+            }
+        },
+    );
     worker.addEventListener("error", (event) => {
         terminate(event.error ?? new Error(event.message));
     });
@@ -133,7 +138,11 @@ function createRegexRunner(signal: AbortSignal): {
                 }, regexExecutionTimeoutMs);
                 pending.set(id, { resolve, reject, timeout });
                 try {
-                    worker.postMessage({ id, pattern, text } satisfies RegexRequest);
+                    worker.postMessage({
+                        id,
+                        pattern,
+                        text,
+                    } satisfies RegexRequest);
                 } catch (reason) {
                     clearTimeout(timeout);
                     pending.delete(id);
@@ -181,22 +190,14 @@ function requireString(value: Value, name: string): string {
 }
 
 function requireMatcher(value: Value): Matcher {
-    if (
-        value != null &&
-        typeof value === "object" &&
-        matcherTag in value
-    ) {
+    if (value != null && typeof value === "object" && matcherTag in value) {
         return value as unknown as Matcher;
     }
     throw new Error("Expected a Lint Matcher");
 }
 
 function requireRule(value: Value): Rule {
-    if (
-        value != null &&
-        typeof value === "object" &&
-        ruleTag in value
-    ) {
+    if (value != null && typeof value === "object" && ruleTag in value) {
         return value as unknown as Rule;
     }
     throw new Error("Expected a Lint Rule");
@@ -283,19 +284,13 @@ function createRule(
 function cloneRule(
     rule: Rule,
     update: Partial<
-        Pick<
-            Rule,
-            "locations" | "severity" | "fix" | "suggestionProvider"
-        >
+        Pick<Rule, "locations" | "severity" | "fix" | "suggestionProvider">
     >,
 ): Rule {
     return { ...rule, ...update };
 }
 
-function matchesForPattern(
-    source: string,
-    runRegex: LintRegexRunner,
-): Matcher {
+function matchesForPattern(source: string, runRegex: LintRegexRunner): Matcher {
     if (source.length > maxPatternLength) {
         throw new Error(
             `Lint pattern exceeds the ${maxPatternLength} character limit`,
@@ -368,10 +363,7 @@ function createSalBinary(
     callback: (left: Value, right: Value) => Value,
 ): Value {
     return (left) =>
-        done(
-            (right: Value) =>
-                done(asValue(callback(left, right))),
-        );
+        done((right: Value) => done(asValue(callback(left, right))));
 }
 
 function createSalGlobals(runRegex: LintRegexRunner) {
@@ -381,17 +373,12 @@ function createSalGlobals(runRegex: LintRegexRunner) {
         fromWord: (value) => done(value),
         pattern: createSalFunction((source) =>
             asValue(
-                matchesForPattern(
-                    requireString(source, "pattern"),
-                    runRegex,
-                ),
+                matchesForPattern(requireString(source, "pattern"), runRegex),
             ),
         ),
         "missing-suffix": createSalFunction((suffix) =>
             asValue(
-                matchesMissingSuffix(
-                    requireString(suffix, "missing-suffix"),
-                ),
+                matchesMissingSuffix(requireString(suffix, "missing-suffix")),
             ),
         ),
         both: createSalBinary((left, right) => {
@@ -417,12 +404,9 @@ function createSalGlobals(runRegex: LintRegexRunner) {
                     const rightKeys = new Set(
                         (await second.match(text, signal)).flatMap(captureKeys),
                     );
-                    return (await first.match(text, signal))
-                        .filter((match) =>
-                            captureKeys(match).some(
-                                (key) => !rightKeys.has(key),
-                            ),
-                        );
+                    return (await first.match(text, signal)).filter((match) =>
+                        captureKeys(match).some((key) => !rightKeys.has(key)),
+                    );
                 }, true),
             );
         }),
@@ -486,9 +470,7 @@ function createSalGlobals(runRegex: LintRegexRunner) {
         if (severity !== "error" && severity !== "warning") {
             throw new Error(`Unknown Lint severity: ${severity}`);
         }
-        return asValue(
-            cloneRule(requireRule(ruleValue), { severity }),
-        );
+        return asValue(cloneRule(requireRule(ruleValue), { severity }));
     });
     additions["suggest"] = createSalBinary((ruleValue, provider) => {
         if (typeof provider !== "function") {
@@ -562,8 +544,7 @@ async function runRuleAsync(
 
     const filtered = diagnostics.filter(
         (diagnostic) =>
-            rule.locations == null ||
-            rule.locations.has(diagnostic.location),
+            rule.locations == null || rule.locations.has(diagnostic.location),
     );
     const result: LintDiagnostic[] = [];
     for (const diagnostic of filtered) {
@@ -687,10 +668,7 @@ export async function evaluateLint(
                 `Invalid Sal Lint configuration: ${syntaxErrors.join("; ")}`,
             );
         }
-        const value = await forceAsPromise(
-            expression,
-            signal,
-        );
+        const value = await forceAsPromise(expression, signal);
         const rule = requireRule(value);
         return await runRule(rule, input, signal);
     } finally {

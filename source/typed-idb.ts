@@ -184,8 +184,7 @@ export function enterTransactionScope<
         let waitRequests_results: unknown[] | undefined;
         let waitRequests_requests: readonly IDBRequest[] | undefined;
         let openCursor_request:
-            | IDBRequest<IDBCursorWithValue | null>
-            | undefined;
+            IDBRequest<IDBCursorWithValue | null> | undefined;
         let openCursor_action: IterateValuesRequest["action"] | undefined;
         function onResolved() {
             let r;

@@ -42,10 +42,7 @@ import {
     type ActionCommand,
     createCopyCommand,
 } from "./simple-editor-actions";
-import type {
-    LintDiagnostic,
-    LintTextEdit,
-} from "./lint";
+import type { LintDiagnostic, LintTextEdit } from "./lint";
 
 function openUrlAction(text: string): Effective<ActionCommand> {
     return done({
@@ -229,10 +226,7 @@ async function createDecorations(
         const matchedText = text.slice(start, end);
         let command: ActionCommand | undefined;
         try {
-            command = await forceAsPromise(
-                action.execute(matchedText),
-                signal,
-            );
+            command = await forceAsPromise(action.execute(matchedText), signal);
         } catch (error) {
             if (signal.aborted) throw error;
             handleAsyncError(error);
@@ -321,9 +315,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
     let visibleMatches: ActionMatchRange[] = [];
     let menuPosition = 0;
     let lintDiagnostics: readonly LintDiagnostic[] = [];
-    let applyLintEdits:
-        | ((edits: readonly LintTextEdit[]) => void)
-        | undefined;
+    let applyLintEdits: ((edits: readonly LintTextEdit[]) => void) | undefined;
 
     function dispatchLintEdits(edits: readonly LintTextEdit[]) {
         if (applyLintEdits == null) {
@@ -465,8 +457,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
         renderActionMenu(activeMatches, position);
     }
 
-    const setActionDecorationsEffect =
-        StateEffect.define<ActionDecorations>();
+    const setActionDecorationsEffect = StateEffect.define<ActionDecorations>();
     const actionDecorator = ViewPlugin.fromClass(
         class ActionDecorator {
             decorations = Decoration.none;

@@ -183,8 +183,7 @@ export async function createPoiRecordsCanvasOverlay(
         private renderedViewport: Viewport | null = null;
         override draw() {
             const projection = this.getProjection() as
-                | google.maps.MapCanvasProjection
-                | undefined;
+                google.maps.MapCanvasProjection | undefined;
             const map = this.getMap();
             if (!projection || !(map instanceof google.maps.Map)) return;
 
@@ -209,11 +208,8 @@ export async function createPoiRecordsCanvasOverlay(
                 !Bounds.containsBounds(
                     renderedViewport.bounds,
                     Bounds.fromClass(
-                        padBoundsRelative(
-                            map,
-                            currentBounds,
-                            bufferRatio / 2,
-                        ).paddedBounds,
+                        padBoundsRelative(map, currentBounds, bufferRatio / 2)
+                            .paddedBounds,
                     ),
                 );
             if (needsRedraw) {
@@ -231,8 +227,7 @@ export async function createPoiRecordsCanvasOverlay(
             if (!(map instanceof google.maps.Map)) return;
 
             const projection = this.getProjection() as
-                | google.maps.MapCanvasProjection
-                | undefined;
+                google.maps.MapCanvasProjection | undefined;
 
             if (projection == null) return;
 
@@ -294,8 +289,7 @@ export async function createPoiRecordsCanvasOverlay(
 
             // 現在の地図状態に合わせてキャンパスを調整
             const latestProjection = this.getProjection() as
-                | google.maps.MapCanvasProjection
-                | undefined;
+                google.maps.MapCanvasProjection | undefined;
             if (latestProjection) {
                 const currentPos = latestProjection.fromLatLngToDivPixel(
                     port.nwLatLng,

@@ -173,7 +173,7 @@ export function getNearlyCellsForBounds<TLevel extends number>(
     remainingCells.enqueue(
         createCellFromCoordinates(B.getCenter(bounds), level),
     );
-    for (let cell; (cell = remainingCells.dequeue()); ) {
+    for (let cell; (cell = remainingCells.dequeue());) {
         const id = cell.toString();
         if (seenCellIds.has(id)) continue;
         seenCellIds.add(id);

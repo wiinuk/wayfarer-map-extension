@@ -38,9 +38,35 @@ describe("Sal Lint", () => {
 
         expect(diagnostics.map(({ from, to, fix }) => [from, to, fix])).toEqual(
             [
-                [2, 2, [{ location: "description", from: 2, to: 2, insert: "。" }]],
-                [11, 11, [{ location: "description", from: 11, to: 11, insert: "。" }]],
-                [15, 15, [{ location: "description", from: 15, to: 15, insert: "。" }]],
+                [
+                    2,
+                    2,
+                    [{ location: "description", from: 2, to: 2, insert: "。" }],
+                ],
+                [
+                    11,
+                    11,
+                    [
+                        {
+                            location: "description",
+                            from: 11,
+                            to: 11,
+                            insert: "。",
+                        },
+                    ],
+                ],
+                [
+                    15,
+                    15,
+                    [
+                        {
+                            location: "description",
+                            from: 15,
+                            to: 15,
+                            insert: "。",
+                        },
+                    ],
+                ],
             ],
         );
     });
@@ -128,10 +154,7 @@ describe("Sal Lint", () => {
         );
 
         expect(
-            diagnostics.map(({ location, severity }) => [
-                location,
-                severity,
-            ]),
+            diagnostics.map(({ location, severity }) => [location, severity]),
         ).toEqual([
             ["description", "warning"],
             ["note", "warning"],

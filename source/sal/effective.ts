@@ -26,7 +26,7 @@ export function* getCancel(): Effective<AbortSignal> {
 export async function forceAsPromise<T>(g: Effective<T>, signal: AbortSignal) {
     let nextInput = undefined;
     let nextResult;
-    for (; (nextResult = g.next(nextInput)), !nextResult.done; ) {
+    for (; (nextResult = g.next(nextInput)), !nextResult.done;) {
         const nextOutput = nextResult.value;
         if (nextOutput === privateGetAbortSignalSymbol) {
             nextInput = signal;

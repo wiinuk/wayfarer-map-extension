@@ -1,7 +1,4 @@
-import {
-    evaluateExpression,
-    type Value,
-} from "../sal/evaluator";
+import { evaluateExpression, type Value } from "../sal/evaluator";
 import { done, forceAsPromise, type Effective } from "../sal/effective";
 import { raise } from "../standard-extensions";
 
@@ -29,11 +26,7 @@ export interface ExternalUrlOption {
 function isValueRecord(
     value: Value,
 ): value is { readonly [key: string]: Value } {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        !Array.isArray(value)
-    );
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isExternalUrlDefinition(value: Value): value is ExternalUrlDefinition {
@@ -53,9 +46,7 @@ function getDefinitions(value: Value): readonly ExternalUrlDefinition[] {
     throw new Error("External URL settings must be defined with open");
 }
 
-function binary(
-    operation: (left: Value, right: Value) => Value,
-): Value {
+function binary(operation: (left: Value, right: Value) => Value): Value {
     return (left) => done((right) => done(operation(left, right)));
 }
 
@@ -78,50 +69,41 @@ function createSalExternalUrlGlobals() {
             ...getDefinitions(right),
         ]),
     );
-    globals.set(
-        "open",
-        (label) =>
-            done((buildUrl) => {
-                if (typeof label !== "string") {
-                    throw new Error("open expects a string label");
-                }
-                if (typeof buildUrl !== "function") {
-                    throw new Error("open expects a URL-generating function");
-                }
-                const definition: ExternalUrlDefinition = {
-                    marker: externalUrlMarker,
-                    label,
-                    buildUrl,
-                };
-                return done(definition);
-            }),
+    globals.set("open", (label) =>
+        done((buildUrl) => {
+            if (typeof label !== "string") {
+                throw new Error("open expects a string label");
+            }
+            if (typeof buildUrl !== "function") {
+                throw new Error("open expects a URL-generating function");
+            }
+            const definition: ExternalUrlDefinition = {
+                marker: externalUrlMarker,
+                label,
+                buildUrl,
+            };
+            return done(definition);
+        }),
     );
-    globals.set(
-        "get",
-        (record) =>
-            done((key) => {
-                if (
-                    !isValueRecord(record) ||
-                    typeof key !== "string"
-                ) {
-                    throw new Error("get expects a record and a string key");
-                }
-                const value = record[key];
-                if (value === undefined) {
-                    throw new Error(`Unknown record field: ${key}`);
-                }
-                return done(value);
-            }),
+    globals.set("get", (record) =>
+        done((key) => {
+            if (!isValueRecord(record) || typeof key !== "string") {
+                throw new Error("get expects a record and a string key");
+            }
+            const value = record[key];
+            if (value === undefined) {
+                throw new Error(`Unknown record field: ${key}`);
+            }
+            return done(value);
+        }),
     );
-    globals.set(
-        "pipe",
-        (value) =>
-            done((operation) => {
-                if (typeof operation !== "function") {
-                    throw new Error("pipe expects a function");
-                }
-                return operation(value);
-            }),
+    globals.set("pipe", (value) =>
+        done((operation) => {
+            if (typeof operation !== "function") {
+                throw new Error("pipe expects a function");
+            }
+            return operation(value);
+        }),
     );
     globals.set("trim-end", (value) => {
         if (typeof value !== "string") {
@@ -177,10 +159,7 @@ export async function evaluateExternalUrls(
     const options: ExternalUrlOption[] = [];
 
     for (const definition of definitions) {
-        const url = await forceAsPromise(
-            definition.buildUrl(payload),
-            signal,
-        );
+        const url = await forceAsPromise(definition.buildUrl(payload), signal);
         if (typeof url !== "string") {
             throw new Error(
                 `URL generator "${definition.label}" must return a string`,

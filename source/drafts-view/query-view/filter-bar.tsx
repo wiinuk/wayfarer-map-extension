@@ -3,10 +3,7 @@ import {
     createTypedCustomEvent,
     createTypedEventTarget,
 } from "../../typed-event-target";
-import {
-    createInlineQueryEditor,
-    type SalDiagnostic,
-} from "./editor";
+import { createInlineQueryEditor, type SalDiagnostic } from "./editor";
 import classNames, { cssText } from "./filter-bar.module.css";
 
 const setStyle = styleSetter(cssText);
@@ -20,9 +17,7 @@ export function createFilterBar({ value: initialValue }: { value: string }) {
         "click-edit-button": undefined;
     }>();
 
-    const input = (
-        <div classList={[classNames.input]} />
-    ) as HTMLDivElement;
+    const input = (<div classList={[classNames.input]} />) as HTMLDivElement;
 
     const clearButton = (
         <button

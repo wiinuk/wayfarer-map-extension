@@ -8,8 +8,7 @@ interface FragmentTagNameMap {
 
 type EventHandlers<T> = {
     [K in keyof T as K extends `on${string}` ? K : never]?: T[K] extends  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        | ((this: any, ev: infer E) => any)
-        | null
+        ((this: any, ev: infer E) => any) | null
         ? (ev: E) => void
         : never;
 };
@@ -22,9 +21,7 @@ type KnownAttributeNameAndType<
     : TPropertyName extends "htmlFor"
       ? { name: "for"; type: string }
       : KnownElementTagNameMap[TTagName][TPropertyName] extends
-              | string
-              | boolean
-              | number
+              string | boolean | number
         ? {
               name: TPropertyName;
               type: KnownElementTagNameMap[TTagName][TPropertyName];
@@ -64,10 +61,12 @@ type KnownExtendedAttributes<TTagName extends keyof KnownElementTagNameMap> =
             {};
 
 type ElementProperties<TName extends keyof KnownElementTagNameMap> = {
-    [k in keyof KnownElementTagNameMap[TName] as KnownAttributeNameAndType<
-        TName,
-        k
-    >["name"]]?: KnownAttributeNameAndType<TName, k>["type"];
+    [
+        k in keyof KnownElementTagNameMap[TName] as KnownAttributeNameAndType<
+            TName,
+            k
+        >["name"]
+    ]?: KnownAttributeNameAndType<TName, k>["type"];
 } & KnownExtendedAttributes<TName> &
     EventHandlers<KnownElementTagNameMap[TName]> & {
         readonly classList?: readonly string[];
@@ -80,10 +79,7 @@ interface JsxOption {
 }
 type Children = readonly (HTMLElement | string | falsy)[];
 type ChildrenProperty =
-    | readonly (HTMLElement | string | falsy)[]
-    | HTMLElement
-    | string
-    | falsy;
+    readonly (HTMLElement | string | falsy)[] | HTMLElement | string | falsy;
 
 export function jsxs<TName extends keyof KnownElementTagNameMap>(
     name: TName,

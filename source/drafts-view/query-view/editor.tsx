@@ -262,8 +262,8 @@ export function createInlineQueryEditor({
             createSalTokenHighlighter(),
             errorLinter,
             placeholder("🔍キーワードで絞り込み…"),
-            EditorState.changeFilter.of((transaction) =>
-                transaction.newDoc.lines === 1,
+            EditorState.changeFilter.of(
+                (transaction) => transaction.newDoc.lines === 1,
             ),
             EditorView.inputHandler.of((view, from, to, text) => {
                 if (!/[\r\n]/.test(text)) return false;
