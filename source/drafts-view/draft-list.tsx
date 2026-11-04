@@ -480,7 +480,7 @@ export async function createDraftList({
     const autoFixButton = document.createElement("button");
     autoFixButton.type = "button";
     autoFixButton.className = classNames.button;
-    autoFixButton.textContent = "Lintを一括修正";
+    autoFixButton.textContent = "一括修正";
     autoFixButton.addEventListener("click", () => {
         void applyAllLintFixes().catch(handleAsyncError);
     });
@@ -617,7 +617,7 @@ export async function createDraftList({
             row.append(message);
             if (diagnostic.fix != null) {
                 row.append(
-                    createLintActionButton("自動修正", () =>
+                    createLintActionButton("修正", () =>
                         applyLintEdits(diagnostic.fix ?? []),
                     ),
                 );

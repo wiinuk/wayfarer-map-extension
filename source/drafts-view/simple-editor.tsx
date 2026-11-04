@@ -574,7 +574,7 @@ export function createSimpleEditor(options: SimpleEditorOptions) {
                 const fix = diagnostic.fix;
                 if (fix != null) {
                     actions.push({
-                        name: "自動修正",
+                        name: "修正",
                         apply: () => dispatchLintEdits(fix),
                     });
                 }
