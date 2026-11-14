@@ -389,6 +389,11 @@ export async function createDraftList({
             }),
         );
     };
+    const updateHighlightedDrafts = (query: string) => {
+        overlay.setHighlightedDrafts(
+            query.trim() ? filteredDrafts : [],
+        );
+    };
     dispatchCountUpdatedEvent();
 
     const saveDraftChanges = (draft: Draft) => {
@@ -1079,6 +1084,7 @@ export async function createDraftList({
         overlay.deleteDraft(draftId);
         allDrafts = allDrafts.filter((d) => d.id !== draftId);
         filteredDrafts = filteredDrafts.filter((d) => d.id !== draftId);
+        updateHighlightedDrafts(getSelectedSource() ?? "");
 
         if (selectedDraft?.id === draftId) {
             selectedDraft = null;
@@ -1266,6 +1272,7 @@ export async function createDraftList({
                         });
                     },
                 );
+                updateHighlightedDrafts(query);
                 editor.setErrors(queryId, diagnostics);
                 filterInput.setErrors(diagnostics);
             } catch (e) {

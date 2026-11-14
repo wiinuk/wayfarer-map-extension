@@ -61,6 +61,7 @@ export interface ViewConfig {
         readonly fillColor: string;
         readonly strokeColor: string;
         readonly strokeWeight: number;
+        readonly highlightColor: string;
         readonly label: {
             readonly fillColor: string;
             readonly fontSize: string;
@@ -80,6 +81,10 @@ export interface ViewConfig {
 }
 interface ViewOptionsCache {
     readonly draftMarkerOptions: google.maps.MarkerOptions;
+    readonly draftMarkerIcon: NonNullable<google.maps.MarkerOptions["icon"]>;
+    readonly highlightedDraftMarkerIcon: NonNullable<
+        google.maps.MarkerOptions["icon"]
+    >;
     readonly draftMarkerLabel: google.maps.MarkerLabel;
 }
 function createDefaultViewConfig(): ViewConfig {
@@ -117,6 +122,7 @@ function createDefaultViewConfig(): ViewConfig {
             fillColor: "#00ffb380",
             strokeColor: "#ffffff80",
             strokeWeight: 2,
+            highlightColor: "#ffdf00",
             label: {
                 fillColor: "#FFFFBB",
                 fontSize: "11px",
@@ -162,17 +168,23 @@ function createDefaultViewConfig(): ViewConfig {
     };
 }
 function createOptionsCache(config: ViewConfig): ViewOptionsCache {
+    const { highlightColor, ...draftMarkerConfig } = config.draftMarker;
+    const draftMarkerIcon = {
+        ...draftMarkerConfig,
+        labelOrigin: new google.maps.Point(0, 2),
+        path: 0,
+        fillOpacity: 1,
+        strokeOpacity: 1,
+    };
     return {
         draftMarkerOptions: {
             zIndex: config.baseZIndex,
-            icon: {
-                ...config.draftMarker,
-
-                labelOrigin: new google.maps.Point(0, 2),
-                path: 0,
-                fillOpacity: 1,
-                strokeOpacity: 1,
-            },
+            icon: draftMarkerIcon,
+        },
+        draftMarkerIcon,
+        highlightedDraftMarkerIcon: {
+            ...draftMarkerIcon,
+            strokeColor: highlightColor,
         },
         draftMarkerLabel: {
             ...config.draftMarker.label,
@@ -206,6 +218,7 @@ export interface DraftsOverlay {
     readonly events: TypedEventTarget<DraftsOverlayEventMap>;
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
+    setHighlightedDrafts(drafts: readonly Draft[]): void;
     addDraft(draft: Draft): void;
     addDrafts(draft: Iterable<Draft>, scheduler: Scheduler): Promise<void>;
     deleteDraft(draftId: Draft["id"]): void;
@@ -372,15 +385,17 @@ export function createDraftsOverlay(
     const config = createDefaultViewConfig();
     const drafts: DraftViews = new Map();
     const selectedDraftId = { contents: null };
+    const cachedOptions = createOptionsCache(config);
     const draftsCanvasOverlay = createCanvasOverlay(
         drafts,
         config,
         selectedDraftId,
     );
+    const highlightedDraftIds = new Set<DraftId>();
     return {
         events: createTypedEventTarget(),
         config,
-        cachedOptions: createOptionsCache(config),
+        cachedOptions,
         map,
         drafts,
         selectedDraftId,
@@ -409,6 +424,22 @@ export function createDraftsOverlay(
                 }
                 notifyMapRangeChanged(this);
             }
+        },
+        setHighlightedDrafts(drafts) {
+            highlightedDraftIds.clear();
+            for (const draft of drafts) {
+                highlightedDraftIds.add(draft.id);
+            }
+            for (const [draftId, draftWithView] of this.drafts) {
+                draftWithView.mapView.marker.setIcon(
+                    highlightedDraftIds.has(draftId)
+                        ? cachedOptions.highlightedDraftMarkerIcon
+                        : cachedOptions.draftMarkerIcon,
+                );
+            }
+            this.draftsCanvasOverlay.setHighlightedDrafts(
+                highlightedDraftIds,
+            );
         },
         async addDrafts(drafts, scheduler) {
             for (const draft of drafts) {
