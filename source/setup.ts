@@ -162,8 +162,6 @@ async function setupDraftManagerDialog(page: PageResource) {
         geo: page.geo,
         local: page.local,
         handleAsyncError,
-        setRangeDisplayPlan: (plan) =>
-            page.overlay.canvasOverlay.setRangeDisplayPlan(plan),
     });
 
     const title = createDraftsDialogTitle({

@@ -2,7 +2,6 @@
 import { toLatLngLiteral } from "../geometry";
 import {
     createRecordsCanvasRenderer,
-    setRecordsRangeDisplayPlan,
     type Viewport,
     updateRecordsCanvasRenderer,
     type CanvasRenderer,
@@ -17,7 +16,6 @@ import {
     wrapCancellable,
 } from "../standard-extensions";
 import * as Bounds from "../bounds";
-import type { RangeDisplayPlan } from "./range-display";
 
 interface ViewOptions {
     readonly cell17CountMarkerOptions: google.maps.MarkerOptions;
@@ -28,44 +26,34 @@ export interface PoisOverlay {
     readonly canvasOverlay: PoiRecordsCanvasOverlay;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function createDrawerForMainThread(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: (image: ImageBitmap, port: Viewport) => void,
-    onRangeRenderUpdated: CanvasRenderer["onRangeRenderUpdated"],
 ): Promise<IsolatedDrawer> {
     const views = createRecordsCanvasRenderer(
         handleAsyncError,
         onRenderUpdated,
-        onRangeRenderUpdated,
     );
-    return {
-        async draw(signal, viewport: Viewport) {
-            await updateRecordsCanvasRenderer(await views, viewport, signal);
-        },
-        async setRangeDisplayPlan(plan, revision) {
-            setRecordsRangeDisplayPlan(await views, plan, revision);
-        },
-    };
+    return async (signal, viewport: Viewport) =>
+        updateRecordsCanvasRenderer(await views, viewport, signal);
 }
 
 export type MainApi = ReturnType<typeof createMainApi>;
 function createMainApi(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
-    onRangeRenderUpdated: CanvasRenderer["onRangeRenderUpdated"],
 ) {
     return {
         reportError(reason: Error | string) {
             handleAsyncError(reason);
         },
         notifyRenderCompleted: onRenderUpdated,
-        notifyRangeRenderCompleted: onRangeRenderUpdated,
     };
 }
 async function createDrawerForWorker(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
-    onRangeRenderUpdated: CanvasRenderer["onRangeRenderUpdated"],
 ) {
     const Comlink =
         await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
@@ -76,26 +64,16 @@ async function createDrawerForWorker(
             overlayWorker,
         );
 
-    const mainApi = createMainApi(
-        handleAsyncError,
-        onRenderUpdated,
-        onRangeRenderUpdated,
-    );
+    const mainApi = createMainApi(handleAsyncError, onRenderUpdated);
     Comlink.expose(mainApi, overlayWorker);
 
-    return {
-        draw: wrapCancellable(workerApi.draw, workerApi.drawCancel),
-        setRangeDisplayPlan: workerApi.setRangeDisplayPlan,
-    };
+    return wrapCancellable(workerApi.draw, workerApi.drawCancel);
 }
 
-interface IsolatedDrawer {
-    draw(signal: AbortSignal, parameters: Viewport): Promise<void>;
-    setRangeDisplayPlan(
-        plan: RangeDisplayPlan,
-        revision: number,
-    ): Promise<void>;
-}
+type IsolatedDrawer = (
+    signal: AbortSignal,
+    parameters: Viewport,
+) => Promise<void>;
 
 function pointClassToRecord({ x, y }: google.maps.Point) {
     return { x, y };
@@ -154,15 +132,6 @@ function initCanvas(
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 }
 
-function configureCanvas(canvas: HTMLCanvasElement) {
-    canvas.style.position = "absolute";
-    canvas.style.transition = "none";
-    canvas.style.transformOrigin = "0 0";
-    canvas.style.left = "0px";
-    canvas.style.top = "0px";
-    canvas.style.imageRendering = "crisp-edges";
-}
-
 export type PoiRecordsCanvasOverlay = Awaited<
     ReturnType<typeof createPoiRecordsCanvasOverlay>
 >;
@@ -172,78 +141,46 @@ export async function createPoiRecordsCanvasOverlay(
     const bufferRatio = 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
         private ctx: CanvasRenderingContext2D;
-        private rangeCtx: CanvasRenderingContext2D;
         private drawer!: IsolatedDrawer;
         private drawDebounceScope = createAsyncCancelScope(handleAsyncError);
-        private rangePlanRevision = 0;
-        private lastRangeRenderId = 0;
 
         constructor() {
             super();
             const canvas = document.createElement("canvas");
-            configureCanvas(canvas);
+            canvas.style.position = "absolute";
+            canvas.style.transition = "none";
+            canvas.style.transformOrigin = "0 0";
+            canvas.style.left = "0px";
+            canvas.style.top = "0px";
+            canvas.style.imageRendering = "crisp-edges";
             this.ctx = canvas.getContext("2d") ?? raise`context 2d`;
-            const rangeCanvas = document.createElement("canvas");
-            configureCanvas(rangeCanvas);
-            rangeCanvas.style.pointerEvents = "none";
-            this.rangeCtx =
-                rangeCanvas.getContext("2d") ?? raise`range context 2d`;
         }
 
         async init(handleAsyncError: (reason: unknown) => void) {
-            const imageScope = createAsyncCancelScope(handleAsyncError);
-            const rangeScope = createAsyncCancelScope(handleAsyncError);
-            const onRenderUpdated: CanvasRenderer["onRenderUpdated"] = (
-                image,
-                port,
-            ) =>
-                imageScope(async (signal) => {
-                    try {
-                        await this.commitImage(image, port, signal);
-                    } finally {
-                        image.close();
-                    }
-                });
-            const onRangeRenderUpdated: CanvasRenderer["onRangeRenderUpdated"] =
-                (image, port, planRevision, renderId) =>
-                    rangeScope(async (signal) => {
+            const scope = createAsyncCancelScope(handleAsyncError);
+            this.drawer = await createDrawerForWorker(
+                handleAsyncError,
+                (image, port) =>
+                    scope(async (signal) => {
                         try {
-                            await this.commitRangeImage(
-                                image,
-                                port,
-                                planRevision,
-                                renderId,
-                                signal,
-                            );
+                            await this.commitImage(image, port, signal);
                         } finally {
                             image.close();
                         }
-                    });
-            const createDrawer =
-                typeof Worker === "undefined" ||
-                typeof OffscreenCanvas === "undefined"
-                    ? createDrawerForMainThread
-                    : createDrawerForWorker;
-            this.drawer = await createDrawer(
-                handleAsyncError,
-                onRenderUpdated,
-                onRangeRenderUpdated,
+                    }),
             );
         }
 
         override onAdd() {
             const panes = this.getPanes()!;
-            panes.overlayLayer.appendChild(this.rangeCtx.canvas);
             panes.overlayLayer.appendChild(this.ctx.canvas);
         }
 
         override onRemove() {
             this.ctx.canvas.remove();
-            this.rangeCtx.canvas.remove();
         }
 
         private renderedViewport: Viewport | null = null;
-        private rangeRenderedViewport: Viewport | null = null;
         override draw() {
             const projection = this.getProjection() as
                 google.maps.MapCanvasProjection | undefined;
@@ -252,16 +189,17 @@ export async function createPoiRecordsCanvasOverlay(
 
             const currentZoom = map.getZoom();
             const currentBounds = map.getBounds()!;
-            this.applyCanvasViewportTransform(
-                this.ctx.canvas,
-                this.renderedViewport,
-                projection,
-            );
-            this.applyCanvasViewportTransform(
-                this.rangeCtx.canvas,
-                this.rangeRenderedViewport,
-                projection,
-            );
+            if (this.renderedViewport) {
+                const currentWorldWidth = projection.getWorldWidth();
+                const renderedWorldWidth =
+                    256 * 2 ** this.renderedViewport.zoom;
+                const scale = currentWorldWidth / renderedWorldWidth;
+
+                const currentPos = projection.fromLatLngToDivPixel(
+                    this.renderedViewport.nwLatLng,
+                )!;
+                this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+            }
 
             const renderedViewport = this.renderedViewport;
             const needsRedraw =
@@ -314,10 +252,8 @@ export async function createPoiRecordsCanvasOverlay(
             // 地図のサイズ[px]
             const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
             const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
-            for (const canvas of [this.ctx.canvas, this.rangeCtx.canvas]) {
-                canvas.style.width = `${canvasWidth}px`;
-                canvas.style.height = `${canvasHeight}px`;
-            }
+            this.ctx.canvas.style.width = `${canvasWidth}px`;
+            this.ctx.canvas.style.height = `${canvasHeight}px`;
 
             // 地図の左上[世界座標]
             const nwWorld = pointClassToRecord(
@@ -335,21 +271,7 @@ export async function createPoiRecordsCanvasOverlay(
                 devicePixelRatio: window.devicePixelRatio || 1,
             };
 
-            await this.drawer.draw(signal, port);
-        }
-        applyCanvasViewportTransform(
-            canvas: HTMLCanvasElement,
-            renderedViewport: Viewport | null,
-            projection: google.maps.MapCanvasProjection,
-        ) {
-            if (!renderedViewport) return;
-            const currentWorldWidth = projection.getWorldWidth();
-            const renderedWorldWidth = 256 * 2 ** renderedViewport.zoom;
-            const scale = currentWorldWidth / renderedWorldWidth;
-            const currentPos = projection.fromLatLngToDivPixel(
-                renderedViewport.nwLatLng,
-            )!;
-            canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
+            await this.drawer(signal, port);
         }
         async commitImage(
             image: ImageBitmap,
@@ -374,53 +296,6 @@ export async function createPoiRecordsCanvasOverlay(
                 )!;
                 this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
             }
-        }
-        async commitRangeImage(
-            image: ImageBitmap,
-            port: Viewport,
-            planRevision: number,
-            renderId: number,
-            signal: AbortSignal,
-        ) {
-            if (
-                planRevision !== this.rangePlanRevision ||
-                renderId < this.lastRangeRenderId
-            ) {
-                return;
-            }
-            await waitAnimationFrame(signal);
-            if (
-                planRevision !== this.rangePlanRevision ||
-                renderId < this.lastRangeRenderId
-            ) {
-                return;
-            }
-            initCanvas(this.rangeCtx, port);
-            this.rangeCtx.drawImage(
-                image,
-                0,
-                0,
-                this.rangeCtx.canvas.width,
-                this.rangeCtx.canvas.height,
-            );
-            this.rangeRenderedViewport = port;
-            this.lastRangeRenderId = renderId;
-            const projection = this.getProjection() as
-                google.maps.MapCanvasProjection | undefined;
-            if (projection) {
-                this.applyCanvasViewportTransform(
-                    this.rangeCtx.canvas,
-                    port,
-                    projection,
-                );
-            }
-        }
-        setRangeDisplayPlan(plan: RangeDisplayPlan) {
-            const revision = ++this.rangePlanRevision;
-            this.drawer
-                .setRangeDisplayPlan(plan, revision)
-                .then(() => this.notifyDrawNeeded())
-                .catch(handleAsyncError);
         }
     }
     const overlay = new PoiRecordsCanvasOverlay();

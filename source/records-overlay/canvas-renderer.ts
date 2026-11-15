@@ -35,12 +35,6 @@ import {
     newCirclesMeshBuilder,
     type CirclesMeshBuilder,
 } from "./circles-mesh-builder";
-import {
-    createRangeCanvasPool,
-    renderRangeDisplay,
-    type RangeDisplayPlan,
-    type RangeCanvasPool,
-} from "./range-display";
 type PIXI = typeof PIXI;
 
 export interface Viewport {
@@ -93,20 +87,7 @@ export interface CanvasRenderer {
         image: ImageBitmap,
         port: Viewport,
     ) => void;
-    readonly onRangeRenderUpdated: (
-        this: unknown,
-        image: ImageBitmap,
-        port: Viewport,
-        planRevision: number,
-        renderId: number,
-    ) => void;
-    readonly canvas: HTMLCanvasElement | OffscreenCanvas;
-    readonly rangeCanvas: HTMLCanvasElement | OffscreenCanvas;
-    readonly rangeCanvasPool: RangeCanvasPool;
-    rangeDisplayPlan: RangeDisplayPlan;
-    rangeDisplayRevision: number;
-    rangeDisplayRenderId: number;
-    rangeDisplayCacheKey: string | null;
+    readonly canvas: OffscreenCanvas;
     readonly PIXI: PIXI;
     readonly BoxBounds: BoxBounds;
 
@@ -133,7 +114,7 @@ export interface CanvasRenderer {
     readonly _pois_cache: PoiRecord[];
 }
 
-async function initPIXI(canvas: HTMLCanvasElement | OffscreenCanvas) {
+async function initPIXI(canvas: OffscreenCanvas) {
     let PIXI;
     if (isWebWorker()) {
         PIXI =
@@ -157,25 +138,6 @@ async function initPIXI(canvas: HTMLCanvasElement | OffscreenCanvas) {
         PIXI,
         app,
     };
-}
-
-function createCanvasSurface() {
-    if (typeof OffscreenCanvas !== "undefined") {
-        return new OffscreenCanvas(0, 0);
-    }
-    return document.createElement("canvas");
-}
-
-async function createCanvasImageBitmap(
-    canvas: HTMLCanvasElement | OffscreenCanvas,
-) {
-    if (
-        typeof OffscreenCanvas !== "undefined" &&
-        canvas instanceof OffscreenCanvas
-    ) {
-        return canvas.transferToImageBitmap();
-    }
-    return createImageBitmap(canvas);
 }
 
 function createCellBoundsShader(PIXI: PIXI) {
@@ -208,11 +170,9 @@ function updateFixedScale(renderer: CanvasRenderer, container: PIXI.Container) {
 export async function createRecordsCanvasRenderer(
     handleAsyncError: (reason: unknown) => void,
     onRenderUpdated: CanvasRenderer["onRenderUpdated"],
-    onRangeRenderUpdated: CanvasRenderer["onRangeRenderUpdated"],
 ): Promise<CanvasRenderer> {
     const records = await openRecords();
-    const canvas = createCanvasSurface();
-    const rangeCanvas = createCanvasSurface();
+    const canvas = new OffscreenCanvas(0, 0);
     const { PIXI, app } = await initPIXI(canvas);
     const worldContainer = app.stage.addChild(new PIXI.Container());
 
@@ -230,12 +190,6 @@ export async function createRecordsCanvasRenderer(
     });
     return {
         canvas,
-        rangeCanvas,
-        rangeCanvasPool: createRangeCanvasPool(createCanvasSurface),
-        rangeDisplayPlan: { expression: null, circles: [] },
-        rangeDisplayRevision: 0,
-        rangeDisplayRenderId: 0,
-        rangeDisplayCacheKey: null,
         layers: {
             cellLayer: worldContainer.addChild(new PIXI.Container<PIXI.Mesh>()),
             circleLayer: worldContainer.addChild(
@@ -257,7 +211,6 @@ export async function createRecordsCanvasRenderer(
         worldContainer,
         handleAsyncError,
         onRenderUpdated,
-        onRangeRenderUpdated,
         options: createOverlayViewOptions(),
         records,
         cells: new Map(),
@@ -267,49 +220,6 @@ export async function createRecordsCanvasRenderer(
         _tempTransform: new PIXI.Transform(),
     };
 }
-export function setRecordsRangeDisplayPlan(
-    renderer: CanvasRenderer,
-    plan: RangeDisplayPlan,
-    revision: number,
-) {
-    renderer.rangeDisplayPlan = plan;
-    renderer.rangeDisplayRevision = revision;
-    renderer.rangeDisplayCacheKey = null;
-}
-
-async function drawRangeDisplay(renderer: CanvasRenderer, port: Viewport) {
-    const cacheKey = [
-        renderer.rangeDisplayRevision,
-        port.zoom,
-        port.nwWorld.x,
-        port.nwWorld.y,
-        port.width,
-        port.height,
-        port.devicePixelRatio,
-    ].join(":");
-    if (renderer.rangeDisplayCacheKey === cacheKey) return;
-
-    const plan = renderer.rangeDisplayPlan;
-    const planRevision = renderer.rangeDisplayRevision;
-    const renderId = ++renderer.rangeDisplayRenderId;
-    renderRangeDisplay(
-        renderer.rangeCanvas,
-        renderer.rangeCanvasPool,
-        plan,
-        port,
-    );
-    const image = await createCanvasImageBitmap(renderer.rangeCanvas);
-    if (
-        planRevision !== renderer.rangeDisplayRevision ||
-        renderId !== renderer.rangeDisplayRenderId
-    ) {
-        image.close();
-        return;
-    }
-    renderer.onRangeRenderUpdated(image, port, planRevision, renderId);
-    renderer.rangeDisplayCacheKey = cacheKey;
-}
-
 function applyViewport(layer: PIXI.Container, viewport: Viewport) {
     const scale = 2 ** viewport.zoom;
     layer.scale.set(scale);
@@ -362,7 +272,7 @@ async function draw(
     applyViewport(worldContainer, port);
     updateContainers(renderer);
     app.render();
-    const bitmap = await createCanvasImageBitmap(renderer.canvas);
+    const bitmap = renderer.canvas.transferToImageBitmap();
     renderer.onRenderUpdated(bitmap, port);
 }
 
@@ -440,7 +350,6 @@ export async function updateRecordsCanvasRenderer(
 ) {
     const { cells } = overlay;
     const { zoom, bounds } = port;
-    await drawRangeDisplay(overlay, port);
 
     if (zoom <= 12) {
         for (const cellId of cells.keys()) {

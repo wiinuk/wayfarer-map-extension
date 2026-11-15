@@ -4,11 +4,9 @@ import {
     createStandardQueries,
     reachableWith,
     type DraftQueryBuilder,
-    type QueryEnvironment,
 } from "./standard-queries";
 import { done, forceAsPromise } from "../sal/effective";
 import type { Draft } from "../remote";
-import { createRangeDisplayPlan } from "../records-overlay/range-display";
 
 describe("Queries", () => {
     async function evaluate(source: string) {
@@ -22,33 +20,26 @@ describe("Queries", () => {
 
         return e;
     }
-    function queryEnvironment(): QueryEnvironment {
-        return {
-            getUserLocation() {
-                return done({ lat: 0, lng: 0 });
-            },
-            getMinFreshDate() {
-                return done(0);
-            },
-            getCell17Stat() {
-                return done(undefined);
-            },
-            getCell14Stat() {
-                return done(undefined);
-            },
-            getCell14DraftStat() {
-                return done(undefined);
-            },
-        };
-    }
-    async function initializeBuilder(b: DraftQueryBuilder) {
-        const signal = new AbortController().signal;
-        return forceAsPromise(b.initialize(queryEnvironment()), signal);
-    }
     async function builderAsPredicate(b: DraftQueryBuilder) {
         const signal = new AbortController().signal;
         const q = await forceAsPromise(
-            b.initialize(queryEnvironment()),
+            b.initialize({
+                getUserLocation() {
+                    return done({ lat: 0, lng: 0 });
+                },
+                getMinFreshDate() {
+                    return done(0);
+                },
+                getCell17Stat() {
+                    return done(undefined);
+                },
+                getCell14Stat() {
+                    return done(undefined);
+                },
+                getCell14DraftStat() {
+                    return done(undefined);
+                },
+            }),
             signal,
         );
         return (d: Draft) => forceAsPromise(q.isVisible(d), signal);
@@ -99,53 +90,6 @@ describe("Queries", () => {
                 })
             ).isVisible,
         ).toBe(false);
-    });
-
-    it("keeps geographic AND constraints but excludes non-geographic ORs", async () => {
-        const andQuery = await initializeBuilder(
-            await evaluate("reachableWith:[0,0]:1000 and coffee"),
-        );
-        expect(andQuery.rangeDisplay?.circles).toHaveLength(1);
-        expect(andQuery.rangeDisplay?.expression?.type).toBe("circle");
-
-        const orQuery = await initializeBuilder(
-            await evaluate("reachableWith:[0,0]:1000 or coffee"),
-        );
-        expect(orQuery.rangeDisplay?.circles).toHaveLength(1);
-        expect(orQuery.rangeDisplay?.expression).toBeUndefined();
-    });
-
-    it("preserves geographic negation for display", async () => {
-        const query = await initializeBuilder(
-            await evaluate("-reachableWith:[0,0]:1000"),
-        );
-
-        expect(query.rangeDisplay?.expression?.type).toBe("not");
-    });
-
-    it("does not negate a spatial constraint that includes a text condition", async () => {
-        const query = await initializeBuilder(
-            await evaluate("-(reachableWith:[0,0]:1000 and coffee)"),
-        );
-        const plan = createRangeDisplayPlan(query.rangeDisplay);
-
-        expect(plan.expression).toBeNull();
-        expect(plan.circles[0]?.contribution).toBe("non-contributing");
-    });
-
-    it("keeps a safe spatial constraint under a larger conjunction", async () => {
-        const query = await initializeBuilder(
-            await evaluate(
-                "(reachableWith:[0,0]:1000 or coffee) and reachableWith:[1,1]:1000",
-            ),
-        );
-        const plan = createRangeDisplayPlan(query.rangeDisplay);
-
-        expect(plan.expression).toEqual({ type: "circle", id: "range-2" });
-        expect(plan.circles.map(({ contribution }) => contribution)).toEqual([
-            "non-contributing",
-            "contributing",
-        ]);
     });
 
     it("searches a built-in name when quoted as a term", async () => {
