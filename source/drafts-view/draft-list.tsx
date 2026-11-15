@@ -27,6 +27,7 @@ import { SalEvaluationError } from "../sal/evaluator";
 import { createSimpleEditor } from "./simple-editor";
 import type { Geo } from "../geo";
 import { evaluateExternalUrls, type ExternalUrlData } from "./external-url";
+import type { RangeDisplayPlan } from "../records-overlay/range-display";
 import {
     evaluateLint,
     type LintDiagnostic,
@@ -42,6 +43,7 @@ interface DraftListOptions {
     readonly local: LocalConfigAccessor;
     readonly geo: Geo;
     readonly handleAsyncError: (reason: unknown) => void;
+    readonly setRangeDisplayPlan: (plan: RangeDisplayPlan) => void;
 }
 interface DraftListEventMap {
     "count-changed": {
@@ -141,6 +143,7 @@ export async function createDraftList({
     local,
     geo,
     handleAsyncError,
+    setRangeDisplayPlan,
 }: DraftListOptions) {
     setStyle();
 
@@ -1298,7 +1301,7 @@ export async function createDraftList({
             );
             const diagnostics: SalDiagnostic[] = [];
             try {
-                const filteredMatches = await filterDrafts(
+                const filteredResult = await filterDrafts(
                     records,
                     allDrafts,
                     geo,
@@ -1314,6 +1317,8 @@ export async function createDraftList({
                         });
                     },
                 );
+                const filteredMatches = filteredResult.drafts;
+                setRangeDisplayPlan(filteredResult.rangeDisplayPlan);
                 filteredDrafts = filteredMatches.map(({ draft }) => draft);
                 filteredCategories = new Map(
                     filteredMatches.map(

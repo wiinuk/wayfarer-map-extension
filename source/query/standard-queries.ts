@@ -11,6 +11,10 @@ import {
     type Cell17Id,
     getCellId,
 } from "../typed-s2cell";
+import type {
+    RangeDisplayCandidate,
+    RangeDisplayExpression,
+} from "../records-overlay/range-display";
 
 export interface Cell14DraftStat {
     readonly potentialStops: number;
@@ -49,6 +53,7 @@ export function buildDraftMap(drafts: readonly Draft[]) {
 
 export interface DraftQuery {
     isVisible(draft: Draft): Effective<DraftQueryMatch>;
+    readonly rangeDisplay?: RangeDisplayCandidate;
 }
 export interface DraftQueryMatch {
     readonly isVisible: boolean;
@@ -95,6 +100,46 @@ function queryAsBuilder(query: DraftQuery): DraftQueryBuilder {
         },
     };
 }
+
+function combineRangeDisplay(
+    first: RangeDisplayCandidate | undefined,
+    second: RangeDisplayCandidate | undefined,
+    operator: "and" | "or",
+): RangeDisplayCandidate | undefined {
+    if (first == null && second == null) return;
+
+    const circles = [...(first?.circles ?? []), ...(second?.circles ?? [])];
+    let expression: RangeDisplayExpression | undefined;
+    if (operator === "and") {
+        if (first?.expression && second?.expression) {
+            expression = {
+                type: "and",
+                left: first.expression,
+                right: second.expression,
+            };
+        } else {
+            expression = first?.expression ?? second?.expression;
+        }
+    } else if (first?.expression && second?.expression) {
+        if (!first.constraintOnly && !second.constraintOnly) {
+            expression = {
+                type: "or",
+                left: first.expression,
+                right: second.expression,
+            };
+        }
+    }
+
+    const constraintOnly =
+        operator === "and"
+            ? expression != null &&
+              (first?.constraintOnly === true ||
+                  second?.constraintOnly === true ||
+                  first?.expression == null ||
+                  second?.expression == null)
+            : expression == null;
+    return { expression, circles, constraintOnly };
+}
 function builderAsValue(builder: DraftQueryBuilder) {
     return builder as unknown as Value; // TODO:
 }
@@ -135,6 +180,17 @@ function not(b: DraftQueryBuilder) {
         *initialize(e) {
             const q = yield* b.initialize(e);
             return {
+                rangeDisplay: {
+                    circles: q.rangeDisplay?.circles ?? [],
+                    expression:
+                        q.rangeDisplay?.expression &&
+                        !q.rangeDisplay.constraintOnly
+                            ? {
+                                  type: "not",
+                                  expression: q.rangeDisplay.expression,
+                              }
+                            : undefined,
+                },
                 *isVisible(d) {
                     const match = yield* q.isVisible(d);
                     return match.isVisible
@@ -156,6 +212,7 @@ function classifyAs(label: string, builder: DraftQueryBuilder) {
         *initialize(environment: QueryEnvironment) {
             const query = yield* builder.initialize(environment);
             return {
+                rangeDisplay: query.rangeDisplay,
                 *isVisible(draft: Draft) {
                     const match = yield* query.isVisible(draft);
                     if (!match.isVisible) return match;
@@ -178,6 +235,7 @@ function tag(label: string, builder: DraftQueryBuilder) {
         *initialize(environment: QueryEnvironment) {
             const query = yield* builder.initialize(environment);
             return {
+                rangeDisplay: query.rangeDisplay,
                 *isVisible(draft: Draft) {
                     const match = yield* query.isVisible(draft);
                     if (!match.isVisible || match.categories.includes(label)) {
@@ -253,6 +311,11 @@ function and(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
             const q1 = yield* b1.initialize(e);
             const q2 = yield* b2.initialize(e);
             return {
+                rangeDisplay: combineRangeDisplay(
+                    q1.rangeDisplay,
+                    q2.rangeDisplay,
+                    "and",
+                ),
                 *isVisible(draft) {
                     const match1 = yield* q1.isVisible(draft);
                     if (!match1.isVisible) return notVisible;
@@ -285,6 +348,11 @@ function or(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
             const q1 = yield* b1.initialize(e);
             const q2 = yield* b2.initialize(e);
             return {
+                rangeDisplay: combineRangeDisplay(
+                    q1.rangeDisplay,
+                    q2.rangeDisplay,
+                    "or",
+                ),
                 *isVisible(d) {
                     const match1 = yield* q1.isVisible(d);
                     if (match1.isVisible) return match1;
@@ -298,8 +366,22 @@ function or(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
 function reachableWithQuery(
     center: google.maps.LatLngLiteral,
     radius: number,
+    id: string,
 ): DraftQuery {
     return {
+        rangeDisplay: {
+            expression: {
+                type: "circle",
+                id,
+            },
+            circles: [
+                {
+                    id,
+                    center,
+                    radius,
+                },
+            ],
+        },
         isVisible(d: Draft) {
             const [p2] = d.coordinates;
             return done(toQueryMatch(distance(center, p2) <= radius));
@@ -307,17 +389,29 @@ function reachableWithQuery(
     };
 }
 
-export function reachableWith(
+let nextRangeDisplayCircleId = 0;
+function reachableWithId(
     center: readonly [number, number],
     radius: number,
+    id: string,
 ): DraftQueryBuilder {
     return {
         isIgnorable: false,
         initialize() {
             const p1 = { lat: center[0], lng: center[1] };
-            return done(reachableWithQuery(p1, radius));
+            return done(reachableWithQuery(p1, radius, id));
         },
     };
+}
+export function reachableWith(
+    center: readonly [number, number],
+    radius: number,
+): DraftQueryBuilder {
+    return reachableWithId(
+        center,
+        radius,
+        `range-${nextRangeDisplayCircleId++}`,
+    );
 }
 
 function builderOfPredicate(
@@ -460,6 +554,9 @@ function binaryFunction(f: (a: Value, b: Value) => Value): Value {
     return (x) => done((y) => done(f(x, y)));
 }
 export function createStandardQueries() {
+    let nextRangeId = 0;
+    const createRangeId = () => `range-${nextRangeId++}`;
+    const reachableId = createRangeId();
     const all = any();
     const ignorableAll = builderAsValue({
         isIgnorable: true,
@@ -497,9 +594,10 @@ export function createStandardQueries() {
 
         reachableWith: binaryFunction((center, distanceMeter) => {
             return builderAsValue(
-                reachableWith(
+                reachableWithId(
                     center as [number, number],
                     distanceMeter as number,
+                    createRangeId(),
                 ),
             );
         }),
@@ -507,7 +605,7 @@ export function createStandardQueries() {
             isIgnorable: false,
             *initialize(e) {
                 const p = yield* e.getUserLocation();
-                return reachableWithQuery(p, 10000);
+                return reachableWithQuery(p, 10000, reachableId);
             },
         }),
         duplicated,

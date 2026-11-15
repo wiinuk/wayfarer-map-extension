@@ -29,6 +29,7 @@ import {
     type Cell14Id,
 } from "../typed-s2cell";
 import type { Geo } from "../geo";
+import { createRangeDisplayPlan } from "../records-overlay/range-display";
 
 async function getDraftStat(
     source: CellStatisticsSource,
@@ -148,7 +149,7 @@ export async function filterDrafts(
     source: string,
     signal: AbortSignal,
     reportError: ErrorReporter,
-): Promise<FilteredDraft[]> {
+): Promise<FilterDraftsResult> {
     const queryGlobals = createStandardQueries();
     const effective = evaluateExpression(
         source,
@@ -183,7 +184,15 @@ export async function filterDrafts(
         }
     }
     if (error) console.error(error);
-    return result;
+    return {
+        drafts: result,
+        rangeDisplayPlan: createRangeDisplayPlan(query.rangeDisplay),
+    };
+}
+
+export interface FilterDraftsResult {
+    readonly drafts: readonly FilteredDraft[];
+    readonly rangeDisplayPlan: ReturnType<typeof createRangeDisplayPlan>;
 }
 
 export interface FilteredDraft {

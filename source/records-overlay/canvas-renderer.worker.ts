@@ -1,10 +1,12 @@
 // spell-checker: ignore comlink
 import {
     createRecordsCanvasRenderer,
+    setRecordsRangeDisplayPlan,
     updateRecordsCanvasRenderer,
     type Viewport,
 } from "./canvas-renderer";
 import { createCancellableWorker } from "../standard-extensions";
+import type { RangeDisplayPlan } from "./range-display";
 
 function handleError(reason: unknown) {
     console.error("An error occurred during asynchronous processing:", reason);
@@ -38,6 +40,16 @@ async function exposeWorkerApi() {
                     )
                     .catch(handleAsyncError);
             },
+            (image, port, planRevision, renderId) => {
+                mainAPI
+                    .notifyRangeRenderCompleted(
+                        Comlink.transfer(image, [image]),
+                        port,
+                        planRevision,
+                        renderId,
+                    )
+                    .catch(handleAsyncError);
+            },
         );
 
         const { task: draw, cancelTask: drawCancel } = createCancellableWorker(
@@ -47,6 +59,9 @@ async function exposeWorkerApi() {
         const api = {
             draw,
             drawCancel,
+            setRangeDisplayPlan(plan: RangeDisplayPlan, revision: number) {
+                setRecordsRangeDisplayPlan(views, plan, revision);
+            },
         };
         Comlink.expose(api);
         return api;
