@@ -20,6 +20,7 @@ import {
     type DraftCanvasOverlay,
 } from "./drafts-canvas-overlay";
 import { createCategoryColorMap } from "./category-colors";
+import { createDraftMarkerOutlineSegments } from "./draft-marker-outline";
 
 export interface DraftWithView {
     readonly draft: Draft;
@@ -87,6 +88,10 @@ interface ViewOptionsCache {
         google.maps.MarkerOptions["icon"]
     >;
     readonly draftMarkerIconsByStrokeColor: Map<
+        string,
+        NonNullable<google.maps.MarkerOptions["icon"]>
+    >;
+    readonly draftMarkerIconsByColorSet: Map<
         string,
         NonNullable<google.maps.MarkerOptions["icon"]>
     >;
@@ -184,6 +189,32 @@ function createDraftMarkerIcon(config: ViewConfig, strokeColor: string) {
         strokeOpacity: 1,
     };
 }
+function createDraftMarkerIconWithSegments(
+    config: ViewConfig,
+    colors: readonly string[],
+): NonNullable<google.maps.MarkerOptions["icon"]> {
+    const center = 16;
+    const radius = config.draftMarker.scale;
+    const strokeWidth = config.draftMarker.strokeWeight;
+    const paths = createDraftMarkerOutlineSegments(colors)
+        .map(({ color, startAngle, endAngle }) => {
+            const startX = center + radius * Math.cos(startAngle);
+            const startY = center + radius * Math.sin(startAngle);
+            const endX = center + radius * Math.cos(endAngle);
+            const endY = center + radius * Math.sin(endAngle);
+            const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+            return `<path d="M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="butt"/>`;
+        })
+        .join("");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="${center}" cy="${center}" r="${radius}" fill="${config.draftMarker.fillColor}" stroke="${config.draftMarker.strokeColor}" stroke-width="${strokeWidth}"/>${paths}</svg>`;
+
+    return {
+        url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+        scaledSize: new google.maps.Size(32, 32),
+        anchor: new google.maps.Point(center, center),
+        labelOrigin: new google.maps.Point(center, center + 2),
+    };
+}
 function createOptionsCache(config: ViewConfig): ViewOptionsCache {
     const draftMarkerIcon = createDraftMarkerIcon(
         config,
@@ -204,6 +235,7 @@ function createOptionsCache(config: ViewConfig): ViewOptionsCache {
             [config.draftMarker.strokeColor, draftMarkerIcon],
             [config.draftMarker.highlightColor, highlightedDraftMarkerIcon],
         ]),
+        draftMarkerIconsByColorSet: new Map(),
         draftMarkerLabel: {
             ...config.draftMarker.label,
             text: "",
@@ -237,7 +269,7 @@ export interface DraftsOverlay {
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
     setHighlightedDrafts(
-        categoriesByDraftId: ReadonlyMap<DraftId, string | null>,
+        categoriesByDraftId: ReadonlyMap<DraftId, readonly string[]>,
     ): ReadonlyMap<string, string>;
     addDraft(draft: Draft): void;
     addDrafts(draft: Iterable<Draft>, scheduler: Scheduler): Promise<void>;
@@ -446,37 +478,63 @@ export function createDraftsOverlay(
         },
         setHighlightedDrafts(categoriesByDraftId) {
             const categoryColors = createCategoryColorMap(
-                Array.from(categoriesByDraftId.values()).filter(
-                    (category): category is string => category !== null,
-                ),
+                Array.from(categoriesByDraftId.values()).flat(),
             );
-            const colorsByDraftId = new Map<DraftId, string>();
-            for (const [draftId, category] of categoriesByDraftId) {
-                const color =
-                    category === null
-                        ? config.draftMarker.highlightColor
-                        : categoryColors.get(category);
-                if (color == null) {
-                    throw new Error(
-                        `No color assigned to category "${category}".`,
-                    );
-                }
-                colorsByDraftId.set(draftId, color);
+            const colorsByDraftId = new Map<DraftId, readonly string[]>();
+            for (const [draftId, categories] of categoriesByDraftId) {
+                const colors =
+                    categories.length === 0
+                        ? []
+                        : Array.from(new Set(categories))
+                              .sort()
+                              .map((category) => {
+                                  const color = categoryColors.get(category);
+                                  if (color == null) {
+                                      throw new Error(
+                                          `No color assigned to category "${category}".`,
+                                      );
+                                  }
+                                  return color;
+                              });
+                colorsByDraftId.set(draftId, colors);
             }
             for (const [draftId, draftWithView] of this.drafts) {
-                const color = colorsByDraftId.get(draftId);
+                const colors = colorsByDraftId.get(draftId);
                 let icon = cachedOptions.draftMarkerIcon;
-                if (color != null) {
-                    const cachedIcon =
-                        cachedOptions.draftMarkerIconsByStrokeColor.get(color);
-                    if (cachedIcon == null) {
-                        icon = createDraftMarkerIcon(config, color);
-                        cachedOptions.draftMarkerIconsByStrokeColor.set(
-                            color,
-                            icon,
-                        );
+                if (colors != null) {
+                    if (colors.length === 0) {
+                        icon = cachedOptions.highlightedDraftMarkerIcon;
+                    } else if (colors.length === 1) {
+                        const color = colors[0]!;
+                        const cachedIcon =
+                            cachedOptions.draftMarkerIconsByStrokeColor.get(
+                                color,
+                            );
+                        if (cachedIcon == null) {
+                            icon = createDraftMarkerIcon(config, color);
+                            cachedOptions.draftMarkerIconsByStrokeColor.set(
+                                color,
+                                icon,
+                            );
+                        } else {
+                            icon = cachedIcon;
+                        }
                     } else {
-                        icon = cachedIcon;
+                        const key = colors.join("\u0000");
+                        const cachedIcon =
+                            cachedOptions.draftMarkerIconsByColorSet.get(key);
+                        if (cachedIcon == null) {
+                            icon = createDraftMarkerIconWithSegments(
+                                config,
+                                colors,
+                            );
+                            cachedOptions.draftMarkerIconsByColorSet.set(
+                                key,
+                                icon,
+                            );
+                        } else {
+                            icon = cachedIcon;
+                        }
                     }
                 }
                 draftWithView.mapView.marker.setIcon(icon);

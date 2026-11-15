@@ -68,7 +68,7 @@ describe("Queries", () => {
         ).toBe(false);
         expect(await isVisible({ ...emptyDraft(), name: "coff" })).toEqual({
             isVisible: true,
-            category: null,
+            categories: [],
         });
     });
 
@@ -99,45 +99,95 @@ describe("Queries", () => {
             query({ ...emptyDraft(), name: "category" }),
         ).resolves.toEqual({
             isVisible: true,
-            category: null,
+            categories: [],
         });
     });
 
-    it("attaches a category to a matching query", async () => {
+    it("classifies a matching query", async () => {
         const query = await parseToPredicate(
-            'category: @"神社": 神社 or category: @"寺院": 寺院',
+            'classifyAs: @"神社": 神社 or classifyAs: @"寺院": 寺院',
         );
 
         await expect(query({ ...emptyDraft(), name: "寺院" })).resolves.toEqual(
             {
                 isVisible: true,
-                category: "寺院",
+                categories: ["寺院"],
             },
         );
     });
 
-    it("uses the first matching category when both alternatives match", async () => {
+    it("uses the first matching classification when both alternatives match", async () => {
         const query = await parseToPredicate(
-            'category: @"神社": 神社 or category: @"寺院": 寺院',
+            'classifyAs: @"神社": 神社 or classifyAs: @"寺院": 寺院',
         );
 
         await expect(
             query({ ...emptyDraft(), name: "神社 寺院" }),
         ).resolves.toEqual({
             isVisible: true,
-            category: "神社",
+            categories: ["神社"],
         });
     });
 
-    it("lets a category group multiple alternatives", async () => {
+    it("merges classifications from both matching AND operands", async () => {
         const query = await parseToPredicate(
-            'category: @"寺社": (神社 or 寺院)',
+            'classifyAs: @"神社": 神社 and classifyAs: @"鳥居": 鳥居',
         );
 
-        await expect(query({ ...emptyDraft(), name: "寺院" })).resolves.toEqual(
+        await expect(
+            query({ ...emptyDraft(), name: "神社 鳥居" }),
+        ).resolves.toEqual({
+            isVisible: true,
+            categories: ["神社", "鳥居"],
+        });
+    });
+
+    it("adds tags without replacing existing classifications", async () => {
+        const query = await parseToPredicate(
+            'tag: @"鳥居": (classifyAs: @"神社": 神社)',
+        );
+
+        await expect(query({ ...emptyDraft(), name: "神社" })).resolves.toEqual(
             {
                 isVisible: true,
-                category: "寺社",
+                categories: ["神社", "鳥居"],
+            },
+        );
+    });
+
+    it("deduplicates repeated tags", async () => {
+        const query = await parseToPredicate(
+            'tag: @"内側": (tag: @"内側": 神社)',
+        );
+
+        await expect(query({ ...emptyDraft(), name: "神社" })).resolves.toEqual(
+            {
+                isVisible: true,
+                categories: ["内側"],
+            },
+        );
+    });
+
+    it("lets classifyAs replace nested labels", async () => {
+        const query = await parseToPredicate(
+            'classifyAs: @"外側": (tag: @"内側": 神社)',
+        );
+
+        await expect(query({ ...emptyDraft(), name: "神社" })).resolves.toEqual(
+            {
+                isVisible: true,
+                categories: ["外側"],
+            },
+        );
+    });
+
+    it("drops labels when a labeled query is negated", async () => {
+        const query = await parseToPredicate('-classifyAs: @"神社": 寺院');
+
+        await expect(query({ ...emptyDraft(), name: "神社" })).resolves.toEqual(
+            {
+                isVisible: true,
+                categories: [],
             },
         );
     });

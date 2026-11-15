@@ -52,7 +52,7 @@ export interface DraftQuery {
 }
 export interface DraftQueryMatch {
     readonly isVisible: boolean;
-    readonly category: string | null;
+    readonly categories: readonly string[];
 }
 export interface DraftQueryBuilder {
     initialize(environment: QueryEnvironment): Effective<DraftQuery>;
@@ -61,11 +61,11 @@ export interface DraftQueryBuilder {
 
 const notVisible: DraftQueryMatch = {
     isVisible: false,
-    category: null,
+    categories: [],
 };
 const visibleWithoutCategory: DraftQueryMatch = {
     isVisible: true,
-    category: null,
+    categories: [],
 };
 
 function toQueryMatch(isVisible: boolean): DraftQueryMatch {
@@ -147,7 +147,7 @@ function not(b: DraftQueryBuilder) {
     });
 }
 
-function withCategory(label: string, builder: DraftQueryBuilder) {
+function classifyAs(label: string, builder: DraftQueryBuilder) {
     if (builder.isIgnorable) return builder;
 
     return {
@@ -159,12 +159,62 @@ function withCategory(label: string, builder: DraftQueryBuilder) {
                     const match = yield* query.isVisible(draft);
                     if (!match.isVisible) return match;
                     return {
-                        ...match,
-                        category: label,
+                        isVisible: true,
+                        categories: [label],
                     };
                 },
             };
         },
+    };
+}
+
+function tag(label: string, builder: DraftQueryBuilder) {
+    if (builder.isIgnorable) return builder;
+
+    return {
+        isIgnorable: false,
+        *initialize(environment: QueryEnvironment) {
+            const query = yield* builder.initialize(environment);
+            return {
+                *isVisible(draft: Draft) {
+                    const match = yield* query.isVisible(draft);
+                    if (!match.isVisible || match.categories.includes(label)) {
+                        return match;
+                    }
+                    return {
+                        isVisible: true,
+                        categories: [...match.categories, label],
+                    };
+                },
+            };
+        },
+    };
+}
+
+function labelQueryFunction(
+    name: string,
+    applyLabel: (
+        label: string,
+        builder: DraftQueryBuilder,
+    ) => DraftQueryBuilder,
+): Value {
+    return (label) => {
+        if (typeof label !== "string") {
+            throw new Error(
+                `${name} expects a raw string label, for example @"神社".`,
+            );
+        }
+        const normalizedLabel = label.normalize("NFC").trim();
+        if (!normalizedLabel) {
+            throw new Error(`${name} label must not be empty.`);
+        }
+        return done((query: Value) =>
+            done(
+                builderAsValue(
+                    applyLabel(normalizedLabel, valueAsBuilder(query)),
+                ),
+            ),
+        );
     };
 }
 
@@ -202,10 +252,15 @@ function and(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
                     const match2 = yield* q2.isVisible(draft);
                     if (!match2.isVisible) return notVisible;
 
-                    const category = match1.category ?? match2.category;
-                    return category === null
+                    const categories = [...match1.categories];
+                    for (const category of match2.categories) {
+                        if (!categories.includes(category)) {
+                            categories.push(category);
+                        }
+                    }
+                    return categories.length === 0
                         ? visibleWithoutCategory
-                        : { isVisible: true, category };
+                        : { isVisible: true, categories };
                 },
             };
         },
@@ -422,24 +477,9 @@ export function createStandardQueries() {
         },
         fromString,
         fromWord: fromString,
-        category(label) {
-            if (typeof label !== "string") {
-                throw new Error(
-                    'category expects a raw string label, for example @"神社".',
-                );
-            }
-            const normalizedLabel = label.normalize("NFC").trim();
-            if (!normalizedLabel) {
-                throw new Error("category label must not be empty.");
-            }
-            return done((query: Value) => {
-                return done(
-                    builderAsValue(
-                        withCategory(normalizedLabel, valueAsBuilder(query)),
-                    ),
-                );
-            });
-        },
+        classifyAs: labelQueryFunction("classifyAs", classifyAs),
+        tag: labelQueryFunction("tag", tag),
+        category: labelQueryFunction("category", classifyAs),
         not_(x) {
             return done(not(valueAsBuilder(x)));
         },

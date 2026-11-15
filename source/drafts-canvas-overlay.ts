@@ -10,6 +10,7 @@ import {
 } from "./drafts-overlay";
 import type { Reference } from "./standard-extensions";
 import { createCellFromCoordinates } from "./typed-s2cell";
+import { createDraftMarkerOutlineSegments } from "./draft-marker-outline";
 
 type LatLng = google.maps.LatLngLiteral;
 
@@ -35,8 +36,10 @@ export function createCanvasOverlay(
 ) {
     class CanvasOverlay extends google.maps.OverlayView {
         private canvas: HTMLCanvasElement | null = null;
-        private highlightedDraftColors: ReadonlyMap<DraftId, string> =
-            new Map();
+        private highlightedDraftColors: ReadonlyMap<
+            DraftId,
+            readonly string[]
+        > = new Map();
         constructor(
             private config: ViewConfig,
             private drafts: DraftViews,
@@ -114,7 +117,7 @@ export function createCanvasOverlay(
             }
         }
 
-        setHighlightedDrafts(colors: ReadonlyMap<DraftId, string>) {
+        setHighlightedDrafts(colors: ReadonlyMap<DraftId, readonly string[]>) {
             this.highlightedDraftColors = colors;
             this.draw();
         }
@@ -232,7 +235,7 @@ function setPath(
 function renderDrafts(
     ctx: CanvasRenderingContext2D,
     drafts: DraftViews,
-    highlightedDraftColors: ReadonlyMap<DraftId, string>,
+    highlightedDraftColors: ReadonlyMap<DraftId, readonly string[]>,
     config: ViewConfig["draftMarker"],
     projection: google.maps.MapCanvasProjection,
     deviceX: number,
@@ -256,12 +259,35 @@ function renderDrafts(
         ctx.fillStyle = fillStyle;
         ctx.fill();
 
+        const colors = highlightedDraftColors.get(draft.draft.id);
+        const outlineColors =
+            colors == null
+                ? []
+                : colors.length === 0
+                  ? [config.highlightColor]
+                  : colors;
+
         ctx.beginPath();
         ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
         ctx.lineWidth = lineWidth;
-        ctx.strokeStyle =
-            highlightedDraftColors.get(draft.draft.id) ?? config.strokeColor;
+        ctx.strokeStyle = config.strokeColor;
         ctx.stroke();
+
+        if (outlineColors.length === 1) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
+            ctx.strokeStyle = outlineColors[0]!;
+            ctx.stroke();
+        } else if (outlineColors.length > 1) {
+            for (const segment of createDraftMarkerOutlineSegments(
+                outlineColors,
+            )) {
+                ctx.beginPath();
+                ctx.arc(x, y, radius + 2, segment.startAngle, segment.endAngle);
+                ctx.strokeStyle = segment.color;
+                ctx.stroke();
+            }
+        }
     }
 }
 

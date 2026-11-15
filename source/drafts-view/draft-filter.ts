@@ -168,7 +168,7 @@ export async function filterDrafts(
     for (const d of drafts) {
         let match: DraftQueryMatch = {
             isVisible: false,
-            category: null,
+            categories: [],
         };
         try {
             match = await forceAsPromise(query.isVisible(d), signal);
@@ -178,7 +178,7 @@ export async function filterDrafts(
         if (match.isVisible) {
             result.push({
                 draft: d,
-                category: match.category,
+                categories: match.categories,
             });
         }
     }
@@ -188,5 +188,5 @@ export async function filterDrafts(
 
 export interface FilteredDraft {
     readonly draft: Draft;
-    readonly category: string | null;
+    readonly categories: readonly string[];
 }

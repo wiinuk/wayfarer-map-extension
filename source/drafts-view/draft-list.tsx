@@ -149,7 +149,7 @@ export async function createDraftList({
         (view) => view.draft,
     );
     let filteredDrafts: Draft[] = [...allDrafts];
-    let filteredCategories = new Map<Draft["id"], string | null>();
+    let filteredCategories = new Map<Draft["id"], readonly string[]>();
     let selectedDraft: Draft | null = null;
     let currentSources: SourcesWithSelection = local.getConfig().sources || {
         selectedIndex: 0,
@@ -392,7 +392,7 @@ export async function createDraftList({
     };
     const categoryLegend = document.createElement("div");
     categoryLegend.setAttribute("role", "list");
-    categoryLegend.setAttribute("aria-label", "カテゴリ別の色");
+    categoryLegend.setAttribute("aria-label", "分類・タグ別の色");
     categoryLegend.style.flexWrap = "wrap";
     categoryLegend.style.gap = "8px";
     categoryLegend.style.padding = "4px";
@@ -423,12 +423,12 @@ export async function createDraftList({
     };
     updateCategoryLegend(new Map());
     const updateHighlightedDrafts = (query: string) => {
-        const highlights = new Map<Draft["id"], string | null>();
+        const highlights = new Map<Draft["id"], readonly string[]>();
         if (query.trim()) {
             for (const draft of filteredDrafts) {
                 highlights.set(
                     draft.id,
-                    filteredCategories.get(draft.id) ?? null,
+                    filteredCategories.get(draft.id) ?? [],
                 );
             }
         }
@@ -1317,7 +1317,8 @@ export async function createDraftList({
                 filteredDrafts = filteredMatches.map(({ draft }) => draft);
                 filteredCategories = new Map(
                     filteredMatches.map(
-                        ({ draft, category }) => [draft.id, category] as const,
+                        ({ draft, categories }) =>
+                            [draft.id, categories] as const,
                     ),
                 );
                 updateHighlightedDrafts(query);
