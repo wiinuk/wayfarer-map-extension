@@ -16,6 +16,17 @@ function hueDistance(a: number, b: number) {
 }
 
 describe("createCategoryColorMap", () => {
+    it("separates the shrine and temple categories", () => {
+        const colors = createCategoryColorMap(["神社", "寺院"]);
+
+        expect(
+            hueDistance(
+                getHue(colors.get("神社")!),
+                getHue(colors.get("寺院")!),
+            ),
+        ).toBeGreaterThanOrEqual(MIN_CATEGORY_HUE_SEPARATION);
+    });
+
     it("keeps a category's base color when no other category conflicts", () => {
         const labels = Array.from({ length: 30 }, (_, i) => `category-${i}`);
         const singleColors = new Map(

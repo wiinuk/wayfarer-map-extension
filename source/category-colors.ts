@@ -1,5 +1,5 @@
 const HUE_COUNT = 360;
-export const MIN_CATEGORY_HUE_SEPARATION = 30;
+export const MIN_CATEGORY_HUE_SEPARATION = 60;
 
 function normalizeCategoryName(name: string) {
     return name.normalize("NFC").trim();
