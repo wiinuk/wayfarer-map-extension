@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.8.4
+// @version      0.9.0
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -2508,8 +2508,8 @@
             return new ATNConfig2(state, this, context);
           }
         }
-        static checkNonGreedyDecision(source, target) {
-          return source.hasPassedThroughNonGreedyDecision || target instanceof DecisionState_1.DecisionState && target.nonGreedy;
+        static checkNonGreedyDecision(source5, target) {
+          return source5.hasPassedThroughNonGreedyDecision || target instanceof DecisionState_1.DecisionState && target.nonGreedy;
         }
         appendContext(context, contextCache) {
           if (typeof context === "number") {
@@ -5383,20 +5383,20 @@
       var Decorators_1 = require_Decorators();
       var Token_1 = require_Token();
       var CommonToken = class CommonToken2 {
-        constructor(type, text, source = CommonToken2.EMPTY_SOURCE, channel = Token_1.Token.DEFAULT_CHANNEL, start = 0, stop = 0) {
+        constructor(type, text, source5 = CommonToken2.EMPTY_SOURCE, channel = Token_1.Token.DEFAULT_CHANNEL, start = 0, stop = 0) {
           this._line = 0;
           this._charPositionInLine = -1;
           this._channel = Token_1.Token.DEFAULT_CHANNEL;
           this.index = -1;
           this._text = text;
           this._type = type;
-          this.source = source;
+          this.source = source5;
           this._channel = channel;
           this.start = start;
           this.stop = stop;
-          if (source.source != null) {
-            this._line = source.source.line;
-            this._charPositionInLine = source.source.charPositionInLine;
+          if (source5.source != null) {
+            this._line = source5.source.line;
+            this._charPositionInLine = source5.source.charPositionInLine;
           }
         }
         /**
@@ -5601,12 +5601,12 @@
         constructor(copyText = false) {
           this.copyText = copyText;
         }
-        create(source, type, text, channel, start, stop, line, charPositionInLine) {
-          let t2 = new CommonToken_1.CommonToken(type, text, source, channel, start, stop);
+        create(source5, type, text, channel, start, stop, line, charPositionInLine) {
+          let t2 = new CommonToken_1.CommonToken(type, text, source5, channel, start, stop);
           t2.line = line;
           t2.charPositionInLine = charPositionInLine;
-          if (text == null && this.copyText && source.stream != null) {
-            t2.text = source.stream.getText(Interval_1.Interval.of(start, stop));
+          if (text == null && this.copyText && source5.stream != null) {
+            t2.text = source5.stream.getText(Interval_1.Interval.of(start, stop));
           }
           return t2;
         }
@@ -12997,9 +12997,9 @@
             if (!tok) {
               throw new Error("Expected exception to have an offending token");
             }
-            let source = tok.tokenSource;
-            let stream = source !== void 0 ? source.inputStream : void 0;
-            let sourcePair = { source, stream };
+            let source5 = tok.tokenSource;
+            let stream = source5 !== void 0 ? source5.inputStream : void 0;
+            let sourcePair = { source: source5, stream };
             if (e instanceof InputMismatchException_1.InputMismatchException) {
               let expectedTokens = e.expectedTokens;
               if (expectedTokens === void 0) {
@@ -13022,7 +13022,7 @@
               );
               this._ctx.addErrorNode(this.createErrorNode(this._ctx, errToken));
             } else {
-              let source2 = tok.tokenSource;
+              let source6 = tok.tokenSource;
               let errToken = this.tokenFactory.create(
                 sourcePair,
                 Token_1.Token.INVALID_TYPE,
@@ -14194,12 +14194,12 @@
          * @exception IllegalArgumentException if `tag` is not defined or
          * empty.
          */
-        constructor(tag, label) {
+        constructor(tag2, label) {
           super();
-          if (tag == null || tag.length === 0) {
+          if (tag2 == null || tag2.length === 0) {
             throw new Error("tag cannot be null or empty");
           }
-          this._tag = tag;
+          this._tag = tag2;
           this._label = label;
         }
         /**
@@ -14705,13 +14705,13 @@
             chunks.push(new TextChunk_1.TextChunk(text));
           }
           for (let i = 0; i < ntags; i++) {
-            let tag = pattern2.substring(starts[i] + this.start.length, stops[i]);
-            let ruleOrToken = tag;
+            let tag2 = pattern2.substring(starts[i] + this.start.length, stops[i]);
+            let ruleOrToken = tag2;
             let label;
-            let colon = tag.indexOf(":");
+            let colon = tag2.indexOf(":");
             if (colon >= 0) {
-              label = tag.substring(0, colon);
-              ruleOrToken = tag.substring(colon + 1, tag.length);
+              label = tag2.substring(0, colon);
+              ruleOrToken = tag2.substring(colon + 1, tag2.length);
             }
             chunks.push(new TagChunk_1.TagChunk(ruleOrToken, label));
             if (i + 1 < ntags) {
@@ -17248,7 +17248,7 @@
           }
           return configSet;
         }
-        getReachableTarget(source, trans, ttype) {
+        getReachableTarget(source5, trans, ttype) {
           if (trans.matches(ttype, 0, this.atn.maxTokenType)) {
             return trans.target;
           }
@@ -20485,12 +20485,119 @@
   var X_FACTOR = TILE_SIZE / 360;
   var Y_FACTOR = TILE_SIZE / (2 * PI);
   var OFFSET = TILE_SIZE / 2;
+  function latLngToWorldPoint(lat, lng, result) {
+    const x = (lng + 180) * X_FACTOR;
+    const sinY = Math.sin(lat * RAD_PER_DEG);
+    const clampedSinY = sinY > 0.9999 ? 0.9999 : sinY < -0.9999 ? -0.9999 : sinY;
+    const y = OFFSET - Math.atanh(clampedSinY) * Y_FACTOR;
+    result.x = x;
+    result.y = y;
+    return result;
+  }
+  function createZeroPoint() {
+    return { x: 0, y: 0 };
+  }
+
+  // source/collision-checker.ts
+  function createCollisionChecker(cellSize = 128) {
+    const buckets2 = /* @__PURE__ */ new Map();
+    function getBucketKey(gx, gy) {
+      return gx << 16 | gy & 65535;
+    }
+    function getGridKeys(box, result) {
+      const minX = box.x - box.width / 2;
+      const maxX = box.x + box.width / 2;
+      const minY = box.y - box.height / 2;
+      const maxY = box.y + box.height / 2;
+      const startX = Math.floor(minX / cellSize);
+      const endX = Math.floor(maxX / cellSize);
+      const startY = Math.floor(minY / cellSize);
+      const endY = Math.floor(maxY / cellSize);
+      for (let gx = startX; gx <= endX; gx++) {
+        for (let gy = startY; gy <= endY; gy++) {
+          result.push(getBucketKey(gx, gy));
+        }
+      }
+    }
+    const getGridsResult = [];
+    function addBox(box) {
+      getGridKeys(box, getGridsResult);
+      try {
+        for (const key of getGridsResult) {
+          let list = buckets2.get(key);
+          if (!list) {
+            list = [];
+            buckets2.set(key, list);
+          }
+          list.push(box);
+        }
+      } finally {
+        getGridsResult.length = 0;
+      }
+    }
+    const candidatesCache = /* @__PURE__ */ new Set();
+    function check(box) {
+      getGridKeys(box, getGridsResult);
+      try {
+        for (const key of getGridsResult) {
+          const list = buckets2.get(key);
+          if (list) {
+            for (const other of list) {
+              candidatesCache.add(other);
+            }
+          }
+        }
+        for (const other of candidatesCache) {
+          if (box.key === other.key) continue;
+          const dx = Math.abs(box.x - other.x);
+          const combinedHalfWidth = (box.width + other.width) / 2;
+          if (dx >= combinedHalfWidth) continue;
+          const dy = Math.abs(box.y - other.y);
+          const combinedHalfHeight = (box.height + other.height) / 2;
+          if (dy >= combinedHalfHeight) continue;
+          return true;
+        }
+      } finally {
+        candidatesCache.clear();
+        getGridsResult.length = 0;
+      }
+      return false;
+    }
+    return {
+      addBox,
+      check
+    };
+  }
 
   // source/bounds.ts
+  function createDefault() {
+    return {
+      sw: { lat: Infinity, lng: Infinity },
+      ne: { lat: -Infinity, lng: -Infinity }
+    };
+  }
   function fromSwNeLatLng(swLat, swLng, neLat, neLng) {
     return {
       sw: { lat: swLat, lng: swLng },
       ne: { lat: neLat, lng: neLng }
+    };
+  }
+  function getCenter(bounds) {
+    return {
+      lat: (bounds.sw.lat + bounds.ne.lat) / 2,
+      lng: (bounds.sw.lng + bounds.ne.lng) / 2
+    };
+  }
+  function toExtended(bounds, point) {
+    return {
+      sw: {
+        lat: Math.min(bounds.sw.lat, point.lat),
+        lng: Math.min(bounds.sw.lng, point.lng)
+      },
+      ne: {
+        lat: Math.max(bounds.ne.lat, point.lat),
+        lng: Math.max(bounds.ne.lng, point.lng)
+      }
     };
   }
   function contains(bounds, point) {
@@ -20506,6 +20613,25 @@
   }
   function containsBounds(outer, inner) {
     return contains(outer, inner.sw) && contains(outer, inner.ne);
+  }
+  function intersects(bounds, other) {
+    const latIntersects = bounds.sw.lat <= other.ne.lat && other.sw.lat <= bounds.ne.lat;
+    if (!latIntersects) return false;
+    return intersectsLng(bounds, other);
+  }
+  function intersectsLng(b1, b2) {
+    const cdl1 = b1.sw.lng > b1.ne.lng;
+    const cdl2 = b2.sw.lng > b2.ne.lng;
+    if (!cdl1 && !cdl2) {
+      return b1.sw.lng <= b2.ne.lng && b2.sw.lng <= b1.ne.lng;
+    }
+    return containsLng(b1, b2.sw.lng) || containsLng(b1, b2.ne.lng) || containsLng(b2, b1.sw.lng) || containsLng(b2, b1.ne.lng) || cdl1 && cdl2;
+  }
+  function containsLng(bounds, lng) {
+    if (bounds.sw.lng <= bounds.ne.lng) {
+      return lng >= bounds.sw.lng && lng <= bounds.ne.lng;
+    }
+    return lng >= bounds.sw.lng || lng <= bounds.ne.lng;
   }
   function fromClass(object) {
     const sw = object.getSouthWest();
@@ -20671,8 +20797,8 @@
     });
   }
   var IterateValuesRequest = class {
-    constructor(source, query, action) {
-      this.source = source;
+    constructor(source5, query, action) {
+      this.source = source5;
       this.query = query;
       this.action = action;
     }
@@ -21281,6 +21407,26 @@
   var buffer64 = new BigUint64Array(1);
   var view32 = new Uint32Array(buffer64.buffer);
 
+  // source/queue.ts
+  function createQueue(initialCapacity = 1024) {
+    const buf = new Array(initialCapacity);
+    const mask = initialCapacity - 1;
+    let head = 0;
+    let tail = 0;
+    return {
+      enqueue(x) {
+        buf[tail & mask] = x;
+        tail++;
+      },
+      dequeue() {
+        if (head === tail) return void 0;
+        const x = buf[head & mask];
+        head++;
+        return x;
+      }
+    };
+  }
+
   // source/async-queue.ts
   function createAsyncQueue(consume, handleAsyncError2, { batchSize = 10, delayMilliseconds = 1e3 } = {}) {
     const queue = [];
@@ -21468,6 +21614,29 @@
     map.set(key, value);
     return value;
   }
+  function getNearlyCellsForBounds(bounds, level) {
+    const result = [];
+    const seenCellIds = /* @__PURE__ */ new Set();
+    const remainingCells = createQueue();
+    remainingCells.enqueue(
+      createCellFromCoordinates(getCenter(bounds), level)
+    );
+    for (let cell; cell = remainingCells.dequeue(); ) {
+      const id2 = cell.toString();
+      if (seenCellIds.has(id2)) continue;
+      seenCellIds.add(id2);
+      let cellBounds = createDefault();
+      for (const corner of cell.getCornerLatLngs()) {
+        cellBounds = toExtended(cellBounds, corner);
+      }
+      if (!intersects(bounds, cellBounds)) continue;
+      result.push(cell);
+      for (const neighbor of cell.getNeighbors()) {
+        remainingCells.enqueue(neighbor);
+      }
+    }
+    return result;
+  }
   function createEmptyCell14Statistics(cell) {
     return {
       cell,
@@ -21563,6 +21732,1284 @@
     return cell14;
   }
 
+  // source/records-overlay/options.ts
+  function createOverlayViewOptions() {
+    const cellBaseZIndex = 3100;
+    const poiBaseZIndex = cellBaseZIndex + 100;
+    const poiLabelBaseZIndex = poiBaseZIndex + 100;
+    const statLabelBaseZIndex = poiLabelBaseZIndex + 100;
+    const cell17EmptyOptions = Object.freeze({
+      strokeColor: "rgba(253, 255, 114, 0.4)",
+      strokeWeight: 1,
+      fillColor: "#0000002d",
+      clickable: false,
+      zIndex: cellBaseZIndex + 1
+    });
+    const cell17PokestopOptions = Object.freeze({
+      ...cell17EmptyOptions,
+      fillColor: "rgba(0, 191, 255, 0.4)",
+      strokeColor: "rgba(0, 191, 255, 0.6)",
+      zIndex: cellBaseZIndex
+    });
+    const cell17GymOptions = Object.freeze({
+      ...cell17PokestopOptions,
+      fillColor: "rgba(255, 0, 13, 0.4)",
+      strokeColor: "rgba(255, 0, 13, 0.6)"
+    });
+    const baseCell14Options = {
+      strokeColor: "#c54545b7",
+      strokeWeight: 2,
+      fillColor: "#00000000",
+      clickable: false,
+      zIndex: cellBaseZIndex + 2
+    };
+    const cell14Options = Object.freeze(baseCell14Options);
+    const cell14OptionsEmpty = cell14Options;
+    const cell14Options1 = Object.freeze({
+      ...cell14Options,
+      fillColor: "#dd767625"
+    });
+    const cell14Options2 = Object.freeze({
+      ...cell14Options,
+      fillColor: "#d3b71738"
+    });
+    const baseWayspotOptions = {
+      markerSize: 8,
+      borderColor: "#ff6600",
+      borderWidth: 2,
+      fillColor: "#ff660080",
+      zIndex: poiBaseZIndex
+    };
+    const wayspotOptions = Object.freeze(baseWayspotOptions);
+    const gymOptions = Object.freeze({
+      ...wayspotOptions,
+      borderColor: "#ffffff",
+      fillColor: "#ff2450"
+    });
+    const pokestopOptions = Object.freeze({
+      ...wayspotOptions,
+      borderColor: "#0000cd",
+      fillColor: "#00bfff"
+    });
+    const powerspotOptions = Object.freeze({
+      ...wayspotOptions,
+      borderColor: "#e762d3",
+      fillColor: "#f195eb"
+    });
+    const baseWayspotLabelOptions = {
+      fontWeight: "normal",
+      fontSize: `11px`,
+      fontFamily: `"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
+      strokeColor: "rgb(0, 0, 0)",
+      fillColor: "#FFFFBB",
+      strokeWeight: 2,
+      lineJoin: "round",
+      shadowBlur: 1
+    };
+    const wayspotLabelOptions = Object.freeze(baseWayspotLabelOptions);
+    const pokestopLabelOptions = Object.freeze({
+      ...wayspotLabelOptions,
+      strokeColor: "#000030",
+      fillColor: "#f0ffff"
+    });
+    const gymLabelOptions = Object.freeze({
+      ...wayspotLabelOptions,
+      fontWeight: `bold`,
+      strokeColor: "#ffffffd5",
+      fillColor: "#9c1933"
+    });
+    const powerspotLabelOptions = Object.freeze({
+      ...wayspotLabelOptions,
+      strokeColor: "#e762d3"
+    });
+    return {
+      cell17EmptyOptions,
+      cell17PokestopOptions,
+      cell17GymOptions,
+      cell14Options,
+      cell14OptionsEmpty,
+      cell14Options1,
+      cell14Options2,
+      wayspotOptions,
+      gymOptions,
+      pokestopOptions,
+      powerspotOptions,
+      wayspotLabelOptions,
+      pokestopLabelOptions,
+      gymLabelOptions,
+      powerspotLabelOptions,
+      cellBaseZIndex,
+      poiBaseZIndex,
+      poiLabelBaseZIndex,
+      statLabelBaseZIndex
+    };
+  }
+
+  // source/records-overlay/views.ts
+  function getEllipsisTextWithMetrics({ CanvasTextMetrics }, style, text, maxWidth, ellipsis = "\u2026") {
+    const fullMetrics = CanvasTextMetrics.measureText(text, style);
+    if (fullMetrics.width <= maxWidth) return fullMetrics;
+    let low = 0;
+    let high = text.length;
+    let bestText = ellipsis;
+    let bestMetrics = CanvasTextMetrics.measureText(ellipsis, style);
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const testString = text.substring(0, mid) + ellipsis;
+      const testMetrics = CanvasTextMetrics.measureText(testString, style);
+      if (testMetrics.width <= maxWidth) {
+        bestText = testString;
+        bestMetrics = testMetrics;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return { bestText, bestMetrics };
+  }
+  function createCell14Label({ PIXI, cell14LabelTextStyle }, text, { lat, lng }, strength) {
+    const pointResultCache = createZeroPoint();
+    const { x: worldX, y: worldY } = latLngToWorldPoint(
+      lat,
+      lng,
+      pointResultCache
+    );
+    const label = new PIXI.Text();
+    label.text = text;
+    label.style = cell14LabelTextStyle;
+    label.anchor.set(0.5);
+    label.x = worldX;
+    label.y = worldY;
+    label.alpha = strength;
+    return label;
+  }
+  function countToCell14Options(options, count) {
+    switch (count) {
+      case 0:
+        return options.cell14OptionsEmpty;
+      case 1:
+      case 5:
+      case 19:
+        return options.cell14Options1;
+      case 4:
+      case 18:
+        return options.cell14Options2;
+    }
+    return options.cell14Options;
+  }
+  function getCell14Options(store, entityCount, coverRate) {
+    const options = countToCell14Options(store, entityCount);
+    if (coverRate === 1) return options;
+    return {
+      ...options,
+      strokeWeight: options.strokeWeight * 2 + options.strokeWeight * 10 * (1 - coverRate),
+      strokeOpacity: 0.3 + 0.4 * coverRate,
+      fillColor: "#00000000"
+    };
+  }
+  function sumGymAndPokestopCount({ kindToPois }) {
+    return (kindToPois.get("GYM")?.length ?? 0) + (kindToPois.get("POKESTOP")?.length ?? 0);
+  }
+  function isObsolete(stat14) {
+    const freshnessInterval = 1e3 * 60 * 60 * 24 * 7;
+    const lastFetchDate = stat14.minLastFetchDate ?? stat14.maxLastFetchDate;
+    return lastFetchDate === void 0 || lastFetchDate < Date.now() - freshnessInterval;
+  }
+  function getStrength(stat14) {
+    return isObsolete(stat14) ? 0.3 : 1;
+  }
+  function addCell14Bound(renderer, cellViews, cell14) {
+    const { options: store } = renderer;
+    const entityCount = sumGymAndPokestopCount(cell14);
+    const coverRate = cell14.cell17s.size / 4 ** (17 - 14);
+    const options = getCell14Options(store, entityCount, coverRate);
+    return cellViews.cellMeshBuilder.add(
+      cell14.corner,
+      options,
+      getStrength(cell14)
+    );
+  }
+  function createCell17CountLabel(renderer, cell14) {
+    const count = sumGymAndPokestopCount(cell14);
+    if (count <= 0) return;
+    const strength = getStrength(cell14);
+    return createCell14Label(renderer, `${count}`, cell14.center, strength);
+  }
+  function has(kind, cell17) {
+    return (cell17.kindToCount.get(kind) ?? 0) !== 0;
+  }
+  function addCell17Bounds(renderer, stat14, builder) {
+    const { options: store } = renderer;
+    for (const cell17 of stat14.cell17s.values()) {
+      let options;
+      if (has("GYM", cell17)) {
+        options = store.cell17GymOptions;
+      } else if (has("POKESTOP", cell17)) {
+        options = store.cell17PokestopOptions;
+      } else {
+        options = store.cell17EmptyOptions;
+      }
+      const path = cell17.cell.getCornerLatLngs();
+      builder.add(path, options, getStrength(stat14));
+    }
+  }
+  function entityKindToCircleOptions(options, kind) {
+    switch (kind) {
+      case "GYM":
+        return options.gymOptions;
+      case "POKESTOP":
+        return options.pokestopOptions;
+      case "POWERSPOT":
+        return options.powerspotOptions;
+      default:
+        return options.wayspotOptions;
+    }
+  }
+  function entityKindToLabelOptions(options, kind) {
+    switch (kind) {
+      case "GYM":
+        return options.gymLabelOptions;
+      case "POKESTOP":
+        return options.pokestopLabelOptions;
+      case "POWERSPOT":
+        return options.powerspotLabelOptions;
+      default:
+        return options.wayspotLabelOptions;
+    }
+  }
+  function addCell14PoiCircles({ options: store }, { zoom }, stat14, builder) {
+    for (const [kind, pois] of stat14.kindToPois) {
+      const options = entityKindToCircleOptions(store, kind);
+      const radius = zoom <= 16 ? options.markerSize * 0.5 : options.markerSize;
+      for (const poi of pois) {
+        if (!poi.data.isCommunityContributed) continue;
+        builder.add(poi, radius, options, getStrength(stat14));
+      }
+    }
+  }
+  function getPoiImportance({ data }) {
+    let importance = 0;
+    if (data.isCommunityContributed) {
+      importance += 0.5;
+    }
+    let hasActive = false;
+    let hasGym = false;
+    let hasPokestop = false;
+    let hasPowerspot = false;
+    for (const { status, entity } of data.gmo) {
+      if (status === "ACTIVE") hasActive = true;
+      switch (entity) {
+        case "GYM":
+          hasGym = true;
+          break;
+        case "POKESTOP":
+          hasPokestop = true;
+          break;
+        case "POWERSPOT":
+          hasPowerspot = true;
+          break;
+      }
+    }
+    if (hasActive) {
+      importance += 0.5;
+    }
+    if (hasGym) {
+      importance += 0.4;
+    }
+    if (hasPokestop) {
+      importance += 0.1;
+    }
+    if (hasPowerspot) {
+      importance += 0.05;
+    }
+    if (data.hasAdditionalImages) {
+      importance += 0.01;
+    }
+    return importance;
+  }
+  function comparePoiByImportance(p1, p2) {
+    return getPoiImportance(p2) - getPoiImportance(p1);
+  }
+  function getKind(poi) {
+    for (const { entity } of poi.data.gmo) return entity;
+    return "";
+  }
+  function createPoiLabelView({ PIXI, options: store }, poi) {
+    const { lat, lng, guid, name: name2 } = poi;
+    const options = entityKindToLabelOptions(store, getKind(poi));
+    const style = new PIXI.TextStyle({
+      fontFamily: options.fontFamily,
+      fontWeight: options.fontWeight,
+      fontSize: options.fontSize,
+      fill: options.fillColor,
+      stroke: {
+        color: options.strokeColor,
+        join: options.lineJoin,
+        width: options.strokeWeight
+      },
+      dropShadow: {
+        alpha: 1,
+        angle: 0,
+        distance: 0,
+        color: options.strokeColor,
+        blur: options.shadowBlur
+      }
+    });
+    let truncatedMetrics = getEllipsisTextWithMetrics(PIXI, style, name2, 140);
+    let truncatedText = name2;
+    if (!(truncatedMetrics instanceof PIXI.CanvasTextMetrics)) {
+      truncatedText = truncatedMetrics.bestText;
+      truncatedMetrics = truncatedMetrics.bestMetrics;
+    }
+    const { x, y } = latLngToWorldPoint(lat, lng, createZeroPoint());
+    return {
+      worldX: x,
+      worldY: y,
+      text: truncatedText,
+      textMetrics: truncatedMetrics,
+      guid,
+      style
+    };
+  }
+  function createCell14PoiNames(renderer, { zoom }, stat14) {
+    const { PIXI } = renderer;
+    const pois = [];
+    for (const poi of stat14.pois.values()) {
+      if (poi.data.isCommunityContributed) pois.push(poi);
+    }
+    pois.sort(comparePoiByImportance);
+    const referenceZoom = 16;
+    const maxPoisAtReferenceZoom = 6;
+    const maxPois = Math.max(
+      1,
+      Math.ceil(maxPoisAtReferenceZoom * 2 ** (zoom - referenceZoom))
+    );
+    pois.length = Math.min(pois.length, maxPois);
+    const strength = getStrength(stat14);
+    return pois.map((poi) => {
+      const { worldX, worldY, text, style } = createPoiLabelView(
+        renderer,
+        poi
+      );
+      const label = new PIXI.Text();
+      label.text = text;
+      label.style = style;
+      label.x = worldX;
+      label.y = worldY;
+      label.anchor.set(0.5, -0.5);
+      label.alpha = strength;
+      return label;
+    });
+  }
+
+  // source/records-overlay/cell.vert
+  var source = "#version 300 es\r\nprecision mediump float;\r\n\r\nuniform mat3 uProjectionMatrix;\r\nuniform mat3 uWorldTransformMatrix;\r\nuniform mat3 uTransformMatrix;\r\n\r\nin vec2 aPosition;\r\nin vec2 aUV;\r\nin vec4 aFillColor;\r\nin vec4 aStrokeColor;\r\nin float aLineWidth;\r\n\r\nout vec2 vUV;\r\nout vec4 vFillColor;\r\nout vec4 vStrokeColor;\r\nout float vLineWidth;\r\n\r\nvoid main() {\r\n    vUV = aUV;\r\n    vFillColor = aFillColor;\r\n    vStrokeColor = aStrokeColor;\r\n    vLineWidth = aLineWidth;\r\n\r\n    vec3 worldPos = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix * vec3(aPosition, 1.0f);\r\n    gl_Position = vec4(worldPos.xy, 0.0f, 1.0f);\r\n}\r\n";
+  var uniforms = { "uProjectionMatrix": "mat3", "uWorldTransformMatrix": "mat3", "uTransformMatrix": "mat3" };
+  var attributes = { "aPosition": { "type": "vec2" }, "aUV": { "type": "vec2" }, "aFillColor": { "type": "vec4" }, "aStrokeColor": { "type": "vec4" }, "aLineWidth": { "type": "float" } };
+  var cell_default = { source, uniforms, attributes };
+
+  // source/records-overlay/cell.frag
+  var source2 = "#version 300 es\r\nprecision mediump float;\r\n\r\nin vec2 vUV;\r\nin vec4 vFillColor;\r\nin vec4 vStrokeColor;\r\nin float vLineWidth;\r\n\r\nout vec4 fragColor;\r\n\r\nvoid main() {\r\n    vec4 fillColor = vFillColor;\r\n    vec4 strokeColor = vStrokeColor;\r\n    float lineWidth = vLineWidth;\r\n\r\n    vec2 dEdge = min(vUV, 1.0f - vUV);\r\n    float minEdgeDist = min(dEdge.x, dEdge.y);\r\n\r\n    float dx = fwidth(vUV.x);\r\n    float dy = fwidth(vUV.y);\r\n    float pixelSize = max(dx, dy);\r\n\r\n    float threshold = pixelSize * lineWidth;\r\n\r\n    float edgeAlpha = smoothstep(threshold - pixelSize, threshold, minEdgeDist);\r\n    vec4 color = mix(strokeColor, fillColor, edgeAlpha);\r\n\r\n    fragColor = vec4(color.rgb * color.a, color.a);\r\n}";
+  var uniforms2 = {};
+  var attributes2 = { "vUV": { "type": "vec2" }, "vFillColor": { "type": "vec4" }, "vStrokeColor": { "type": "vec4" }, "vLineWidth": { "type": "float" } };
+  var cell_default2 = { source: source2, uniforms: uniforms2, attributes: attributes2 };
+
+  // source/records-overlay/circle.vert
+  var source3 = "#version 300 es\r\nprecision mediump float;\r\n\r\nuniform mat3 uProjectionMatrix;\r\nuniform mat3 uWorldTransformMatrix;\r\nuniform mat3 uTransformMatrix;\r\n\r\nin vec2 aQuadPos;\r\nin vec2 aCenter;\r\nin float aRadius;\r\nin float aStrokeWidth;\r\nin vec4 aFillColor;\r\nin vec4 aStrokeColor;\r\n\r\nout vec2 vPixelPos;\r\nout float vRadius;\r\nout float vStrokeWidth;\r\nout vec4 vFillColor;\r\nout vec4 vStrokeColor;\r\n\r\nvoid main() {\r\n    mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;\r\n    vec3 clip = mvp * vec3(aCenter, 1.0f);\r\n\r\n    float ndcPxX = uProjectionMatrix[0][0];\r\n    float ndcPxY = -uProjectionMatrix[1][1];\r\n\r\n    float quadR = aRadius + aStrokeWidth;\r\n    vec2 ndcOffset = vec2(aQuadPos.x * quadR * ndcPxX, aQuadPos.y * quadR * ndcPxY);\r\n\r\n    gl_Position = vec4(clip.xy + ndcOffset, 0.0f, 1.0f);\r\n\r\n    vPixelPos = aQuadPos * quadR;\r\n    vRadius = aRadius;\r\n    vStrokeWidth = aStrokeWidth;\r\n    vFillColor = aFillColor;\r\n    vStrokeColor = aStrokeColor;\r\n}";
+  var uniforms3 = { "uProjectionMatrix": "mat3", "uWorldTransformMatrix": "mat3", "uTransformMatrix": "mat3" };
+  var attributes3 = { "aQuadPos": { "type": "vec2" }, "aCenter": { "type": "vec2" }, "aRadius": { "type": "float" }, "aStrokeWidth": { "type": "float" }, "aFillColor": { "type": "vec4" }, "aStrokeColor": { "type": "vec4" } };
+  var circle_default = { source: source3, uniforms: uniforms3, attributes: attributes3 };
+
+  // source/records-overlay/circle.frag
+  var source4 = "#version 300 es\r\nprecision mediump float;\r\n\r\nin vec2 vPixelPos;\r\nin float vRadius;\r\nin float vStrokeWidth;\r\nin vec4 vFillColor;\r\nin vec4 vStrokeColor;\r\n\r\nout vec4 fragColor;\r\n\r\nvoid main() {\r\n    float d = length(vPixelPos);\r\n    float fw = fwidth(d);\r\n\r\n    float outerEdge = vRadius + vStrokeWidth;\r\n    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);\r\n    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);\r\n\r\n    if(outerMask <= 0.0f)\r\n        discard;\r\n\r\n    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);\r\n    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);\r\n\r\n    vec4 finalColor = mix(s, f, fillMask);\r\n    fragColor = finalColor * outerMask;\r\n}";
+  var uniforms4 = {};
+  var attributes4 = { "vPixelPos": { "type": "vec2" }, "vRadius": { "type": "float" }, "vStrokeWidth": { "type": "float" }, "vFillColor": { "type": "vec4" }, "vStrokeColor": { "type": "vec4" } };
+  var circle_default2 = { source: source4, uniforms: uniforms4, attributes: attributes4 };
+
+  // source/typed-pixi-shader.ts
+  function newGeometry(PIXI) {
+    return new PIXI.Geometry();
+  }
+  function asUntypedGeometry(geometry) {
+    return geometry;
+  }
+  function createTypedShaderFrom(pixi, vertexShaderModule, fragmentShaderModule, uniforms5) {
+    return pixi.Shader.from({
+      gl: {
+        vertex: vertexShaderModule.source,
+        fragment: fragmentShaderModule.source
+      },
+      resources: {
+        typedUniforms: uniforms5
+      }
+    });
+  }
+
+  // source/records-overlay/colors.ts
+  function normalizeColor(cssColor) {
+    cssColor = cssColor.trim().toLowerCase();
+    if (cssColor.startsWith("#")) {
+      const hex = cssColor.slice(1);
+      const r = parseInt(hex.substring(0, 2), 16) / 255;
+      const g = parseInt(hex.substring(2, 4), 16) / 255;
+      const b = parseInt(hex.substring(4, 6), 16) / 255;
+      const a = hex.length === 8 ? parseInt(hex.substring(6, 8), 16) / 255 : 1;
+      return [r, g, b, a];
+    }
+    if (cssColor.startsWith("rgb")) {
+      const values = cssColor.match(/[\d.]+/g)?.map(Number);
+      if (values?.length === 4) {
+        return [
+          values[0] / 255,
+          values[1] / 255,
+          values[2] / 255,
+          values[3]
+        ];
+      }
+    }
+    throw new Error("Unsupported format");
+  }
+
+  // source/records-overlay/cell-mesh-builder.ts
+  var cornerCount = 4;
+  function newCellMeshBuilder(renderer, cell14Center) {
+    const { x: cellX, y: cellY } = cell14Center;
+    const { PIXI, shader, _point_result_cache } = renderer;
+    const vertices = [];
+    const uvs = [];
+    const indices = [];
+    const fillColors = [];
+    const strokeColors = [];
+    const lineWidths = [];
+    function add2(cornerPath, options, strength) {
+      if (cornerPath.length !== cornerCount) return raise`internal error`;
+      const fillColor = normalizeColor(options.fillColor);
+      const strokeColor = normalizeColor(options.strokeColor);
+      const lineWidth = options.strokeWeight;
+      const vOffset = lineWidths.length;
+      for (let i = 0; i < cornerCount; i++) {
+        const { lat, lng } = cornerPath[i];
+        const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
+        vertices.push(x - cellX, y - cellY);
+        fillColors.push(
+          fillColor[0],
+          fillColor[1],
+          fillColor[2],
+          fillColor[3] * strength
+        );
+        strokeColors.push(
+          strokeColor[0],
+          strokeColor[1],
+          strokeColor[2],
+          strokeColor[3] * strength
+        );
+        lineWidths.push(lineWidth);
+      }
+      uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+      indices.push(
+        vOffset + 0,
+        vOffset + 1,
+        vOffset + 2,
+        vOffset + 0,
+        vOffset + 2,
+        vOffset + 3
+      );
+    }
+    function bake() {
+      const geometry = newGeometry(PIXI);
+      geometry.addAttribute("aPosition", {
+        buffer: new Float32Array(vertices),
+        format: "float32x2"
+      });
+      geometry.addAttribute("aUV", {
+        buffer: new Float32Array(uvs),
+        format: "float32x2"
+      });
+      geometry.addIndex(indices);
+      geometry.addAttribute("aFillColor", {
+        buffer: new Float32Array(fillColors),
+        format: "float32x4"
+      });
+      geometry.addAttribute("aStrokeColor", {
+        buffer: new Float32Array(strokeColors),
+        format: "float32x4"
+      });
+      geometry.addAttribute("aLineWidth", {
+        buffer: new Float32Array(lineWidths),
+        format: "float32"
+      });
+      const mesh = new PIXI.Mesh({
+        geometry: asUntypedGeometry(geometry),
+        shader
+      });
+      mesh.position.set(cellX, cellY);
+      return mesh;
+    }
+    return {
+      add: add2,
+      bake
+    };
+  }
+
+  // source/records-overlay/circles-mesh-builder.ts
+  var corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1]
+  ];
+  function newCirclesMeshBuilder(renderer, cell14Center) {
+    const { PIXI, circleShader: shader, _point_result_cache } = renderer;
+    const { x: cellX, y: cellY } = cell14Center;
+    const quadPositions = [];
+    const centers = [];
+    const indices = [];
+    const radiuses = [];
+    const strokeWidths = [];
+    const fillColors = [];
+    const strokeColors = [];
+    function add2(center, radius, options, strength) {
+      const strokeWidth = options.borderWidth;
+      const fillColor = normalizeColor(options.fillColor);
+      const strokeColor = normalizeColor(options.borderColor);
+      const vOffset = radiuses.length;
+      const { lat, lng } = center;
+      const { x, y } = latLngToWorldPoint(lat, lng, _point_result_cache);
+      for (let i = 0; i < corners.length; i++) {
+        const [qx, qy] = corners[i];
+        quadPositions.push(qx, qy);
+        centers.push(x - cellX, y - cellY);
+        radiuses.push(radius);
+        strokeWidths.push(strokeWidth);
+        fillColors.push(
+          fillColor[0],
+          fillColor[1],
+          fillColor[2],
+          fillColor[3] * strength
+        );
+        strokeColors.push(
+          strokeColor[0],
+          strokeColor[1],
+          strokeColor[2],
+          strokeColor[3] * strength
+        );
+      }
+      indices.push(
+        vOffset + 0,
+        vOffset + 1,
+        vOffset + 2,
+        vOffset + 0,
+        vOffset + 2,
+        vOffset + 3
+      );
+    }
+    function bake() {
+      const geometry = newGeometry(PIXI);
+      geometry.addAttribute("aQuadPos", {
+        buffer: new Float32Array(quadPositions),
+        format: "float32x2"
+      });
+      geometry.addIndex(indices);
+      geometry.addAttribute("aCenter", {
+        buffer: new Float32Array(centers),
+        format: "float32x2"
+      });
+      geometry.addAttribute("aRadius", {
+        buffer: new Float32Array(radiuses),
+        format: "float32"
+      });
+      geometry.addAttribute("aFillColor", {
+        buffer: new Float32Array(fillColors),
+        format: "float32x4"
+      });
+      geometry.addAttribute("aStrokeColor", {
+        buffer: new Float32Array(strokeColors),
+        format: "float32x4"
+      });
+      geometry.addAttribute("aStrokeWidth", {
+        buffer: new Float32Array(strokeWidths),
+        format: "float32"
+      });
+      const mesh = new PIXI.Mesh({
+        geometry: asUntypedGeometry(geometry),
+        shader
+      });
+      mesh.position.set(cellX, cellY);
+      return mesh;
+    }
+    return {
+      add: add2,
+      bake
+    };
+  }
+
+  // source/records-overlay/range-display.ts
+  var EARTH_RADIUS_METERS = 6371e3;
+  function isCircle(expression) {
+    return expression.type === "circle";
+  }
+  function circleAreaRelation(first, second) {
+    if (first.center.lat === second.center.lat && first.center.lng === second.center.lng && first.radius === second.radius) {
+      return "same";
+    }
+    const firstRadius = Math.max(
+      0,
+      Math.min(first.radius, Math.PI * EARTH_RADIUS_METERS)
+    );
+    const secondRadius = Math.max(
+      0,
+      Math.min(second.radius, Math.PI * EARTH_RADIUS_METERS)
+    );
+    const centerDistance = distance(first.center, second.center);
+    if (centerDistance > firstRadius + secondRadius) return "disjoint";
+    if (centerDistance + firstRadius <= secondRadius) return "second-contains";
+    if (centerDistance + secondRadius <= firstRadius) return "first-contains";
+    return "overlap";
+  }
+  function simplify(expression, circles) {
+    if (isCircle(expression)) {
+      const circle = circles.get(expression.id);
+      if (!circle || Number.isNaN(circle.radius) || circle.radius < 0 || !Number.isFinite(circle.center.lat) || !Number.isFinite(circle.center.lng)) {
+        return { expression: false, contributingIds: /* @__PURE__ */ new Set() };
+      }
+      if (circle.radius >= Math.PI * EARTH_RADIUS_METERS) {
+        return { expression: true, contributingIds: /* @__PURE__ */ new Set() };
+      }
+      return {
+        expression,
+        contributingIds: /* @__PURE__ */ new Set([expression.id])
+      };
+    }
+    if (expression.type === "not") {
+      const inner = simplify(expression.expression, circles);
+      if (typeof inner.expression === "boolean") {
+        return {
+          expression: !inner.expression,
+          contributingIds: /* @__PURE__ */ new Set()
+        };
+      }
+      if (inner.expression.type === "not") {
+        return {
+          expression: inner.expression.expression,
+          contributingIds: inner.contributingIds
+        };
+      }
+      return {
+        expression: { type: "not", expression: inner.expression },
+        contributingIds: inner.contributingIds
+      };
+    }
+    const left = simplify(expression.left, circles);
+    const right = simplify(expression.right, circles);
+    const leftExpression = left.expression;
+    const rightExpression = right.expression;
+    const contributingIds = /* @__PURE__ */ new Set([
+      ...left.contributingIds,
+      ...right.contributingIds
+    ]);
+    if (expression.type === "and") {
+      if (leftExpression === false) return left;
+      if (rightExpression === false) return right;
+      if (leftExpression === true) return right;
+      if (rightExpression === true) return left;
+    } else {
+      if (leftExpression === true) return left;
+      if (rightExpression === true) return right;
+      if (leftExpression === false) return right;
+      if (rightExpression === false) return left;
+    }
+    if (typeof leftExpression === "boolean" || typeof rightExpression === "boolean") {
+      throw new Error("Unreduced boolean in range display expression.");
+    }
+    const isComplement = (first, second) => isCircle(first) && second.type === "not" && isCircle(second.expression) && first.id === second.expression.id || isCircle(second) && first.type === "not" && isCircle(first.expression) && second.id === first.expression.id;
+    if (isComplement(leftExpression, rightExpression)) {
+      return {
+        expression: expression.type === "or",
+        contributingIds: /* @__PURE__ */ new Set()
+      };
+    }
+    if (isCircle(leftExpression) && isCircle(rightExpression)) {
+      const leftCircle = circles.get(leftExpression.id);
+      const rightCircle = circles.get(rightExpression.id);
+      const relation = circleAreaRelation(leftCircle, rightCircle);
+      if (relation === "same") {
+        return {
+          expression: leftExpression,
+          contributingIds: /* @__PURE__ */ new Set()
+        };
+      }
+      if (expression.type === "and") {
+        if (relation === "disjoint") {
+          return { expression: false, contributingIds };
+        }
+        if (relation === "first-contains") return right;
+        if (relation === "second-contains") return left;
+      } else {
+        if (relation === "disjoint") {
+          return {
+            expression: {
+              type: "or",
+              left: leftExpression,
+              right: rightExpression
+            },
+            contributingIds
+          };
+        }
+        if (relation === "first-contains") return left;
+        if (relation === "second-contains") return right;
+      }
+    }
+    return {
+      expression: {
+        type: expression.type,
+        left: leftExpression,
+        right: rightExpression
+      },
+      contributingIds
+    };
+  }
+  function createRangeDisplayPlan(candidate) {
+    if (candidate == null) return { expression: null, circles: [] };
+    const circleMap = new Map(
+      candidate.circles.map((circle) => [circle.id, circle])
+    );
+    const simplified = candidate.expression ? simplify(candidate.expression, circleMap) : { expression: false, contributingIds: /* @__PURE__ */ new Set() };
+    return {
+      expression: candidate.expression ? simplified.expression : null,
+      circles: candidate.circles.map((circle) => ({
+        ...circle,
+        contribution: simplified.contributingIds.has(circle.id) ? "contributing" : "non-contributing"
+      }))
+    };
+  }
+  function createRangeCanvasPool(createCanvas, maxPoolPixels = 8e6) {
+    const available = [];
+    return {
+      acquire(width, height) {
+        const index = available.findIndex(
+          (canvas2) => canvas2.width === width && canvas2.height === height
+        );
+        const canvas = index < 0 ? createCanvas() : available.splice(index, 1)[0];
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        return canvas;
+      },
+      release(canvas) {
+        const pixels = canvas.width * canvas.height;
+        const pooledPixels = available.reduce(
+          (total, item) => total + item.width * item.height,
+          0
+        );
+        if (pixels > maxPoolPixels || pooledPixels + pixels > maxPoolPixels) {
+          return;
+        }
+        available.push(canvas);
+      }
+    };
+  }
+  function createCirclePath(context, circle, viewport, scale) {
+    const radius = Math.max(
+      0,
+      Math.min(circle.radius, Math.PI * EARTH_RADIUS_METERS)
+    );
+    const sampleCount = Math.min(
+      1024,
+      Math.max(
+        180,
+        Math.ceil(radius * 256 * scale / (EARTH_RADIUS_METERS * 12))
+      )
+    );
+    const angularDistance = radius / EARTH_RADIUS_METERS;
+    const latitude = circle.center.lat * Math.PI / 180;
+    const longitude = circle.center.lng * Math.PI / 180;
+    let previousWorldX;
+    context.beginPath();
+    for (let index = 0; index <= sampleCount; index++) {
+      const bearing = 2 * Math.PI * index / sampleCount;
+      const targetLatitude = Math.asin(
+        Math.sin(latitude) * Math.cos(angularDistance) + Math.cos(latitude) * Math.sin(angularDistance) * Math.cos(bearing)
+      );
+      const targetLongitude = longitude + Math.atan2(
+        Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latitude),
+        Math.cos(angularDistance) - Math.sin(latitude) * Math.sin(targetLatitude)
+      );
+      const point = { x: 0, y: 0 };
+      latLngToWorldPoint(
+        targetLatitude * 180 / Math.PI,
+        targetLongitude * 180 / Math.PI,
+        point
+      );
+      let worldX = point.x;
+      if (previousWorldX !== void 0) {
+        worldX += Math.round(previousWorldX - worldX);
+      } else {
+        const viewportWorldWidth = viewport.width / 2 ** viewport.zoom;
+        const viewportCenter = viewport.nwWorld.x + viewportWorldWidth / 2;
+        worldX += Math.round(viewportCenter - worldX);
+      }
+      previousWorldX = worldX;
+      const x = (worldX - viewport.nwWorld.x) * scale;
+      const y = (point.y - viewport.nwWorld.y) * scale;
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.closePath();
+  }
+  function evaluateMask(expression, circles, pool, width, height, viewport, scale, override) {
+    const stack = [];
+    const operations = [{ type: "visit", node: expression }];
+    while (operations.length > 0) {
+      const operation = operations.pop();
+      if (operation.type === "visit") {
+        const node = operation.node;
+        if (node.type === "circle") {
+          const surface = pool.acquire(width, height);
+          const context2 = surface.getContext("2d");
+          if (!context2)
+            throw new Error("2D canvas context is unavailable.");
+          context2.clearRect(0, 0, width, height);
+          const circle = circles.get(node.id);
+          if (!circle)
+            throw new Error(`Missing range circle: ${node.id}`);
+          if (node.id === override?.id) {
+            if (override.value) {
+              context2.fillStyle = "#fff";
+              context2.fillRect(0, 0, width, height);
+            }
+          } else if (circle.radius >= Math.PI * EARTH_RADIUS_METERS) {
+            context2.fillStyle = "#fff";
+            context2.fillRect(0, 0, width, height);
+          } else if (circle.radius > 0) {
+            createCirclePath(context2, circle, viewport, scale);
+            context2.fillStyle = "#fff";
+            context2.fill();
+          }
+          stack.push(surface);
+        } else if (node.type === "not") {
+          operations.push({ type: "negate" });
+          operations.push({ type: "visit", node: node.expression });
+        } else {
+          operations.push({ type: "combine", operator: node.type });
+          operations.push({ type: "visit", node: node.right });
+          operations.push({ type: "visit", node: node.left });
+        }
+        continue;
+      }
+      if (operation.type === "negate") {
+        const inner = stack.pop();
+        const result = pool.acquire(width, height);
+        const context2 = result.getContext("2d");
+        if (!context2) throw new Error("2D canvas context is unavailable.");
+        context2.fillStyle = "#fff";
+        context2.fillRect(0, 0, width, height);
+        context2.globalCompositeOperation = "destination-out";
+        context2.drawImage(inner, 0, 0);
+        context2.globalCompositeOperation = "source-over";
+        pool.release(inner);
+        stack.push(result);
+        continue;
+      }
+      const right = stack.pop();
+      const left = stack.pop();
+      const context = left.getContext("2d");
+      if (!context) throw new Error("2D canvas context is unavailable.");
+      context.globalCompositeOperation = operation.operator === "and" ? "destination-in" : "source-over";
+      context.drawImage(right, 0, 0);
+      context.globalCompositeOperation = "source-over";
+      pool.release(right);
+      stack.push(left);
+    }
+    if (stack.length !== 1)
+      throw new Error("Invalid range display expression.");
+    return stack[0];
+  }
+  function getExpressionCircleIds(expression) {
+    const ids = /* @__PURE__ */ new Set();
+    const pending = [expression];
+    while (pending.length > 0) {
+      const node = pending.pop();
+      if (node.type === "circle") ids.add(node.id);
+      else if (node.type === "not") pending.push(node.expression);
+      else pending.push(node.left, node.right);
+    }
+    return ids;
+  }
+  function renderRangeDisplay(canvas, pool, plan, viewport) {
+    const dpr = Math.max(1, Math.min(viewport.devicePixelRatio, 2));
+    const maxDimension = 4096;
+    const requestedScale = dpr;
+    const viewportPixels = Math.max(viewport.width * viewport.height, 1);
+    const backingScale = Math.min(
+      requestedScale,
+      maxDimension / Math.max(viewport.width, viewport.height, 1),
+      Math.sqrt(8e6 / viewportPixels)
+    );
+    const width = Math.max(1, Math.round(viewport.width * backingScale));
+    const height = Math.max(1, Math.round(viewport.height * backingScale));
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("2D canvas context is unavailable.");
+    context.clearRect(0, 0, width, height);
+    const circles = new Map(plan.circles.map((circle) => [circle.id, circle]));
+    const mapScale = 2 ** viewport.zoom * backingScale;
+    if (plan.expression !== null && plan.expression !== true) {
+      if (plan.expression === false) {
+        context.fillStyle = "rgba(0, 0, 0, 0.28)";
+        context.fillRect(0, 0, width, height);
+      } else {
+        const mask = evaluateMask(
+          plan.expression,
+          circles,
+          pool,
+          width,
+          height,
+          viewport,
+          mapScale
+        );
+        context.fillStyle = "rgba(0, 0, 0, 0.28)";
+        context.fillRect(0, 0, width, height);
+        context.globalCompositeOperation = "destination-out";
+        context.drawImage(mask, 0, 0);
+        context.globalCompositeOperation = "source-over";
+        pool.release(mask);
+      }
+    }
+    if (plan.expression === null) {
+      for (const circle of plan.circles) {
+        context.save();
+        createCirclePath(context, circle, viewport, mapScale);
+        context.strokeStyle = circle.contribution === "contributing" ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.3)";
+        context.lineWidth = circle.contribution === "contributing" ? 1 : 1.5;
+        context.setLineDash(
+          circle.contribution === "contributing" ? [] : [5, 5]
+        );
+        context.stroke();
+        context.restore();
+      }
+      return;
+    }
+    if (typeof plan.expression === "boolean") return;
+    for (const id2 of getExpressionCircleIds(plan.expression)) {
+      const circle = circles.get(id2);
+      if (!circle) throw new Error(`Missing range circle: ${id2}`);
+      const outsideMask = evaluateMask(
+        plan.expression,
+        circles,
+        pool,
+        width,
+        height,
+        viewport,
+        mapScale,
+        { id: id2, value: false }
+      );
+      const insideMask = evaluateMask(
+        plan.expression,
+        circles,
+        pool,
+        width,
+        height,
+        viewport,
+        mapScale,
+        { id: id2, value: true }
+      );
+      const maskContext = outsideMask.getContext("2d");
+      if (!maskContext)
+        throw new Error("2D canvas context is unavailable.");
+      maskContext.globalCompositeOperation = "xor";
+      maskContext.drawImage(insideMask, 0, 0);
+      maskContext.globalCompositeOperation = "source-over";
+      pool.release(insideMask);
+      const outline = pool.acquire(width, height);
+      const outlineContext = outline.getContext("2d");
+      if (!outlineContext)
+        throw new Error("2D canvas context is unavailable.");
+      outlineContext.clearRect(0, 0, width, height);
+      createCirclePath(outlineContext, circle, viewport, mapScale);
+      outlineContext.strokeStyle = "rgba(255, 255, 255, 0.72)";
+      outlineContext.lineWidth = 1;
+      outlineContext.stroke();
+      outlineContext.globalCompositeOperation = "destination-in";
+      outlineContext.drawImage(outsideMask, 0, 0);
+      outlineContext.globalCompositeOperation = "source-over";
+      context.drawImage(outline, 0, 0);
+      pool.release(outline);
+      pool.release(outsideMask);
+    }
+  }
+
+  // source/records-overlay/canvas-renderer.ts
+  function createCellViews(renderer, cell14) {
+    const { lat, lng } = cell14.getLatLng();
+    const center = latLngToWorldPoint(lat, lng, createZeroPoint());
+    const cellMeshBuilder = newCellMeshBuilder(renderer, center);
+    const circlesBuilder = newCirclesMeshBuilder(renderer, center);
+    return { views: [], center, cellMeshBuilder, circlesBuilder };
+  }
+  function createBoxBoundsClass(PIXI) {
+    return class BoxBounds extends PIXI.Bounds {
+      constructor(key) {
+        super();
+        this.key = key;
+      }
+    };
+  }
+  async function initPIXI(canvas) {
+    let PIXI;
+    if (isWebWorker()) {
+      PIXI = await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs");
+      PIXI.DOMAdapter.set(PIXI.WebWorkerAdapter);
+    } else {
+      PIXI = await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm");
+    }
+    const app = new PIXI.Application();
+    await app.init({
+      canvas,
+      // OffscreenCanvas では自動追従されない
+      autoDensity: false,
+      autoStart: false,
+      backgroundAlpha: 0,
+      antialias: true,
+      roundPixels: true
+    });
+    return {
+      PIXI,
+      app
+    };
+  }
+  function createCanvasSurface() {
+    if (typeof OffscreenCanvas !== "undefined") {
+      return new OffscreenCanvas(0, 0);
+    }
+    return document.createElement("canvas");
+  }
+  async function createCanvasImageBitmap(canvas) {
+    if (typeof OffscreenCanvas !== "undefined" && canvas instanceof OffscreenCanvas) {
+      return canvas.transferToImageBitmap();
+    }
+    return createImageBitmap(canvas);
+  }
+  function createCellBoundsShader(PIXI) {
+    return createTypedShaderFrom(
+      PIXI,
+      cell_default,
+      cell_default2,
+      new PIXI.UniformGroup({})
+    );
+  }
+  function createCirclesShader(PIXI) {
+    return createTypedShaderFrom(
+      PIXI,
+      circle_default,
+      circle_default2,
+      new PIXI.UniformGroup({})
+    );
+  }
+  function updateFixedScale(renderer, container) {
+    if (container.parent == null) return;
+    const { scale } = container.parent.worldTransform.decompose(
+      renderer._tempTransform
+    );
+    container.scale.x = 1 / scale.x;
+    container.scale.y = 1 / scale.y;
+  }
+  async function createRecordsCanvasRenderer(handleAsyncError2, onRenderUpdated, onRangeRenderUpdated) {
+    const records = await openRecords();
+    const canvas = createCanvasSurface();
+    const rangeCanvas = createCanvasSurface();
+    const { PIXI, app } = await initPIXI(canvas);
+    const worldContainer = app.stage.addChild(new PIXI.Container());
+    const cell14LabelTextStyle = new PIXI.TextStyle({
+      align: "center",
+      fontWeight: "bold",
+      fontSize: "20px",
+      fontFamily: `"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif`,
+      fill: "rgb(255, 255, 255)",
+      stroke: {
+        width: 4,
+        join: "round",
+        color: "#c54545"
+      }
+    });
+    return {
+      canvas,
+      rangeCanvas,
+      rangeCanvasPool: createRangeCanvasPool(createCanvasSurface),
+      rangeDisplayPlan: { expression: null, circles: [] },
+      rangeDisplayRevision: 0,
+      rangeDisplayRenderId: 0,
+      rangeDisplayCacheKey: null,
+      layers: {
+        cellLayer: worldContainer.addChild(new PIXI.Container()),
+        circleLayer: worldContainer.addChild(
+          new PIXI.Container()
+        ),
+        labelLayer: worldContainer.addChild(
+          new PIXI.Container()
+        ),
+        cell14TextLayer: worldContainer.addChild(
+          new PIXI.Container()
+        )
+      },
+      PIXI,
+      BoxBounds: createBoxBoundsClass(PIXI),
+      shader: createCellBoundsShader(PIXI),
+      circleShader: createCirclesShader(PIXI),
+      cell14LabelTextStyle,
+      app,
+      worldContainer,
+      handleAsyncError: handleAsyncError2,
+      onRenderUpdated,
+      onRangeRenderUpdated,
+      options: createOverlayViewOptions(),
+      records,
+      cells: /* @__PURE__ */ new Map(),
+      _point_result_cache: { x: 0, y: 0 },
+      _pois_cache: [],
+      _tempTransform: new PIXI.Transform()
+    };
+  }
+  function setRecordsRangeDisplayPlan(renderer, plan, revision) {
+    renderer.rangeDisplayPlan = plan;
+    renderer.rangeDisplayRevision = revision;
+    renderer.rangeDisplayCacheKey = null;
+  }
+  async function drawRangeDisplay(renderer, port) {
+    const cacheKey = [
+      renderer.rangeDisplayRevision,
+      port.zoom,
+      port.nwWorld.x,
+      port.nwWorld.y,
+      port.width,
+      port.height,
+      port.devicePixelRatio
+    ].join(":");
+    if (renderer.rangeDisplayCacheKey === cacheKey) return;
+    const plan = renderer.rangeDisplayPlan;
+    const planRevision = renderer.rangeDisplayRevision;
+    const renderId = ++renderer.rangeDisplayRenderId;
+    renderRangeDisplay(
+      renderer.rangeCanvas,
+      renderer.rangeCanvasPool,
+      plan,
+      port
+    );
+    const image = await createCanvasImageBitmap(renderer.rangeCanvas);
+    if (planRevision !== renderer.rangeDisplayRevision || renderId !== renderer.rangeDisplayRenderId) {
+      image.close();
+      return;
+    }
+    renderer.onRangeRenderUpdated(image, port, planRevision, renderId);
+    renderer.rangeDisplayCacheKey = cacheKey;
+  }
+  function applyViewport(layer2, viewport) {
+    const scale = 2 ** viewport.zoom;
+    layer2.scale.set(scale);
+    layer2.x = -viewport.nwWorld.x * scale;
+    layer2.y = -viewport.nwWorld.y * scale;
+  }
+  function updateVisibility({ BoxBounds }, checker, label) {
+    const box = new BoxBounds(label.uid);
+    label.visible = true;
+    label.getBounds(false, box);
+    if (checker.check(box)) {
+      label.visible = false;
+      return;
+    }
+    checker.addBox(box);
+    label.visible = true;
+  }
+  function updateContainers(renderer) {
+    for (const label14 of renderer.layers.cell14TextLayer.children) {
+      updateFixedScale(renderer, label14);
+    }
+    for (const label of renderer.layers.labelLayer.children) {
+      updateFixedScale(renderer, label);
+    }
+    const checker = createCollisionChecker();
+    for (const label of renderer.layers.labelLayer.children) {
+      updateVisibility(renderer, checker, label);
+    }
+  }
+  async function draw(renderer, port, signal) {
+    await waitAnimationFrame(signal);
+    const { app, worldContainer } = renderer;
+    const { width, height, devicePixelRatio } = port;
+    app.renderer.resize(width, height, devicePixelRatio);
+    applyViewport(worldContainer, port);
+    updateContainers(renderer);
+    app.render();
+    const bitmap = await createCanvasImageBitmap(renderer.canvas);
+    renderer.onRenderUpdated(bitmap, port);
+  }
+  function deleteAndDestroyCellView(cells, cellId) {
+    const views = cells.get(cellId);
+    if (views) {
+      for (const m of views.views) m.destroy();
+      cells.delete(cellId);
+    }
+  }
+  function clearOutOfRangeCellViews({ cells }, nearlyCell14s) {
+    const cellIds = new Set(nearlyCell14s.map((cell) => cell.toString()));
+    for (const cellId of cells.keys()) {
+      if (!cellIds.has(cellId)) {
+        deleteAndDestroyCellView(cells, cellId);
+      }
+    }
+  }
+  async function updateCell14Views(renderer, port, cell14, signal) {
+    const { cells, records } = renderer;
+    const { zoom } = port;
+    const cellId = cell14.toString();
+    deleteAndDestroyCellView(cells, cellId);
+    const stat14 = await getCell14Stats(records, cell14, signal);
+    if (stat14 == null) return;
+    const views = createCellViews(renderer, cell14);
+    cells.set(cellId, views);
+    if (14 < zoom) {
+      addCell17Bounds(renderer, stat14, views.cellMeshBuilder);
+    }
+    addCell14Bound(renderer, views, stat14);
+    if (14 < zoom && zoom < 16) {
+      addCell14PoiCircles(renderer, port, stat14, views.circlesBuilder);
+    }
+    if (14 < zoom) {
+      for (const label of createCell14PoiNames(renderer, port, stat14)) {
+        views.views.push(renderer.layers.labelLayer.addChild(label));
+      }
+    }
+    if (13 < zoom) {
+      const label = createCell17CountLabel(renderer, stat14);
+      if (label) {
+        views.views.push(renderer.layers.cell14TextLayer.addChild(label));
+      }
+    }
+    views.views.push(
+      renderer.layers.cellLayer.addChild(views.cellMeshBuilder.bake())
+    );
+    views.views.push(
+      renderer.layers.circleLayer.addChild(views.circlesBuilder.bake())
+    );
+  }
+  async function updateRecordsCanvasRenderer(overlay, port, signal) {
+    const { cells } = overlay;
+    const { zoom, bounds } = port;
+    await drawRangeDisplay(overlay, port);
+    if (zoom <= 12) {
+      for (const cellId of cells.keys()) {
+        deleteAndDestroyCellView(cells, cellId);
+      }
+      return draw(overlay, port, signal);
+    }
+    const cell14s = getNearlyCellsForBounds(bounds, 14);
+    clearOutOfRangeCellViews(overlay, cell14s);
+    await draw(overlay, port, signal);
+    for (const cell14 of cell14s) {
+      await updateCell14Views(overlay, port, cell14, signal);
+      await draw(overlay, port, signal);
+    }
+  }
+
   // inline-worker:__inline-worker
   function inlineWorker(scriptText) {
     let blob = new Blob([scriptText], { type: "text/javascript" });
@@ -21574,27 +23021,50 @@
 
   // source/records-overlay/canvas-renderer.worker.ts?worker
   function Worker2() {
-    return inlineWorker('var Ze=Object.defineProperty,He=Object.defineProperties;var Je=Object.getOwnPropertyDescriptors;var $=Object.getOwnPropertySymbols;var $e=Object.prototype.hasOwnProperty,ze=Object.prototype.propertyIsEnumerable;var V=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),et=t=>{throw TypeError(t)};var W=(t,e,n)=>e in t?Ze(t,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):t[e]=n,C=(t,e)=>{for(var n in e||(e={}))$e.call(e,n)&&W(t,n,e[n]);if($)for(var n of $(e))ze.call(e,n)&&W(t,n,e[n]);return t},I=(t,e)=>He(t,Je(e));var z=(t,e,n)=>W(t,typeof e!="symbol"?e+"":e,n);var tt=function(t,e){this[0]=t,this[1]=e};var U=t=>{var e=t[V("asyncIterator")],n=!1,s,a={};return e==null?(e=t[V("iterator")](),s=l=>a[l]=u=>e[l](u)):(e=e.call(t),s=l=>a[l]=u=>{if(n){if(n=!1,l==="throw")throw u;return u}return n=!0,{done:!1,value:new tt(new Promise(d=>{var o=e[l](u);o instanceof Object||et("Object expected"),d(o)}),1)}}),a[V("iterator")]=()=>a,s("next"),"throw"in e?s("throw"):a.throw=l=>{throw l},"return"in e&&s("return"),a};function ee(t=128){let e=new Map;function n(o,r){return o<<16|r&65535}function s(o,r){let i=o.x-o.width/2,c=o.x+o.width/2,f=o.y-o.height/2,p=o.y+o.height/2,m=Math.floor(i/t),T=Math.floor(c/t),y=Math.floor(f/t),h=Math.floor(p/t);for(let g=m;g<=T;g++)for(let S=y;S<=h;S++)r.push(n(g,S))}let a=[];function l(o){s(o,a);try{for(let r of a){let i=e.get(r);i||(i=[],e.set(r,i)),i.push(o)}}finally{a.length=0}}let u=new Set;function d(o){s(o,a);try{for(let r of a){let i=e.get(r);if(i)for(let c of i)u.add(c)}for(let r of u){if(o.key===r.key)continue;let i=Math.abs(o.x-r.x),c=(o.width+r.width)/2;if(i>=c)continue;let f=Math.abs(o.y-r.y),p=(o.height+r.height)/2;if(!(f>=p))return!0}}finally{u.clear(),a.length=0}return!1}return{addBox:l,check:d}}var X=256,te=Math.PI,nt=te/180,rt=X/360,ot=X/(2*te),at=X/2;function w(t,e,n){let s=(e+180)*rt,a=Math.sin(t*nt),l=a>.9999?.9999:a<-.9999?-.9999:a,u=at-Math.atanh(l)*ot;return n.x=s,n.y=u,n}function R(){return{x:0,y:0}}function ne(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function re(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function oe(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function ae(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?st(t,e):!1}function st(t,e){let n=t.sw.lng>t.ne.lng,s=e.sw.lng>e.ne.lng;return!n&&!s?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:O(t,e.sw.lng)||O(t,e.ne.lng)||O(e,t.sw.lng)||O(e,t.ne.lng)||n&&s}function O(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function q(t){return t}function ie(...t){}function le(t,...e){throw new Error(String.raw(t,...e))}var G=class extends Error{constructor(n){super(n);z(this,"name","AbortError")}};function ce(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new G(t)}function de(t){return new Promise((e,n)=>{if(t.aborted)return n(t.reason);let s=()=>{cancelAnimationFrame(a),t.removeEventListener("abort",s)},a=requestAnimationFrame(l=>{s(),e(l)});t.addEventListener("abort",s,{once:!0})})}function ue(t){let e=new Map;return{async task(n,...s){let a=new AbortController;e.set(n,a);try{return await t(a.signal,...s)}finally{e.delete(n)}},cancelTask(n){let s=e.get(n);s&&(s.abort(),e.delete(n))}}}function it(t,e){for(let[n,s]of Object.entries(e)){let a=t.createObjectStore(n,{keyPath:s.key.slice()});for(let[l,u]of Object.entries(s.indexes))a.createIndex(l,u.key,u)}}function fe(t,e,n){return new Promise((s,a)=>{let l=indexedDB.open(t,e);l.addEventListener("upgradeneeded",()=>it(l.result,n)),l.addEventListener("blocked",()=>a(new Error("database blocked"))),l.addEventListener("error",()=>a(l.error)),l.addEventListener("success",()=>s(l.result))})}var B=class{constructor(e,n,s){this.source=e;this.query=n;this.action=s}};function pe(t,{mode:e,signal:n},s,...a){return new Promise((l,u)=>{if(n!=null&&n.aborted){u(ce());return}let d=!1,o,r=t.transaction(a,e),i=n?()=>{d||r.abort()}:ie;r.addEventListener("complete",()=>{n==null||n.removeEventListener("abort",i),d?l(o):u(new Error("internal error"))}),r.addEventListener("error",x=>{n==null||n.removeEventListener("abort",i),u(x.target.error)}),n==null||n.addEventListener("abort",i);let c={};for(let x of a)c[x]=r.objectStore(x);let f=s(c),p,m,T,y,h,g;function S(){let x;switch(p){case void 0:x=f.next();break;case"Request":{let v=m.result;p=void 0,m=void 0,x=f.next(v);break}case"WaitRequests":{let v=T,L=y,k=L[v.length].result;if(v.push(k),v.length!==L.length)return;p=void 0,y=void 0,T=void 0,x=f.next(v);break}case"OpenCursor":{let v=h.result;if(v===null||g(v.value)==="break")p=void 0,h=void 0,g=void 0,x=f.next(void 0);else{v.continue();return}break}default:{u(new Error(`Invalid resolving kind: ${p}`));return}}if(x.done){d=!0,o=x.value;return}let b=x.value;if(b instanceof IDBRequest){p="Request",m=b,b.onsuccess=S;return}if(b instanceof B){p="OpenCursor",h=b.source.openCursor(b.query),g=b.action,h.onsuccess=S;return}p="WaitRequests",y=b,T=[];for(let v of b)v.onsuccess=S}S()})}function A(t,e){return t.index(e)}function*_(t,e,n){yield new B(t,e,n)}function ct(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(o,r,i){var c=parseFloat(o,10),f=parseFloat(r,10);if(isNaN(c)||isNaN(f))throw new Error("Invalid LatLng object: ("+o+", "+r+")");return i!==!0&&(c=Math.max(Math.min(c,90),-90),f=(f+180)%360+(f<-180||f===180?180:-180)),{lat:c,lng:f}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(o){var r=e.L.LatLng.DEG_TO_RAD,i=o.lat*r,c=o.lng*r,f=Math.cos(i);return[Math.cos(c)*f,Math.sin(c)*f,Math.sin(i)]},e.XYZToLatLng=function(o){var r=e.L.LatLng.RAD_TO_DEG,i=Math.atan2(o[2],Math.sqrt(o[0]*o[0]+o[1]*o[1])),c=Math.atan2(o[1],o[0]);return e.L.LatLng(i*r,c*r)};var n=function(o){var r=[Math.abs(o[0]),Math.abs(o[1]),Math.abs(o[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},s=function(o,r){var i,c;switch(o){case 0:i=r[1]/r[0],c=r[2]/r[0];break;case 1:i=-r[0]/r[1],c=r[2]/r[1];break;case 2:i=-r[0]/r[2],c=-r[1]/r[2];break;case 3:i=r[2]/r[0],c=r[1]/r[0];break;case 4:i=r[2]/r[1],c=-r[0]/r[1];break;case 5:i=-r[1]/r[2],c=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[i,c]};e.XYZToFaceUV=function(o){var r=n(o);o[r]<0&&(r+=3);var i=s(r,o);return[r,i]},e.FaceUVToXYZ=function(o,r){var i=r[0],c=r[1];switch(o){case 0:return[1,i,c];case 1:return[-i,1,c];case 2:return[-i,-c,1];case 3:return[-1,-c,-i];case 4:return[c,-1,-i];case 5:return[c,i,-1];default:throw{error:"Invalid face"}}};var a=function(o){return o>=.5?1/3*(4*o*o-1):1/3*(1-4*(1-o)*(1-o))};e.STToUV=function(o){return[a(o[0]),a(o[1])]};var l=function(o){return o>=0?.5*Math.sqrt(1+3*o):1-.5*Math.sqrt(1-3*o)};e.UVToST=function(o){return[l(o[0]),l(o[1])]},e.STToIJ=function(o,r){var i=1<<r,c=function(f){var p=Math.floor(f*i);return Math.max(0,Math.min(i-1,p))};return[c(o[0]),c(o[1])]},e.IJToST=function(o,r,i){var c=1<<r;return[(o[0]+i[0])/c,(o[1]+i[1])/c]};var u=function(o,r,i,c){var f,p;if(c==0){i==1&&(r.x=o-1-r.x,r.y=o-1-r.y);var m=r.x;r.x=r.y,r.y=m}},d=function(o,r,i,c){var f={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof c!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var p=c%2?"d":"a",m=[],T=i-1;T>=0;T--){var y=1<<T,h=o&y?1:0,g=r&y?1:0,S=f[p][h*2+g];m.push(S[0]),p=S[1]}return m};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(o){var r=o.split("/"),i=parseInt(r[0]),c=r[1],f=c.length,p={x:0,y:0},m,T,y,h,g,S;for(m=f-1;m>=0;m--)T=f-m,y=c[m],h=0,g=0,y==="1"?g=1:y==="2"?(h=1,g=1):y==="3"&&(h=1),S=Math.pow(2,T-1),u(S,p,h,g),p.x+=S*h,p.y+=S*g;if(i%2===1){var x=p.x;p.x=p.y,p.y=x}return e.S2Cell.FromFaceIJ(parseInt(i),[p.x,p.y],T)},e.S2Cell.FromLatLng=function(o,r){if(!o.lat&&o.lat!==0||!o.lng&&o.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var i=e.LatLngToXYZ(o),c=e.XYZToFaceUV(i),f=e.UVToST(c[1]),p=e.STToIJ(f,r);return e.S2Cell.FromFaceIJ(c[0],p,r)},e.S2Cell.FromFaceIJ=function(o,r,i){var c=new e.S2Cell;return c.face=o,c.ij=r,c.level=i,c},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var o=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(o),i=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(i)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var o=[],r=[[0,0],[0,1],[1,1],[1,0]],i=0;i<4;i++){var c=e.IJToST(this.ij,this.level,r[i]),f=e.STToUV(c),p=e.FaceUVToXYZ(this.face,f);o.push(e.XYZToLatLng(p))}return o},e.S2Cell.prototype.getFaceAndQuads=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return[this.face,o]},e.S2Cell.prototype.toHilbertQuadkey=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+o.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(o,r,i){return e.S2Cell.FromLatLng({lat:o,lng:r},i).getNeighbors().map(function(c){return c.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var o=function(p,m,T){var y=1<<T;if(m[0]>=0&&m[1]>=0&&m[0]<y&&m[1]<y)return e.S2Cell.FromFaceIJ(p,m,T);var h=e.IJToST(m,T,[.5,.5]),g=e.STToUV(h),S=e.FaceUVToXYZ(p,g),x=e.XYZToFaceUV(S);return p=x[0],g=x[1],h=e.UVToST(g),m=e.STToIJ(h,T),e.S2Cell.FromFaceIJ(p,m,T)},r=this.face,i=this.ij[0],c=this.ij[1],f=this.level;return[o(r,[i-1,c],f),o(r,[i,c-1],f),o(r,[i+1,c],f),o(r,[i,c+1],f)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(o,r,i){var c=t.dcodeIO&&t.dcodeIO.Long,f,p,m;for(i||(i=r.length),r.length>i&&(r=r.substr(0,i)),f=c.fromString(o.toString(10),!0,10).toString(2);f.length<e.FACE_BITS;)f="0"+f;for(p=c.fromString(r,!0,4).toString(2);p.length<2*i;)p="0"+p;for(m=f+p,m+="1";m.length<e.FACE_BITS+e.POS_BITS;)m+="0";return c.fromString(m,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(o){var r=o.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(o){for(var r=t.dcodeIO&&t.dcodeIO.Long,i=r.fromString(o,!0,10).toString(2);i.length<e.FACE_BITS+e.POS_BITS;)i="0"+i;for(var c=i.lastIndexOf("1"),f=i.substring(0,3),p=i.substring(3,c),m=p.length/2,T=r.fromString(f,!0,2).toString(10),y=r.fromString(p,!0,2).toString(4);y.length<m;)y="0"+y;return T+"/"+y},e.keyToLatLng=e.S2Cell.keyToLatLng=function(o){var r=e.S2Cell.FromHilbertQuadKey(o);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(o){var r=e.idToKey(o);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(o,r,i){if(isNaN(i)||i<1||i>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:o,lng:r},i).toHilbertQuadkey()},e.stepKey=function(o,r){var i=t.dcodeIO&&t.dcodeIO.Long,c=o.split("/"),f=c[0],p=c[1],m=c[1].length,T=i.fromString(p,!0,4),y;r>0?y=T.add(Math.abs(r)):r<0&&(y=T.subtract(Math.abs(r)));var h=y.toString(4);for(h==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));h.length<m;)h="0"+h;return f+"/"+h},e.S2Cell.prevKey=e.prevKey=function(o){return e.stepKey(o,-1)},e.S2Cell.nextKey=e.nextKey=function(o){return e.stepKey(o,1)},e}var me=ct(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function D(t,e){return me.S2Cell.FromLatLng(t,e)}var pn=Object.freeze(["0","1","2","3"]);var dt=new BigUint64Array(1),mn=new Uint32Array(dt.buffer);function ye(t=1024){let e=new Array(t),n=t-1,s=0,a=0;return{enqueue(l){e[a&n]=l,a++},dequeue(){if(s===a)return;let l=e[s&n];return s++,l}}}function Q(){return typeof window=="undefined"&&typeof self!="undefined"}var ut={pois:{recordType:q,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:q,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},ft=Symbol("_pois"),pt=Symbol("_cells"),mt=Symbol("_coordinatesIndex"),Se=Symbol("_cellIdsIndex"),xe=Symbol("_ancestorIdsIndexSymbol");function yt(t,e,n){return _(t[Se],e,n)}function Tt(t,e,n){return _(t[xe],e,n)}var ht="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",gt=1,be=Symbol("_database");async function j(){return{[be]:await fe(ht,gt,ut)}}function St(t,e,n,s){return pe(t[be],{mode:e,signal:n==null?void 0:n.signal},({pois:a,cells:l})=>{let u={[ft]:a,[pt]:l,[mt]:A(a,"coordinates"),[Se]:A(a,"cellIds"),[xe]:A(l,"ancestorIds")};return s(u)},"pois","cells")}function ve(t,e,n){return t.set(e,n),n}function Ce(t,e){let n=[],s=new Set,a=ye();a.enqueue(D(re(t),e));for(let l;l=a.dequeue();){let u=l.toString();if(s.has(u))continue;s.add(u);let d=ne();for(let o of l.getCornerLatLngs())d=oe(d,o);if(ae(t,d)){n.push(l);for(let o of l.getNeighbors())a.enqueue(o)}}return n}function Te(t){return{cell:t,id:t.toString(),pois:new Map,corner:t.getCornerLatLngs(),center:t.getLatLng(),cell17s:new Map,cell16s:new Map,kindToPois:new Map,minLastFetchDate:void 0,maxLastFetchDate:void 0}}function Ie(t,e,n){var l;let s=e.toString(),a=(l=t.get(s))!=null?l:ve(t,s,{cell:e,center:e.getLatLng(),kindToCount:new Map,lastFetchDate:n});return a.lastFetchDate||(a.lastFetchDate=n),a}function he(t,e,n){var l;let s=D(e,n),{kindToCount:a}=Ie(t,s,void 0);for(let{entity:u}of e.data.gmo){let d=(l=a.get(u))!=null?l:0;a.set(u,d+1)}}function xt(t){return t.entity==="GYM"||t.entity==="POKESTOP"}function ge(t,e,n){var a;((a=t.kindToPois.get(e))!=null?a:ve(t.kindToPois,e,[])).push(n)}async function Le(t,e,n){let s=e.toString(),a,l=d=>{a!=null||(a=Te(e));let o=`(${d.lat}, ${d.lng})`;if(a.pois.get(o)!=null)return"continue";a.pois.set(o,d);let{gmo:r}=d.data;for(let{entity:i}of r)ge(a,i,d);r.length===0&&ge(a,"",d),r.some(xt)&&(he(a.cell16s,d,16),he(a.cell17s,d,17))},u=d=>{var r,i;if(d.level!==17)return"continue";a!=null||(a=Te(e)),a.minLastFetchDate=Math.min((r=a.minLastFetchDate)!=null?r:a.minLastFetchDate=d.lastFetchDate,d.lastFetchDate),a.maxLastFetchDate=Math.max((i=a.maxLastFetchDate)!=null?i:a.maxLastFetchDate=d.lastFetchDate,d.lastFetchDate);let o=D({lat:d.centerLat,lng:d.centerLng},17);Ie(a.cell17s,o,d.lastFetchDate)};return await St(t,"readonly",{signal:n},function*(d){yield*U(yt(d,s,l)),yield*U(Tt(d,s,u))}),a}function we(){let a=Object.freeze({strokeColor:"rgba(253, 255, 114, 0.4)",strokeWeight:1,fillColor:"#0000002d",clickable:!1,zIndex:3101}),l=Object.freeze(I(C({},a),{fillColor:"rgba(0, 191, 255, 0.4)",strokeColor:"rgba(0, 191, 255, 0.6)",zIndex:3100})),u=Object.freeze(I(C({},l),{fillColor:"rgba(255, 0, 13, 0.4)",strokeColor:"rgba(255, 0, 13, 0.6)"})),o=Object.freeze({strokeColor:"#c54545b7",strokeWeight:2,fillColor:"#00000000",clickable:!1,zIndex:3102}),r=o,i=Object.freeze(I(C({},o),{fillColor:"#dd767625"})),c=Object.freeze(I(C({},o),{fillColor:"#d3b71738"})),p=Object.freeze({markerSize:8,borderColor:"#ff6600",borderWidth:2,fillColor:"#ff660080",zIndex:3200}),m=Object.freeze(I(C({},p),{borderColor:"#ffffff",fillColor:"#ff2450"})),T=Object.freeze(I(C({},p),{borderColor:"#0000cd",fillColor:"#00bfff"})),y=Object.freeze(I(C({},p),{borderColor:"#e762d3",fillColor:"#f195eb"})),g=Object.freeze({fontWeight:"normal",fontSize:"11px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',strokeColor:"rgb(0, 0, 0)",fillColor:"#FFFFBB",strokeWeight:2,lineJoin:"round",shadowBlur:1}),S=Object.freeze(I(C({},g),{strokeColor:"#000030",fillColor:"#f0ffff"})),x=Object.freeze(I(C({},g),{fontWeight:"bold",strokeColor:"#ffffffd5",fillColor:"#9c1933"})),b=Object.freeze(I(C({},g),{strokeColor:"#e762d3"}));return{cell17EmptyOptions:a,cell17PokestopOptions:l,cell17GymOptions:u,cell14Options:o,cell14OptionsEmpty:r,cell14Options1:i,cell14Options2:c,wayspotOptions:p,gymOptions:m,pokestopOptions:T,powerspotOptions:y,wayspotLabelOptions:g,pokestopLabelOptions:S,gymLabelOptions:x,powerspotLabelOptions:b,cellBaseZIndex:3100,poiBaseZIndex:3200,poiLabelBaseZIndex:3300,statLabelBaseZIndex:3400}}function bt({CanvasTextMetrics:t},e,n,s,a="\\u2026"){let l=t.measureText(n,e);if(l.width<=s)return l;let u=0,d=n.length,o=a,r=t.measureText(a,e);for(;u<=d;){let i=Math.floor((u+d)/2),c=n.substring(0,i)+a,f=t.measureText(c,e);f.width<=s?(o=c,r=f,u=i+1):d=i-1}return{bestText:o,bestMetrics:r}}function vt({PIXI:t,cell14LabelTextStyle:e},n,{lat:s,lng:a},l){let u=R(),{x:d,y:o}=w(s,a,u),r=new t.Text;return r.text=n,r.style=e,r.anchor.set(.5),r.x=d,r.y=o,r.alpha=l,r}function Ct(t,e){switch(e){case 0:return t.cell14OptionsEmpty;case 1:case 5:case 19:return t.cell14Options1;case 4:case 18:return t.cell14Options2}return t.cell14Options}function It(t,e,n){let s=Ct(t,e);return n===1?s:I(C({},s),{strokeWeight:s.strokeWeight*2+s.strokeWeight*10*(1-n),strokeOpacity:.3+.4*n,fillColor:"#00000000"})}function Re({kindToPois:t}){var e,n,s,a;return((n=(e=t.get("GYM"))==null?void 0:e.length)!=null?n:0)+((a=(s=t.get("POKESTOP"))==null?void 0:s.length)!=null?a:0)}function Lt(t){var s;let n=(s=t.minLastFetchDate)!=null?s:t.maxLastFetchDate;return n===void 0||n<Date.now()-6048e5}function M(t){return Lt(t)?.3:1}function Me(t,e,n){let{options:s}=t,a=Re(n),l=n.cell17s.size/4**3,u=It(s,a,l);return e.cellMeshBuilder.add(n.corner,u,M(n))}function Oe(t,e){let n=Re(e);if(n<=0)return;let s=M(e);return vt(t,`${n}`,e.center,s)}function Pe(t,e){var n;return((n=e.kindToCount.get(t))!=null?n:0)!==0}function Be(t,e,n){let{options:s}=t;for(let a of e.cell17s.values()){let l;Pe("GYM",a)?l=s.cell17GymOptions:Pe("POKESTOP",a)?l=s.cell17PokestopOptions:l=s.cell17EmptyOptions;let u=a.cell.getCornerLatLngs();n.add(u,l,M(e))}}function wt(t,e){switch(e){case"GYM":return t.gymOptions;case"POKESTOP":return t.pokestopOptions;case"POWERSPOT":return t.powerspotOptions;default:return t.wayspotOptions}}function Pt(t,e){switch(e){case"GYM":return t.gymLabelOptions;case"POKESTOP":return t.pokestopLabelOptions;case"POWERSPOT":return t.powerspotLabelOptions;default:return t.wayspotLabelOptions}}function Ae({options:t},{zoom:e},n,s){for(let[a,l]of n.kindToPois){let u=wt(t,a),d=e<=16?u.markerSize*.5:u.markerSize;for(let o of l)o.data.isCommunityContributed&&s.add(o,d,u,M(n))}}function ke({data:t}){let e=0;t.isCommunityContributed&&(e+=.5);let n=!1,s=!1,a=!1,l=!1;for(let{status:u,entity:d}of t.gmo)switch(u==="ACTIVE"&&(n=!0),d){case"GYM":s=!0;break;case"POKESTOP":a=!0;break;case"POWERSPOT":l=!0;break}return n&&(e+=.5),s&&(e+=.4),a&&(e+=.1),l&&(e+=.05),t.hasAdditionalImages&&(e+=.01),e}function kt(t,e){return ke(e)-ke(t)}function Rt(t){for(let{entity:e}of t.data.gmo)return e;return""}function Mt({PIXI:t,options:e},n){let{lat:s,lng:a,guid:l,name:u}=n,d=Pt(e,Rt(n)),o=new t.TextStyle({fontFamily:d.fontFamily,fontWeight:d.fontWeight,fontSize:d.fontSize,fill:d.fillColor,stroke:{color:d.strokeColor,join:d.lineJoin,width:d.strokeWeight},dropShadow:{alpha:1,angle:0,distance:0,color:d.strokeColor,blur:d.shadowBlur}}),r=bt(t,o,u,140),i=u;r instanceof t.CanvasTextMetrics||(i=r.bestText,r=r.bestMetrics);let{x:c,y:f}=w(s,a,R());return{worldX:c,worldY:f,text:i,textMetrics:r,guid:l,style:o}}function De(t,{zoom:e},n){let{PIXI:s}=t,a=[];for(let r of n.pois.values())r.data.isCommunityContributed&&a.push(r);a.sort(kt);let d=Math.max(1,Math.ceil(6*2**(e-16)));a.length=Math.min(a.length,d);let o=M(n);return a.map(r=>{let{worldX:i,worldY:c,text:f,style:p}=Mt(t,r),m=new s.Text;return m.text=f,m.style=p,m.x=i,m.y=c,m.anchor.set(.5,-.5),m.alpha=o,m})}var Ot=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aPosition;\\r\nin vec2 aUV;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\nin float aLineWidth;\\r\n\\r\nout vec2 vUV;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\nout float vLineWidth;\\r\n\\r\nvoid main() {\\r\n    vUV = aUV;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n    vLineWidth = aLineWidth;\\r\n\\r\n    vec3 worldPos = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix * vec3(aPosition, 1.0f);\\r\n    gl_Position = vec4(worldPos.xy, 0.0f, 1.0f);\\r\n}\\r\n`,Bt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},At={aPosition:{type:"vec2"},aUV:{type:"vec2"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"},aLineWidth:{type:"float"}},Ke={source:Ot,uniforms:Bt,attributes:At};var Dt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vUV;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\nin float vLineWidth;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    vec4 fillColor = vFillColor;\\r\n    vec4 strokeColor = vStrokeColor;\\r\n    float lineWidth = vLineWidth;\\r\n\\r\n    vec2 dEdge = min(vUV, 1.0f - vUV);\\r\n    float minEdgeDist = min(dEdge.x, dEdge.y);\\r\n\\r\n    float dx = fwidth(vUV.x);\\r\n    float dy = fwidth(vUV.y);\\r\n    float pixelSize = max(dx, dy);\\r\n\\r\n    float threshold = pixelSize * lineWidth;\\r\n\\r\n    float edgeAlpha = smoothstep(threshold - pixelSize, threshold, minEdgeDist);\\r\n    vec4 color = mix(strokeColor, fillColor, edgeAlpha);\\r\n\\r\n    fragColor = vec4(color.rgb * color.a, color.a);\\r\n}`,Kt={},Ft={vUV:{type:"vec2"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"},vLineWidth:{type:"float"}},Fe={source:Dt,uniforms:Kt,attributes:Ft};var Et=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aQuadPos;\\r\nin vec2 aCenter;\\r\nin float aRadius;\\r\nin float aStrokeWidth;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\n\\r\nout vec2 vPixelPos;\\r\nout float vRadius;\\r\nout float vStrokeWidth;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\n\\r\nvoid main() {\\r\n    mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;\\r\n    vec3 clip = mvp * vec3(aCenter, 1.0f);\\r\n\\r\n    float ndcPxX = uProjectionMatrix[0][0];\\r\n    float ndcPxY = -uProjectionMatrix[1][1];\\r\n\\r\n    float quadR = aRadius + aStrokeWidth;\\r\n    vec2 ndcOffset = vec2(aQuadPos.x * quadR * ndcPxX, aQuadPos.y * quadR * ndcPxY);\\r\n\\r\n    gl_Position = vec4(clip.xy + ndcOffset, 0.0f, 1.0f);\\r\n\\r\n    vPixelPos = aQuadPos * quadR;\\r\n    vRadius = aRadius;\\r\n    vStrokeWidth = aStrokeWidth;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n}`,Nt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Vt={aQuadPos:{type:"vec2"},aCenter:{type:"vec2"},aRadius:{type:"float"},aStrokeWidth:{type:"float"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"}},Ee={source:Et,uniforms:Nt,attributes:Vt};var Wt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vPixelPos;\\r\nin float vRadius;\\r\nin float vStrokeWidth;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    float d = length(vPixelPos);\\r\n    float fw = fwidth(d);\\r\n\\r\n    float outerEdge = vRadius + vStrokeWidth;\\r\n    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);\\r\n    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);\\r\n\\r\n    if(outerMask <= 0.0f)\\r\n        discard;\\r\n\\r\n    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);\\r\n    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);\\r\n\\r\n    vec4 finalColor = mix(s, f, fillMask);\\r\n    fragColor = finalColor * outerMask;\\r\n}`,Ut={},Xt={vPixelPos:{type:"vec2"},vRadius:{type:"float"},vStrokeWidth:{type:"float"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"}},Ne={source:Wt,uniforms:Ut,attributes:Xt};function K(t){return new t.Geometry}function Y(t,e,n,s){return t.Shader.from({gl:{vertex:e.source,fragment:n.source},resources:{typedUniforms:s}})}function P(t){var e;if(t=t.trim().toLowerCase(),t.startsWith("#")){let n=t.slice(1),s=parseInt(n.substring(0,2),16)/255,a=parseInt(n.substring(2,4),16)/255,l=parseInt(n.substring(4,6),16)/255,u=n.length===8?parseInt(n.substring(6,8),16)/255:1;return[s,a,l,u]}if(t.startsWith("rgb")){let n=(e=t.match(/[\\d.]+/g))==null?void 0:e.map(Number);if((n==null?void 0:n.length)===4)return[n[0]/255,n[1]/255,n[2]/255,n[3]]}throw new Error("Unsupported format")}var Ve=4;function We(t,e){let{x:n,y:s}=e,{PIXI:a,shader:l,_point_result_cache:u}=t,d=[],o=[],r=[],i=[],c=[],f=[];function p(T,y,h){if(T.length!==Ve)return le`internal error`;let g=P(y.fillColor),S=P(y.strokeColor),x=y.strokeWeight,b=f.length;for(let v=0;v<Ve;v++){let{lat:L,lng:k}=T[v],{x:F,y:E}=w(L,k,u);d.push(F-n,E-s),i.push(g[0],g[1],g[2],g[3]*h),c.push(S[0],S[1],S[2],S[3]*h),f.push(x)}o.push(0,0,1,0,1,1,0,1),r.push(b+0,b+1,b+2,b+0,b+2,b+3)}function m(){let T=K(a);T.addAttribute("aPosition",{buffer:new Float32Array(d),format:"float32x2"}),T.addAttribute("aUV",{buffer:new Float32Array(o),format:"float32x2"}),T.addIndex(r),T.addAttribute("aFillColor",{buffer:new Float32Array(i),format:"float32x4"}),T.addAttribute("aStrokeColor",{buffer:new Float32Array(c),format:"float32x4"}),T.addAttribute("aLineWidth",{buffer:new Float32Array(f),format:"float32"});let y=new a.Mesh({geometry:T,shader:l});return y.position.set(n,s),y}return{add:p,bake:m}}var Ue=[[-1,-1],[1,-1],[1,1],[-1,1]];function Xe(t,e){let{PIXI:n,circleShader:s,_point_result_cache:a}=t,{x:l,y:u}=e,d=[],o=[],r=[],i=[],c=[],f=[],p=[];function m(y,h,g,S){let x=g.borderWidth,b=P(g.fillColor),v=P(g.borderColor),L=i.length,{lat:k,lng:F}=y,{x:E,y:Qe}=w(k,F,a);for(let N=0;N<Ue.length;N++){let[je,Ye]=Ue[N];d.push(je,Ye),o.push(E-l,Qe-u),i.push(h),c.push(x),f.push(b[0],b[1],b[2],b[3]*S),p.push(v[0],v[1],v[2],v[3]*S)}r.push(L+0,L+1,L+2,L+0,L+2,L+3)}function T(){let y=K(n);y.addAttribute("aQuadPos",{buffer:new Float32Array(d),format:"float32x2"}),y.addIndex(r),y.addAttribute("aCenter",{buffer:new Float32Array(o),format:"float32x2"}),y.addAttribute("aRadius",{buffer:new Float32Array(i),format:"float32"}),y.addAttribute("aFillColor",{buffer:new Float32Array(f),format:"float32x4"}),y.addAttribute("aStrokeColor",{buffer:new Float32Array(p),format:"float32x4"}),y.addAttribute("aStrokeWidth",{buffer:new Float32Array(c),format:"float32"});let h=new n.Mesh({geometry:y,shader:s});return h.position.set(l,u),h}return{add:m,bake:T}}function qt(t,e){let{lat:n,lng:s}=e.getLatLng(),a=w(n,s,R()),l=We(t,a),u=Xe(t,a);return{views:[],center:a,cellMeshBuilder:l,circlesBuilder:u}}function _t(t){return class extends t.Bounds{constructor(s){super();this.key=s}}}async function Qt(t){let e;Q()?(e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs"),e.DOMAdapter.set(e.WebWorkerAdapter)):e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm");let n=new e.Application;return await n.init({canvas:t,autoDensity:!1,autoStart:!1,backgroundAlpha:0,antialias:!0,roundPixels:!0}),{PIXI:e,app:n}}function jt(t){return Y(t,Ke,Fe,new t.UniformGroup({}))}function Yt(t){return Y(t,Ee,Ne,new t.UniformGroup({}))}function Ge(t,e){if(e.parent==null)return;let{scale:n}=e.parent.worldTransform.decompose(t._tempTransform);e.scale.x=1/n.x,e.scale.y=1/n.y}async function qe(t,e){let n=await j(),s=new OffscreenCanvas(0,0),{PIXI:a,app:l}=await Qt(s),u=l.stage.addChild(new a.Container),d=new a.TextStyle({align:"center",fontWeight:"bold",fontSize:"20px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',fill:"rgb(255, 255, 255)",stroke:{width:4,join:"round",color:"#c54545"}});return{canvas:s,layers:{cellLayer:u.addChild(new a.Container),circleLayer:u.addChild(new a.Container),labelLayer:u.addChild(new a.Container),cell14TextLayer:u.addChild(new a.Container)},PIXI:a,BoxBounds:_t(a),shader:jt(a),circleShader:Yt(a),cell14LabelTextStyle:d,app:l,worldContainer:u,handleAsyncError:t,onRenderUpdated:e,options:we(),records:n,cells:new Map,_point_result_cache:{x:0,y:0},_pois_cache:[],_tempTransform:new a.Transform}}function Zt(t,e){let n=2**e.zoom;t.scale.set(n),t.x=-e.nwWorld.x*n,t.y=-e.nwWorld.y*n}function Ht({BoxBounds:t},e,n){let s=new t(n.uid);if(n.visible=!0,n.getBounds(!1,s),e.check(s)){n.visible=!1;return}e.addBox(s),n.visible=!0}function Jt(t){for(let n of t.layers.cell14TextLayer.children)Ge(t,n);for(let n of t.layers.labelLayer.children)Ge(t,n);let e=ee();for(let n of t.layers.labelLayer.children)Ht(t,e,n)}async function Z(t,e,n){await de(n);let{app:s,worldContainer:a}=t,{width:l,height:u,devicePixelRatio:d}=e;s.renderer.resize(l,u,d),Zt(a,e),Jt(t),s.render();let o=t.canvas.transferToImageBitmap();t.onRenderUpdated(o,e)}function H(t,e){let n=t.get(e);if(n){for(let s of n.views)s.destroy();t.delete(e)}}function $t({cells:t},e){let n=new Set(e.map(s=>s.toString()));for(let s of t.keys())n.has(s)||H(t,s)}async function zt(t,e,n,s){let{cells:a,records:l}=t,{zoom:u}=e,d=n.toString();H(a,d);let o=await Le(l,n,s);if(o==null)return;let r=qt(t,n);if(a.set(d,r),14<u&&Be(t,o,r.cellMeshBuilder),Me(t,r,o),14<u&&u<16&&Ae(t,e,o,r.circlesBuilder),14<u)for(let i of De(t,e,o))r.views.push(t.layers.labelLayer.addChild(i));if(13<u){let i=Oe(t,o);i&&r.views.push(t.layers.cell14TextLayer.addChild(i))}r.views.push(t.layers.cellLayer.addChild(r.cellMeshBuilder.bake())),r.views.push(t.layers.circleLayer.addChild(r.circlesBuilder.bake()))}async function _e(t,e,n){let{cells:s}=t,{zoom:a,bounds:l}=e;if(a<=12){for(let d of s.keys())H(s,d);return Z(t,e,n)}let u=Ce(l,14);$t(t,u),await Z(t,e,n);for(let d of u)await zt(t,e,d,n),await Z(t,e,n)}function J(t){console.error("An error occurred during asynchronous processing:",t)}function en(t){return t instanceof Error?t:String(t)}async function tn(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self);try{let n=d=>{e.reportError(en(d)).catch(J)},s=await qe(n,(d,o)=>{e.notifyRenderCompleted(t.transfer(d,[d]),o).catch(n)}),{task:a,cancelTask:l}=ue((d,o)=>_e(s,o,d)),u={draw:a,drawCancel:l};return t.expose(u),u}catch(n){let s=n instanceof Error?n:String(n);e.reportError(s).catch(J)}}async function nn(){await tn()}nn().catch(J);\n');
+    return inlineWorker('var rt=Object.defineProperty,ot=Object.defineProperties;var at=Object.getOwnPropertyDescriptors;var ne=Object.getOwnPropertySymbols;var it=Object.prototype.hasOwnProperty,st=Object.prototype.propertyIsEnumerable;var W=(t,e)=>(e=Symbol[t])?e:Symbol.for("Symbol."+t),lt=t=>{throw TypeError(t)};var U=(t,e,n)=>e in t?rt(t,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):t[e]=n,C=(t,e)=>{for(var n in e||(e={}))it.call(e,n)&&U(t,n,e[n]);if(ne)for(var n of ne(e))st.call(e,n)&&U(t,n,e[n]);return t},I=(t,e)=>ot(t,at(e));var re=(t,e,n)=>U(t,typeof e!="symbol"?e+"":e,n);var ct=function(t,e){this[0]=t,this[1]=e};var X=t=>{var e=t[W("asyncIterator")],n=!1,a,i={};return e==null?(e=t[W("iterator")](),a=u=>i[u]=c=>e[u](c)):(e=e.call(t),a=u=>i[u]=c=>{if(n){if(n=!1,u==="throw")throw c;return c}return n=!0,{done:!1,value:new ct(new Promise(d=>{var o=e[u](c);o instanceof Object||lt("Object expected"),d(o)}),1)}}),i[W("iterator")]=()=>i,a("next"),"throw"in e?a("throw"):i.throw=u=>{throw u},"return"in e&&a("return"),i};function oe(t=128){let e=new Map;function n(o,r){return o<<16|r&65535}function a(o,r){let s=o.x-o.width/2,l=o.x+o.width/2,m=o.y-o.height/2,f=o.y+o.height/2,p=Math.floor(s/t),g=Math.floor(l/t),y=Math.floor(m/t),T=Math.floor(f/t);for(let h=p;h<=g;h++)for(let x=y;x<=T;x++)r.push(n(h,x))}let i=[];function u(o){a(o,i);try{for(let r of i){let s=e.get(r);s||(s=[],e.set(r,s)),s.push(o)}}finally{i.length=0}}let c=new Set;function d(o){a(o,i);try{for(let r of i){let s=e.get(r);if(s)for(let l of s)c.add(l)}for(let r of c){if(o.key===r.key)continue;let s=Math.abs(o.x-r.x),l=(o.width+r.width)/2;if(s>=l)continue;let m=Math.abs(o.y-r.y),f=(o.height+r.height)/2;if(!(m>=f))return!0}}finally{c.clear(),i.length=0}return!1}return{addBox:u,check:d}}var q=256,ae=Math.PI,dt=ae/180,ut=q/360,pt=q/(2*ae),ft=q/2;function w(t,e,n){let a=(e+180)*ut,i=Math.sin(t*dt),u=i>.9999?.9999:i<-.9999?-.9999:i,c=ft-Math.atanh(u)*pt;return n.x=a,n.y=c,n}function k(){return{x:0,y:0}}function ie(){return{sw:{lat:1/0,lng:1/0},ne:{lat:-1/0,lng:-1/0}}}function se(t){return{lat:(t.sw.lat+t.ne.lat)/2,lng:(t.sw.lng+t.ne.lng)/2}}function le(t,e){return{sw:{lat:Math.min(t.sw.lat,e.lat),lng:Math.min(t.sw.lng,e.lng)},ne:{lat:Math.max(t.ne.lat,e.lat),lng:Math.max(t.ne.lng,e.lng)}}}function ce(t,e){return t.sw.lat<=e.ne.lat&&e.sw.lat<=t.ne.lat?mt(t,e):!1}function mt(t,e){let n=t.sw.lng>t.ne.lng,a=e.sw.lng>e.ne.lng;return!n&&!a?t.sw.lng<=e.ne.lng&&e.sw.lng<=t.ne.lng:D(t,e.sw.lng)||D(t,e.ne.lng)||D(e,t.sw.lng)||D(e,t.ne.lng)||n&&a}function D(t,e){return t.sw.lng<=t.ne.lng?e>=t.sw.lng&&e<=t.ne.lng:e>=t.sw.lng||e<=t.ne.lng}function _(t){return t}function ue(...t){}function pe(t,...e){throw new Error(String.raw(t,...e))}var G=class extends Error{constructor(n){super(n);re(this,"name","AbortError")}};function fe(t="The operation was aborted."){return typeof DOMException=="function"?new DOMException(t,"AbortError"):new G(t)}function me(t){return new Promise((e,n)=>{if(t.aborted)return n(t.reason);let a=()=>{cancelAnimationFrame(i),t.removeEventListener("abort",a)},i=requestAnimationFrame(u=>{a(),e(u)});t.addEventListener("abort",a,{once:!0})})}function ye(t){let e=new Map;return{async task(n,...a){let i=new AbortController;e.set(n,i);try{return await t(i.signal,...a)}finally{e.delete(n)}},cancelTask(n){let a=e.get(n);a&&(a.abort(),e.delete(n))}}}function yt(t,e){for(let[n,a]of Object.entries(e)){let i=t.createObjectStore(n,{keyPath:a.key.slice()});for(let[u,c]of Object.entries(a.indexes))i.createIndex(u,c.key,c)}}function ge(t,e,n){return new Promise((a,i)=>{let u=indexedDB.open(t,e);u.addEventListener("upgradeneeded",()=>yt(u.result,n)),u.addEventListener("blocked",()=>i(new Error("database blocked"))),u.addEventListener("error",()=>i(u.error)),u.addEventListener("success",()=>a(u.result))})}var O=class{constructor(e,n,a){this.source=e;this.query=n;this.action=a}};function Te(t,{mode:e,signal:n},a,...i){return new Promise((u,c)=>{if(n!=null&&n.aborted){c(fe());return}let d=!1,o,r=t.transaction(i,e),s=n?()=>{d||r.abort()}:ue;r.addEventListener("complete",()=>{n==null||n.removeEventListener("abort",s),d?u(o):c(new Error("internal error"))}),r.addEventListener("error",S=>{n==null||n.removeEventListener("abort",s),c(S.target.error)}),n==null||n.addEventListener("abort",s);let l={};for(let S of i)l[S]=r.objectStore(S);let m=a(l),f,p,g,y,T,h;function x(){let S;switch(f){case void 0:S=m.next();break;case"Request":{let v=p.result;f=void 0,p=void 0,S=m.next(v);break}case"WaitRequests":{let v=g,L=y,P=L[v.length].result;if(v.push(P),v.length!==L.length)return;f=void 0,y=void 0,g=void 0,S=m.next(v);break}case"OpenCursor":{let v=T.result;if(v===null||h(v.value)==="break")f=void 0,T=void 0,h=void 0,S=m.next(void 0);else{v.continue();return}break}default:{c(new Error(`Invalid resolving kind: ${f}`));return}}if(S.done){d=!0,o=S.value;return}let b=S.value;if(b instanceof IDBRequest){f="Request",p=b,b.onsuccess=x;return}if(b instanceof O){f="OpenCursor",T=b.source.openCursor(b.query),h=b.action,T.onsuccess=x;return}f="WaitRequests",y=b,g=[];for(let v of b)v.onsuccess=x}x()})}function E(t,e){return t.index(e)}function*Q(t,e,n){yield new O(t,e,n)}function Tt(t){"use strict";var e=t.S2={L:{}};e.L.LatLng=function(o,r,s){var l=parseFloat(o,10),m=parseFloat(r,10);if(isNaN(l)||isNaN(m))throw new Error("Invalid LatLng object: ("+o+", "+r+")");return s!==!0&&(l=Math.max(Math.min(l,90),-90),m=(m+180)%360+(m<-180||m===180?180:-180)),{lat:l,lng:m}},e.L.LatLng.DEG_TO_RAD=Math.PI/180,e.L.LatLng.RAD_TO_DEG=180/Math.PI,e.LatLngToXYZ=function(o){var r=e.L.LatLng.DEG_TO_RAD,s=o.lat*r,l=o.lng*r,m=Math.cos(s);return[Math.cos(l)*m,Math.sin(l)*m,Math.sin(s)]},e.XYZToLatLng=function(o){var r=e.L.LatLng.RAD_TO_DEG,s=Math.atan2(o[2],Math.sqrt(o[0]*o[0]+o[1]*o[1])),l=Math.atan2(o[1],o[0]);return e.L.LatLng(s*r,l*r)};var n=function(o){var r=[Math.abs(o[0]),Math.abs(o[1]),Math.abs(o[2])];return r[0]>r[1]?r[0]>r[2]?0:2:r[1]>r[2]?1:2},a=function(o,r){var s,l;switch(o){case 0:s=r[1]/r[0],l=r[2]/r[0];break;case 1:s=-r[0]/r[1],l=r[2]/r[1];break;case 2:s=-r[0]/r[2],l=-r[1]/r[2];break;case 3:s=r[2]/r[0],l=r[1]/r[0];break;case 4:s=r[2]/r[1],l=-r[0]/r[1];break;case 5:s=-r[1]/r[2],l=-r[0]/r[2];break;default:throw{error:"Invalid face"}}return[s,l]};e.XYZToFaceUV=function(o){var r=n(o);o[r]<0&&(r+=3);var s=a(r,o);return[r,s]},e.FaceUVToXYZ=function(o,r){var s=r[0],l=r[1];switch(o){case 0:return[1,s,l];case 1:return[-s,1,l];case 2:return[-s,-l,1];case 3:return[-1,-l,-s];case 4:return[l,-1,-s];case 5:return[l,s,-1];default:throw{error:"Invalid face"}}};var i=function(o){return o>=.5?1/3*(4*o*o-1):1/3*(1-4*(1-o)*(1-o))};e.STToUV=function(o){return[i(o[0]),i(o[1])]};var u=function(o){return o>=0?.5*Math.sqrt(1+3*o):1-.5*Math.sqrt(1-3*o)};e.UVToST=function(o){return[u(o[0]),u(o[1])]},e.STToIJ=function(o,r){var s=1<<r,l=function(m){var f=Math.floor(m*s);return Math.max(0,Math.min(s-1,f))};return[l(o[0]),l(o[1])]},e.IJToST=function(o,r,s){var l=1<<r;return[(o[0]+s[0])/l,(o[1]+s[1])/l]};var c=function(o,r,s,l){var m,f;if(l==0){s==1&&(r.x=o-1-r.x,r.y=o-1-r.y);var p=r.x;r.x=r.y,r.y=p}},d=function(o,r,s,l){var m={a:[[0,"d"],[1,"a"],[3,"b"],[2,"a"]],b:[[2,"b"],[1,"b"],[3,"a"],[0,"c"]],c:[[2,"c"],[3,"d"],[1,"c"],[0,"b"]],d:[[0,"a"],[3,"c"],[1,"d"],[2,"d"]]};typeof l!="number"&&console.warn(new Error("called pointToHilbertQuadList without face value, defaulting to \'0\'").stack);for(var f=l%2?"d":"a",p=[],g=s-1;g>=0;g--){var y=1<<g,T=o&y?1:0,h=r&y?1:0,x=m[f][T*2+h];p.push(x[0]),f=x[1]}return p};return e.S2Cell=function(){},e.S2Cell.FromHilbertQuadKey=function(o){var r=o.split("/"),s=parseInt(r[0]),l=r[1],m=l.length,f={x:0,y:0},p,g,y,T,h,x;for(p=m-1;p>=0;p--)g=m-p,y=l[p],T=0,h=0,y==="1"?h=1:y==="2"?(T=1,h=1):y==="3"&&(T=1),x=Math.pow(2,g-1),c(x,f,T,h),f.x+=x*T,f.y+=x*h;if(s%2===1){var S=f.x;f.x=f.y,f.y=S}return e.S2Cell.FromFaceIJ(parseInt(s),[f.x,f.y],g)},e.S2Cell.FromLatLng=function(o,r){if(!o.lat&&o.lat!==0||!o.lng&&o.lng!==0)throw new Error("Pass { lat: lat, lng: lng } to S2.S2Cell.FromLatLng");var s=e.LatLngToXYZ(o),l=e.XYZToFaceUV(s),m=e.UVToST(l[1]),f=e.STToIJ(m,r);return e.S2Cell.FromFaceIJ(l[0],f,r)},e.S2Cell.FromFaceIJ=function(o,r,s){var l=new e.S2Cell;return l.face=o,l.ij=r,l.level=s,l},e.S2Cell.prototype.toString=function(){return"F"+this.face+"ij["+this.ij[0]+","+this.ij[1]+"]@"+this.level},e.S2Cell.prototype.getLatLng=function(){var o=e.IJToST(this.ij,this.level,[.5,.5]),r=e.STToUV(o),s=e.FaceUVToXYZ(this.face,r);return e.XYZToLatLng(s)},e.S2Cell.prototype.getCornerLatLngs=function(){for(var o=[],r=[[0,0],[0,1],[1,1],[1,0]],s=0;s<4;s++){var l=e.IJToST(this.ij,this.level,r[s]),m=e.STToUV(l),f=e.FaceUVToXYZ(this.face,m);o.push(e.XYZToLatLng(f))}return o},e.S2Cell.prototype.getFaceAndQuads=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return[this.face,o]},e.S2Cell.prototype.toHilbertQuadkey=function(){var o=d(this.ij[0],this.ij[1],this.level,this.face);return this.face.toString(10)+"/"+o.join("")},e.latLngToNeighborKeys=e.S2Cell.latLngToNeighborKeys=function(o,r,s){return e.S2Cell.FromLatLng({lat:o,lng:r},s).getNeighbors().map(function(l){return l.toHilbertQuadkey()})},e.S2Cell.prototype.getNeighbors=function(){var o=function(f,p,g){var y=1<<g;if(p[0]>=0&&p[1]>=0&&p[0]<y&&p[1]<y)return e.S2Cell.FromFaceIJ(f,p,g);var T=e.IJToST(p,g,[.5,.5]),h=e.STToUV(T),x=e.FaceUVToXYZ(f,h),S=e.XYZToFaceUV(x);return f=S[0],h=S[1],T=e.UVToST(h),p=e.STToIJ(T,g),e.S2Cell.FromFaceIJ(f,p,g)},r=this.face,s=this.ij[0],l=this.ij[1],m=this.level;return[o(r,[s-1,l],m),o(r,[s,l-1],m),o(r,[s+1,l],m),o(r,[s,l+1],m)]},e.FACE_BITS=3,e.MAX_LEVEL=30,e.POS_BITS=2*e.MAX_LEVEL+1,e.facePosLevelToId=e.S2Cell.facePosLevelToId=e.fromFacePosLevel=function(o,r,s){var l=t.dcodeIO&&t.dcodeIO.Long,m,f,p;for(s||(s=r.length),r.length>s&&(r=r.substr(0,s)),m=l.fromString(o.toString(10),!0,10).toString(2);m.length<e.FACE_BITS;)m="0"+m;for(f=l.fromString(r,!0,4).toString(2);f.length<2*s;)f="0"+f;for(p=m+f,p+="1";p.length<e.FACE_BITS+e.POS_BITS;)p+="0";return l.fromString(p,!0,2).toString(10)},e.keyToId=e.S2Cell.keyToId=e.toId=e.toCellId=e.fromKey=function(o){var r=o.split("/");return e.fromFacePosLevel(r[0],r[1],r[1].length)},e.idToKey=e.S2Cell.idToKey=e.S2Cell.toKey=e.toKey=e.fromId=e.fromCellId=e.S2Cell.toHilbertQuadkey=e.toHilbertQuadkey=function(o){for(var r=t.dcodeIO&&t.dcodeIO.Long,s=r.fromString(o,!0,10).toString(2);s.length<e.FACE_BITS+e.POS_BITS;)s="0"+s;for(var l=s.lastIndexOf("1"),m=s.substring(0,3),f=s.substring(3,l),p=f.length/2,g=r.fromString(m,!0,2).toString(10),y=r.fromString(f,!0,2).toString(4);y.length<p;)y="0"+y;return g+"/"+y},e.keyToLatLng=e.S2Cell.keyToLatLng=function(o){var r=e.S2Cell.FromHilbertQuadKey(o);return r.getLatLng()},e.idToLatLng=e.S2Cell.idToLatLng=function(o){var r=e.idToKey(o);return e.keyToLatLng(r)},e.S2Cell.latLngToKey=e.latLngToKey=e.latLngToQuadkey=function(o,r,s){if(isNaN(s)||s<1||s>30)throw new Error("\'level\' is not a number between 1 and 30 (but it should be)");return e.S2Cell.FromLatLng({lat:o,lng:r},s).toHilbertQuadkey()},e.stepKey=function(o,r){var s=t.dcodeIO&&t.dcodeIO.Long,l=o.split("/"),m=l[0],f=l[1],p=l[1].length,g=s.fromString(f,!0,4),y;r>0?y=g.add(Math.abs(r)):r<0&&(y=g.subtract(Math.abs(r)));var T=y.toString(4);for(T==="0"&&console.warning(new Error("face/position wrapping is not yet supported"));T.length<p;)T="0"+T;return m+"/"+T},e.S2Cell.prevKey=e.prevKey=function(o){return e.stepKey(o,-1)},e.S2Cell.nextKey=e.nextKey=function(o){return e.stepKey(o,1)},e}var he=Tt(typeof module!="undefined"&&module.exports?module.exports:typeof globalThis!="undefined"?globalThis:typeof self!="undefined"?self:typeof window!="undefined"?window:void 0);function B(t,e){return he.S2Cell.FromLatLng(t,e)}var Cn=Object.freeze(["0","1","2","3"]);var ht=new BigUint64Array(1),In=new Uint32Array(ht.buffer);function xe(t=1024){let e=new Array(t),n=t-1,a=0,i=0;return{enqueue(u){e[i&n]=u,i++},dequeue(){if(a===i)return;let u=e[a&n];return a++,u}}}function j(){return typeof window=="undefined"&&typeof self!="undefined"}var xt={pois:{recordType:_,key:"guid",indexes:{coordinates:{key:["lat","lng"]},cellIds:{key:"cellIds",multiEntry:!0}}},cells:{recordType:_,key:"cellId",indexes:{ancestorIds:{key:"ancestorIds",multiEntry:!0}}}},St=Symbol("_pois"),bt=Symbol("_cells"),vt=Symbol("_coordinatesIndex"),Ce=Symbol("_cellIdsIndex"),Ie=Symbol("_ancestorIdsIndexSymbol");function Ct(t,e,n){return Q(t[Ce],e,n)}function It(t,e,n){return Q(t[Ie],e,n)}var Lt="poi-records-e232930d-7282-4c02-aeef-bb9508576d2e",wt=1,Le=Symbol("_database");async function Y(){return{[Le]:await ge(Lt,wt,xt)}}function Rt(t,e,n,a){return Te(t[Le],{mode:e,signal:n==null?void 0:n.signal},({pois:i,cells:u})=>{let c={[St]:i,[bt]:u,[vt]:E(i,"coordinates"),[Ce]:E(i,"cellIds"),[Ie]:E(u,"ancestorIds")};return a(c)},"pois","cells")}function we(t,e,n){return t.set(e,n),n}function Re(t,e){let n=[],a=new Set,i=xe();i.enqueue(B(se(t),e));for(let u;u=i.dequeue();){let c=u.toString();if(a.has(c))continue;a.add(c);let d=ie();for(let o of u.getCornerLatLngs())d=le(d,o);if(ce(t,d)){n.push(u);for(let o of u.getNeighbors())i.enqueue(o)}}return n}function Se(t){return{cell:t,id:t.toString(),pois:new Map,corner:t.getCornerLatLngs(),center:t.getLatLng(),cell17s:new Map,cell16s:new Map,kindToPois:new Map,minLastFetchDate:void 0,maxLastFetchDate:void 0}}function Pe(t,e,n){var u;let a=e.toString(),i=(u=t.get(a))!=null?u:we(t,a,{cell:e,center:e.getLatLng(),kindToCount:new Map,lastFetchDate:n});return i.lastFetchDate||(i.lastFetchDate=n),i}function be(t,e,n){var u;let a=B(e,n),{kindToCount:i}=Pe(t,a,void 0);for(let{entity:c}of e.data.gmo){let d=(u=i.get(c))!=null?u:0;i.set(c,d+1)}}function Pt(t){return t.entity==="GYM"||t.entity==="POKESTOP"}function ve(t,e,n){var i;((i=t.kindToPois.get(e))!=null?i:we(t.kindToPois,e,[])).push(n)}async function ke(t,e,n){let a=e.toString(),i,u=d=>{i!=null||(i=Se(e));let o=`(${d.lat}, ${d.lng})`;if(i.pois.get(o)!=null)return"continue";i.pois.set(o,d);let{gmo:r}=d.data;for(let{entity:s}of r)ve(i,s,d);r.length===0&&ve(i,"",d),r.some(Pt)&&(be(i.cell16s,d,16),be(i.cell17s,d,17))},c=d=>{var r,s;if(d.level!==17)return"continue";i!=null||(i=Se(e)),i.minLastFetchDate=Math.min((r=i.minLastFetchDate)!=null?r:i.minLastFetchDate=d.lastFetchDate,d.lastFetchDate),i.maxLastFetchDate=Math.max((s=i.maxLastFetchDate)!=null?s:i.maxLastFetchDate=d.lastFetchDate,d.lastFetchDate);let o=B({lat:d.centerLat,lng:d.centerLng},17);Pe(i.cell17s,o,d.lastFetchDate)};return await Rt(t,"readonly",{signal:n},function*(d){yield*X(Ct(d,a,u)),yield*X(It(d,a,c))}),i}function Me(){let i=Object.freeze({strokeColor:"rgba(253, 255, 114, 0.4)",strokeWeight:1,fillColor:"#0000002d",clickable:!1,zIndex:3101}),u=Object.freeze(I(C({},i),{fillColor:"rgba(0, 191, 255, 0.4)",strokeColor:"rgba(0, 191, 255, 0.6)",zIndex:3100})),c=Object.freeze(I(C({},u),{fillColor:"rgba(255, 0, 13, 0.4)",strokeColor:"rgba(255, 0, 13, 0.6)"})),o=Object.freeze({strokeColor:"#c54545b7",strokeWeight:2,fillColor:"#00000000",clickable:!1,zIndex:3102}),r=o,s=Object.freeze(I(C({},o),{fillColor:"#dd767625"})),l=Object.freeze(I(C({},o),{fillColor:"#d3b71738"})),f=Object.freeze({markerSize:8,borderColor:"#ff6600",borderWidth:2,fillColor:"#ff660080",zIndex:3200}),p=Object.freeze(I(C({},f),{borderColor:"#ffffff",fillColor:"#ff2450"})),g=Object.freeze(I(C({},f),{borderColor:"#0000cd",fillColor:"#00bfff"})),y=Object.freeze(I(C({},f),{borderColor:"#e762d3",fillColor:"#f195eb"})),h=Object.freeze({fontWeight:"normal",fontSize:"11px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',strokeColor:"rgb(0, 0, 0)",fillColor:"#FFFFBB",strokeWeight:2,lineJoin:"round",shadowBlur:1}),x=Object.freeze(I(C({},h),{strokeColor:"#000030",fillColor:"#f0ffff"})),S=Object.freeze(I(C({},h),{fontWeight:"bold",strokeColor:"#ffffffd5",fillColor:"#9c1933"})),b=Object.freeze(I(C({},h),{strokeColor:"#e762d3"}));return{cell17EmptyOptions:i,cell17PokestopOptions:u,cell17GymOptions:c,cell14Options:o,cell14OptionsEmpty:r,cell14Options1:s,cell14Options2:l,wayspotOptions:f,gymOptions:p,pokestopOptions:g,powerspotOptions:y,wayspotLabelOptions:h,pokestopLabelOptions:x,gymLabelOptions:S,powerspotLabelOptions:b,cellBaseZIndex:3100,poiBaseZIndex:3200,poiLabelBaseZIndex:3300,statLabelBaseZIndex:3400}}function kt({CanvasTextMetrics:t},e,n,a,i="\\u2026"){let u=t.measureText(n,e);if(u.width<=a)return u;let c=0,d=n.length,o=i,r=t.measureText(i,e);for(;c<=d;){let s=Math.floor((c+d)/2),l=n.substring(0,s)+i,m=t.measureText(l,e);m.width<=a?(o=l,r=m,c=s+1):d=s-1}return{bestText:o,bestMetrics:r}}function Mt({PIXI:t,cell14LabelTextStyle:e},n,{lat:a,lng:i},u){let c=k(),{x:d,y:o}=w(a,i,c),r=new t.Text;return r.text=n,r.style=e,r.anchor.set(.5),r.x=d,r.y=o,r.alpha=u,r}function Dt(t,e){switch(e){case 0:return t.cell14OptionsEmpty;case 1:case 5:case 19:return t.cell14Options1;case 4:case 18:return t.cell14Options2}return t.cell14Options}function Ot(t,e,n){let a=Dt(t,e);return n===1?a:I(C({},a),{strokeWeight:a.strokeWeight*2+a.strokeWeight*10*(1-n),strokeOpacity:.3+.4*n,fillColor:"#00000000"})}function Ee({kindToPois:t}){var e,n,a,i;return((n=(e=t.get("GYM"))==null?void 0:e.length)!=null?n:0)+((i=(a=t.get("POKESTOP"))==null?void 0:a.length)!=null?i:0)}function Et(t){var a;let n=(a=t.minLastFetchDate)!=null?a:t.maxLastFetchDate;return n===void 0||n<Date.now()-6048e5}function M(t){return Et(t)?.3:1}function Be(t,e,n){let{options:a}=t,i=Ee(n),u=n.cell17s.size/4**3,c=Ot(a,i,u);return e.cellMeshBuilder.add(n.corner,c,M(n))}function Ke(t,e){let n=Ee(e);if(n<=0)return;let a=M(e);return Mt(t,`${n}`,e.center,a)}function De(t,e){var n;return((n=e.kindToCount.get(t))!=null?n:0)!==0}function Ae(t,e,n){let{options:a}=t;for(let i of e.cell17s.values()){let u;De("GYM",i)?u=a.cell17GymOptions:De("POKESTOP",i)?u=a.cell17PokestopOptions:u=a.cell17EmptyOptions;let c=i.cell.getCornerLatLngs();n.add(c,u,M(e))}}function Bt(t,e){switch(e){case"GYM":return t.gymOptions;case"POKESTOP":return t.pokestopOptions;case"POWERSPOT":return t.powerspotOptions;default:return t.wayspotOptions}}function Kt(t,e){switch(e){case"GYM":return t.gymLabelOptions;case"POKESTOP":return t.pokestopLabelOptions;case"POWERSPOT":return t.powerspotLabelOptions;default:return t.wayspotLabelOptions}}function Fe({options:t},{zoom:e},n,a){for(let[i,u]of n.kindToPois){let c=Bt(t,i),d=e<=16?c.markerSize*.5:c.markerSize;for(let o of u)o.data.isCommunityContributed&&a.add(o,d,c,M(n))}}function Oe({data:t}){let e=0;t.isCommunityContributed&&(e+=.5);let n=!1,a=!1,i=!1,u=!1;for(let{status:c,entity:d}of t.gmo)switch(c==="ACTIVE"&&(n=!0),d){case"GYM":a=!0;break;case"POKESTOP":i=!0;break;case"POWERSPOT":u=!0;break}return n&&(e+=.5),a&&(e+=.4),i&&(e+=.1),u&&(e+=.05),t.hasAdditionalImages&&(e+=.01),e}function At(t,e){return Oe(e)-Oe(t)}function Ft(t){for(let{entity:e}of t.data.gmo)return e;return""}function Nt({PIXI:t,options:e},n){let{lat:a,lng:i,guid:u,name:c}=n,d=Kt(e,Ft(n)),o=new t.TextStyle({fontFamily:d.fontFamily,fontWeight:d.fontWeight,fontSize:d.fontSize,fill:d.fillColor,stroke:{color:d.strokeColor,join:d.lineJoin,width:d.strokeWeight},dropShadow:{alpha:1,angle:0,distance:0,color:d.strokeColor,blur:d.shadowBlur}}),r=kt(t,o,c,140),s=c;r instanceof t.CanvasTextMetrics||(s=r.bestText,r=r.bestMetrics);let{x:l,y:m}=w(a,i,k());return{worldX:l,worldY:m,text:s,textMetrics:r,guid:u,style:o}}function Ne(t,{zoom:e},n){let{PIXI:a}=t,i=[];for(let r of n.pois.values())r.data.isCommunityContributed&&i.push(r);i.sort(At);let d=Math.max(1,Math.ceil(6*2**(e-16)));i.length=Math.min(i.length,d);let o=M(n);return i.map(r=>{let{worldX:s,worldY:l,text:m,style:f}=Nt(t,r),p=new a.Text;return p.text=m,p.style=f,p.x=s,p.y=l,p.anchor.set(.5,-.5),p.alpha=o,p})}var Vt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aPosition;\\r\nin vec2 aUV;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\nin float aLineWidth;\\r\n\\r\nout vec2 vUV;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\nout float vLineWidth;\\r\n\\r\nvoid main() {\\r\n    vUV = aUV;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n    vLineWidth = aLineWidth;\\r\n\\r\n    vec3 worldPos = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix * vec3(aPosition, 1.0f);\\r\n    gl_Position = vec4(worldPos.xy, 0.0f, 1.0f);\\r\n}\\r\n`,Wt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},Ut={aPosition:{type:"vec2"},aUV:{type:"vec2"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"},aLineWidth:{type:"float"}},Ve={source:Vt,uniforms:Wt,attributes:Ut};var Xt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vUV;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\nin float vLineWidth;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    vec4 fillColor = vFillColor;\\r\n    vec4 strokeColor = vStrokeColor;\\r\n    float lineWidth = vLineWidth;\\r\n\\r\n    vec2 dEdge = min(vUV, 1.0f - vUV);\\r\n    float minEdgeDist = min(dEdge.x, dEdge.y);\\r\n\\r\n    float dx = fwidth(vUV.x);\\r\n    float dy = fwidth(vUV.y);\\r\n    float pixelSize = max(dx, dy);\\r\n\\r\n    float threshold = pixelSize * lineWidth;\\r\n\\r\n    float edgeAlpha = smoothstep(threshold - pixelSize, threshold, minEdgeDist);\\r\n    vec4 color = mix(strokeColor, fillColor, edgeAlpha);\\r\n\\r\n    fragColor = vec4(color.rgb * color.a, color.a);\\r\n}`,qt={},Gt={vUV:{type:"vec2"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"},vLineWidth:{type:"float"}},We={source:Xt,uniforms:qt,attributes:Gt};var _t=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nuniform mat3 uProjectionMatrix;\\r\nuniform mat3 uWorldTransformMatrix;\\r\nuniform mat3 uTransformMatrix;\\r\n\\r\nin vec2 aQuadPos;\\r\nin vec2 aCenter;\\r\nin float aRadius;\\r\nin float aStrokeWidth;\\r\nin vec4 aFillColor;\\r\nin vec4 aStrokeColor;\\r\n\\r\nout vec2 vPixelPos;\\r\nout float vRadius;\\r\nout float vStrokeWidth;\\r\nout vec4 vFillColor;\\r\nout vec4 vStrokeColor;\\r\n\\r\nvoid main() {\\r\n    mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;\\r\n    vec3 clip = mvp * vec3(aCenter, 1.0f);\\r\n\\r\n    float ndcPxX = uProjectionMatrix[0][0];\\r\n    float ndcPxY = -uProjectionMatrix[1][1];\\r\n\\r\n    float quadR = aRadius + aStrokeWidth;\\r\n    vec2 ndcOffset = vec2(aQuadPos.x * quadR * ndcPxX, aQuadPos.y * quadR * ndcPxY);\\r\n\\r\n    gl_Position = vec4(clip.xy + ndcOffset, 0.0f, 1.0f);\\r\n\\r\n    vPixelPos = aQuadPos * quadR;\\r\n    vRadius = aRadius;\\r\n    vStrokeWidth = aStrokeWidth;\\r\n    vFillColor = aFillColor;\\r\n    vStrokeColor = aStrokeColor;\\r\n}`,Qt={uProjectionMatrix:"mat3",uWorldTransformMatrix:"mat3",uTransformMatrix:"mat3"},jt={aQuadPos:{type:"vec2"},aCenter:{type:"vec2"},aRadius:{type:"float"},aStrokeWidth:{type:"float"},aFillColor:{type:"vec4"},aStrokeColor:{type:"vec4"}},Ue={source:_t,uniforms:Qt,attributes:jt};var Yt=`#version 300 es\\r\nprecision mediump float;\\r\n\\r\nin vec2 vPixelPos;\\r\nin float vRadius;\\r\nin float vStrokeWidth;\\r\nin vec4 vFillColor;\\r\nin vec4 vStrokeColor;\\r\n\\r\nout vec4 fragColor;\\r\n\\r\nvoid main() {\\r\n    float d = length(vPixelPos);\\r\n    float fw = fwidth(d);\\r\n\\r\n    float outerEdge = vRadius + vStrokeWidth;\\r\n    float outerMask = 1.0f - smoothstep(outerEdge - fw, outerEdge, d);\\r\n    float fillMask = 1.0f - smoothstep(vRadius - fw, vRadius, d);\\r\n\\r\n    if(outerMask <= 0.0f)\\r\n        discard;\\r\n\\r\n    vec4 f = vec4(vFillColor.rgb * vFillColor.a, vFillColor.a);\\r\n    vec4 s = vec4(vStrokeColor.rgb * vStrokeColor.a, vStrokeColor.a);\\r\n\\r\n    vec4 finalColor = mix(s, f, fillMask);\\r\n    fragColor = finalColor * outerMask;\\r\n}`,Zt={},Ht={vPixelPos:{type:"vec2"},vRadius:{type:"float"},vStrokeWidth:{type:"float"},vFillColor:{type:"vec4"},vStrokeColor:{type:"vec4"}},Xe={source:Yt,uniforms:Zt,attributes:Ht};function K(t){return new t.Geometry}function Z(t,e,n,a){return t.Shader.from({gl:{vertex:e.source,fragment:n.source},resources:{typedUniforms:a}})}function R(t){var e;if(t=t.trim().toLowerCase(),t.startsWith("#")){let n=t.slice(1),a=parseInt(n.substring(0,2),16)/255,i=parseInt(n.substring(2,4),16)/255,u=parseInt(n.substring(4,6),16)/255,c=n.length===8?parseInt(n.substring(6,8),16)/255:1;return[a,i,u,c]}if(t.startsWith("rgb")){let n=(e=t.match(/[\\d.]+/g))==null?void 0:e.map(Number);if((n==null?void 0:n.length)===4)return[n[0]/255,n[1]/255,n[2]/255,n[3]]}throw new Error("Unsupported format")}var qe=4;function Ge(t,e){let{x:n,y:a}=e,{PIXI:i,shader:u,_point_result_cache:c}=t,d=[],o=[],r=[],s=[],l=[],m=[];function f(g,y,T){if(g.length!==qe)return pe`internal error`;let h=R(y.fillColor),x=R(y.strokeColor),S=y.strokeWeight,b=m.length;for(let v=0;v<qe;v++){let{lat:L,lng:P}=g[v],{x:F,y:N}=w(L,P,c);d.push(F-n,N-a),s.push(h[0],h[1],h[2],h[3]*T),l.push(x[0],x[1],x[2],x[3]*T),m.push(S)}o.push(0,0,1,0,1,1,0,1),r.push(b+0,b+1,b+2,b+0,b+2,b+3)}function p(){let g=K(i);g.addAttribute("aPosition",{buffer:new Float32Array(d),format:"float32x2"}),g.addAttribute("aUV",{buffer:new Float32Array(o),format:"float32x2"}),g.addIndex(r),g.addAttribute("aFillColor",{buffer:new Float32Array(s),format:"float32x4"}),g.addAttribute("aStrokeColor",{buffer:new Float32Array(l),format:"float32x4"}),g.addAttribute("aLineWidth",{buffer:new Float32Array(m),format:"float32"});let y=new i.Mesh({geometry:g,shader:u});return y.position.set(n,a),y}return{add:f,bake:p}}var _e=[[-1,-1],[1,-1],[1,1],[-1,1]];function Qe(t,e){let{PIXI:n,circleShader:a,_point_result_cache:i}=t,{x:u,y:c}=e,d=[],o=[],r=[],s=[],l=[],m=[],f=[];function p(y,T,h,x){let S=h.borderWidth,b=R(h.fillColor),v=R(h.borderColor),L=s.length,{lat:P,lng:F}=y,{x:N,y:et}=w(P,F,i);for(let V=0;V<_e.length;V++){let[tt,nt]=_e[V];d.push(tt,nt),o.push(N-u,et-c),s.push(T),l.push(S),m.push(b[0],b[1],b[2],b[3]*x),f.push(v[0],v[1],v[2],v[3]*x)}r.push(L+0,L+1,L+2,L+0,L+2,L+3)}function g(){let y=K(n);y.addAttribute("aQuadPos",{buffer:new Float32Array(d),format:"float32x2"}),y.addIndex(r),y.addAttribute("aCenter",{buffer:new Float32Array(o),format:"float32x2"}),y.addAttribute("aRadius",{buffer:new Float32Array(s),format:"float32"}),y.addAttribute("aFillColor",{buffer:new Float32Array(m),format:"float32x4"}),y.addAttribute("aStrokeColor",{buffer:new Float32Array(f),format:"float32x4"}),y.addAttribute("aStrokeWidth",{buffer:new Float32Array(l),format:"float32"});let T=new n.Mesh({geometry:y,shader:a});return T.position.set(u,c),T}return{add:p,bake:g}}var A=6371e3;function je(t,e=8e6){let n=[];return{acquire(a,i){let u=n.findIndex(d=>d.width===a&&d.height===i),c=u<0?t():n.splice(u,1)[0];return c.width!==a&&(c.width=a),c.height!==i&&(c.height=i),c},release(a){let i=a.width*a.height,u=n.reduce((c,d)=>c+d.width*d.height,0);i>e||u+i>e||n.push(a)}}}function $(t,e,n,a){let i=Math.max(0,Math.min(e.radius,Math.PI*A)),u=Math.min(1024,Math.max(180,Math.ceil(i*256*a/(A*12)))),c=i/A,d=e.center.lat*Math.PI/180,o=e.center.lng*Math.PI/180,r;t.beginPath();for(let s=0;s<=u;s++){let l=2*Math.PI*s/u,m=Math.asin(Math.sin(d)*Math.cos(c)+Math.cos(d)*Math.sin(c)*Math.cos(l)),f=o+Math.atan2(Math.sin(l)*Math.sin(c)*Math.cos(d),Math.cos(c)-Math.sin(d)*Math.sin(m)),p={x:0,y:0};w(m*180/Math.PI,f*180/Math.PI,p);let g=p.x;if(r!==void 0)g+=Math.round(r-g);else{let h=n.width/2**n.zoom,x=n.nwWorld.x+h/2;g+=Math.round(x-g)}r=g;let y=(g-n.nwWorld.x)*a,T=(p.y-n.nwWorld.y)*a;s===0?t.moveTo(y,T):t.lineTo(y,T)}t.closePath()}function H(t,e,n,a,i,u,c,d){let o=[],r=[{type:"visit",node:t}];for(;r.length>0;){let s=r.pop();if(s.type==="visit"){let p=s.node;if(p.type==="circle"){let g=n.acquire(a,i),y=g.getContext("2d");if(!y)throw new Error("2D canvas context is unavailable.");y.clearRect(0,0,a,i);let T=e.get(p.id);if(!T)throw new Error(`Missing range circle: ${p.id}`);p.id===(d==null?void 0:d.id)?d.value&&(y.fillStyle="#fff",y.fillRect(0,0,a,i)):T.radius>=Math.PI*A?(y.fillStyle="#fff",y.fillRect(0,0,a,i)):T.radius>0&&($(y,T,u,c),y.fillStyle="#fff",y.fill()),o.push(g)}else p.type==="not"?(r.push({type:"negate"}),r.push({type:"visit",node:p.expression})):(r.push({type:"combine",operator:p.type}),r.push({type:"visit",node:p.right}),r.push({type:"visit",node:p.left}));continue}if(s.type==="negate"){let p=o.pop(),g=n.acquire(a,i),y=g.getContext("2d");if(!y)throw new Error("2D canvas context is unavailable.");y.fillStyle="#fff",y.fillRect(0,0,a,i),y.globalCompositeOperation="destination-out",y.drawImage(p,0,0),y.globalCompositeOperation="source-over",n.release(p),o.push(g);continue}let l=o.pop(),m=o.pop(),f=m.getContext("2d");if(!f)throw new Error("2D canvas context is unavailable.");f.globalCompositeOperation=s.operator==="and"?"destination-in":"source-over",f.drawImage(l,0,0),f.globalCompositeOperation="source-over",n.release(l),o.push(m)}if(o.length!==1)throw new Error("Invalid range display expression.");return o[0]}function zt(t){let e=new Set,n=[t];for(;n.length>0;){let a=n.pop();a.type==="circle"?e.add(a.id):a.type==="not"?n.push(a.expression):n.push(a.left,a.right)}return e}function Ye(t,e,n,a){let i=Math.max(1,Math.min(a.devicePixelRatio,2)),u=4096,c=i,d=Math.max(a.width*a.height,1),o=Math.min(c,u/Math.max(a.width,a.height,1),Math.sqrt(8e6/d)),r=Math.max(1,Math.round(a.width*o)),s=Math.max(1,Math.round(a.height*o));t.width!==r&&(t.width=r),t.height!==s&&(t.height=s);let l=t.getContext("2d");if(!l)throw new Error("2D canvas context is unavailable.");l.clearRect(0,0,r,s);let m=new Map(n.circles.map(p=>[p.id,p])),f=2**a.zoom*o;if(n.expression!==null&&n.expression!==!0)if(n.expression===!1)l.fillStyle="rgba(0, 0, 0, 0.28)",l.fillRect(0,0,r,s);else{let p=H(n.expression,m,e,r,s,a,f);l.fillStyle="rgba(0, 0, 0, 0.28)",l.fillRect(0,0,r,s),l.globalCompositeOperation="destination-out",l.drawImage(p,0,0),l.globalCompositeOperation="source-over",e.release(p)}if(n.expression===null){for(let p of n.circles)l.save(),$(l,p,a,f),l.strokeStyle=p.contribution==="contributing"?"rgba(255, 255, 255, 0.72)":"rgba(255, 255, 255, 0.3)",l.lineWidth=p.contribution==="contributing"?1:1.5,l.setLineDash(p.contribution==="contributing"?[]:[5,5]),l.stroke(),l.restore();return}if(typeof n.expression!="boolean")for(let p of zt(n.expression)){let g=m.get(p);if(!g)throw new Error(`Missing range circle: ${p}`);let y=H(n.expression,m,e,r,s,a,f,{id:p,value:!1}),T=H(n.expression,m,e,r,s,a,f,{id:p,value:!0}),h=y.getContext("2d");if(!h)throw new Error("2D canvas context is unavailable.");h.globalCompositeOperation="xor",h.drawImage(T,0,0),h.globalCompositeOperation="source-over",e.release(T);let x=e.acquire(r,s),S=x.getContext("2d");if(!S)throw new Error("2D canvas context is unavailable.");S.clearRect(0,0,r,s),$(S,g,a,f),S.strokeStyle="rgba(255, 255, 255, 0.72)",S.lineWidth=1,S.stroke(),S.globalCompositeOperation="destination-in",S.drawImage(y,0,0),S.globalCompositeOperation="source-over",l.drawImage(x,0,0),e.release(x),e.release(y)}}function Jt(t,e){let{lat:n,lng:a}=e.getLatLng(),i=w(n,a,k()),u=Ge(t,i),c=Qe(t,i);return{views:[],center:i,cellMeshBuilder:u,circlesBuilder:c}}function en(t){return class extends t.Bounds{constructor(a){super();this.key=a}}}async function tn(t){let e;j()?(e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/dist/webworker.min.mjs"),e.DOMAdapter.set(e.WebWorkerAdapter)):e=await import("https://cdn.jsdelivr.net/npm/pixi.js@8.16.0/+esm");let n=new e.Application;return await n.init({canvas:t,autoDensity:!1,autoStart:!1,backgroundAlpha:0,antialias:!0,roundPixels:!0}),{PIXI:e,app:n}}function z(){return typeof OffscreenCanvas!="undefined"?new OffscreenCanvas(0,0):document.createElement("canvas")}async function He(t){return typeof OffscreenCanvas!="undefined"&&t instanceof OffscreenCanvas?t.transferToImageBitmap():createImageBitmap(t)}function nn(t){return Z(t,Ve,We,new t.UniformGroup({}))}function rn(t){return Z(t,Ue,Xe,new t.UniformGroup({}))}function Ze(t,e){if(e.parent==null)return;let{scale:n}=e.parent.worldTransform.decompose(t._tempTransform);e.scale.x=1/n.x,e.scale.y=1/n.y}async function $e(t,e,n){let a=await Y(),i=z(),u=z(),{PIXI:c,app:d}=await tn(i),o=d.stage.addChild(new c.Container),r=new c.TextStyle({align:"center",fontWeight:"bold",fontSize:"20px",fontFamily:\'"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif\',fill:"rgb(255, 255, 255)",stroke:{width:4,join:"round",color:"#c54545"}});return{canvas:i,rangeCanvas:u,rangeCanvasPool:je(z),rangeDisplayPlan:{expression:null,circles:[]},rangeDisplayRevision:0,rangeDisplayRenderId:0,rangeDisplayCacheKey:null,layers:{cellLayer:o.addChild(new c.Container),circleLayer:o.addChild(new c.Container),labelLayer:o.addChild(new c.Container),cell14TextLayer:o.addChild(new c.Container)},PIXI:c,BoxBounds:en(c),shader:nn(c),circleShader:rn(c),cell14LabelTextStyle:r,app:d,worldContainer:o,handleAsyncError:t,onRenderUpdated:e,onRangeRenderUpdated:n,options:Me(),records:a,cells:new Map,_point_result_cache:{x:0,y:0},_pois_cache:[],_tempTransform:new c.Transform}}function ze(t,e,n){t.rangeDisplayPlan=e,t.rangeDisplayRevision=n,t.rangeDisplayCacheKey=null}async function on(t,e){let n=[t.rangeDisplayRevision,e.zoom,e.nwWorld.x,e.nwWorld.y,e.width,e.height,e.devicePixelRatio].join(":");if(t.rangeDisplayCacheKey===n)return;let a=t.rangeDisplayPlan,i=t.rangeDisplayRevision,u=++t.rangeDisplayRenderId;Ye(t.rangeCanvas,t.rangeCanvasPool,a,e);let c=await He(t.rangeCanvas);if(i!==t.rangeDisplayRevision||u!==t.rangeDisplayRenderId){c.close();return}t.onRangeRenderUpdated(c,e,i,u),t.rangeDisplayCacheKey=n}function an(t,e){let n=2**e.zoom;t.scale.set(n),t.x=-e.nwWorld.x*n,t.y=-e.nwWorld.y*n}function sn({BoxBounds:t},e,n){let a=new t(n.uid);if(n.visible=!0,n.getBounds(!1,a),e.check(a)){n.visible=!1;return}e.addBox(a),n.visible=!0}function ln(t){for(let n of t.layers.cell14TextLayer.children)Ze(t,n);for(let n of t.layers.labelLayer.children)Ze(t,n);let e=oe();for(let n of t.layers.labelLayer.children)sn(t,e,n)}async function J(t,e,n){await me(n);let{app:a,worldContainer:i}=t,{width:u,height:c,devicePixelRatio:d}=e;a.renderer.resize(u,c,d),an(i,e),ln(t),a.render();let o=await He(t.canvas);t.onRenderUpdated(o,e)}function ee(t,e){let n=t.get(e);if(n){for(let a of n.views)a.destroy();t.delete(e)}}function cn({cells:t},e){let n=new Set(e.map(a=>a.toString()));for(let a of t.keys())n.has(a)||ee(t,a)}async function dn(t,e,n,a){let{cells:i,records:u}=t,{zoom:c}=e,d=n.toString();ee(i,d);let o=await ke(u,n,a);if(o==null)return;let r=Jt(t,n);if(i.set(d,r),14<c&&Ae(t,o,r.cellMeshBuilder),Be(t,r,o),14<c&&c<16&&Fe(t,e,o,r.circlesBuilder),14<c)for(let s of Ne(t,e,o))r.views.push(t.layers.labelLayer.addChild(s));if(13<c){let s=Ke(t,o);s&&r.views.push(t.layers.cell14TextLayer.addChild(s))}r.views.push(t.layers.cellLayer.addChild(r.cellMeshBuilder.bake())),r.views.push(t.layers.circleLayer.addChild(r.circlesBuilder.bake()))}async function Je(t,e,n){let{cells:a}=t,{zoom:i,bounds:u}=e;if(await on(t,e),i<=12){for(let d of a.keys())ee(a,d);return J(t,e,n)}let c=Re(u,14);cn(t,c),await J(t,e,n);for(let d of c)await dn(t,e,d,n),await J(t,e,n)}function te(t){console.error("An error occurred during asynchronous processing:",t)}function un(t){return t instanceof Error?t:String(t)}async function pn(){let t=await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm"),e=t.wrap(self);try{let n=d=>{e.reportError(un(d)).catch(te)},a=await $e(n,(d,o)=>{e.notifyRenderCompleted(t.transfer(d,[d]),o).catch(n)},(d,o,r,s)=>{e.notifyRangeRenderCompleted(t.transfer(d,[d]),o,r,s).catch(n)}),{task:i,cancelTask:u}=ye((d,o)=>Je(a,o,d)),c={draw:i,drawCancel:u,setRangeDisplayPlan(d,o){ze(a,d,o)}};return t.expose(c),c}catch(n){let a=n instanceof Error?n:String(n);e.reportError(a).catch(te)}}async function fn(){await pn()}fn().catch(te);\n');
   }
 
   // source/records-overlay/overlay-view.ts
-  function createMainApi(handleAsyncError2, onRenderUpdated) {
+  async function createDrawerForMainThread(handleAsyncError2, onRenderUpdated, onRangeRenderUpdated) {
+    const views = createRecordsCanvasRenderer(
+      handleAsyncError2,
+      onRenderUpdated,
+      onRangeRenderUpdated
+    );
+    return {
+      async draw(signal, viewport) {
+        await updateRecordsCanvasRenderer(await views, viewport, signal);
+      },
+      async setRangeDisplayPlan(plan, revision) {
+        setRecordsRangeDisplayPlan(await views, plan, revision);
+      }
+    };
+  }
+  function createMainApi(handleAsyncError2, onRenderUpdated, onRangeRenderUpdated) {
     return {
       reportError(reason) {
         handleAsyncError2(reason);
       },
-      notifyRenderCompleted: onRenderUpdated
+      notifyRenderCompleted: onRenderUpdated,
+      notifyRangeRenderCompleted: onRangeRenderUpdated
     };
   }
-  async function createDrawerForWorker(handleAsyncError2, onRenderUpdated) {
+  async function createDrawerForWorker(handleAsyncError2, onRenderUpdated, onRangeRenderUpdated) {
     const Comlink = await import("https://cdn.jsdelivr.net/npm/comlink@4.4.2/+esm");
     const overlayWorker = new Worker2();
     const workerApi = Comlink.wrap(
       overlayWorker
     );
-    const mainApi = createMainApi(handleAsyncError2, onRenderUpdated);
+    const mainApi = createMainApi(
+      handleAsyncError2,
+      onRenderUpdated,
+      onRangeRenderUpdated
+    );
     Comlink.expose(mainApi, overlayWorker);
-    return wrapCancellable(workerApi.draw, workerApi.drawCancel);
+    return {
+      draw: wrapCancellable(workerApi.draw, workerApi.drawCancel),
+      setRangeDisplayPlan: workerApi.setRangeDisplayPlan
+    };
   }
   function pointClassToRecord({ x, y }) {
     return { x, y };
@@ -21634,59 +23104,90 @@
     }
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   }
+  function configureCanvas(canvas) {
+    canvas.style.position = "absolute";
+    canvas.style.transition = "none";
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.left = "0px";
+    canvas.style.top = "0px";
+    canvas.style.imageRendering = "crisp-edges";
+  }
   async function createPoiRecordsCanvasOverlay(handleAsyncError2) {
     const bufferRatio = 0;
     class PoiRecordsCanvasOverlay extends google.maps.OverlayView {
       ctx;
+      rangeCtx;
       drawer;
       drawDebounceScope = createAsyncCancelScope(handleAsyncError2);
+      rangePlanRevision = 0;
+      lastRangeRenderId = 0;
       constructor() {
         super();
         const canvas = document.createElement("canvas");
-        canvas.style.position = "absolute";
-        canvas.style.transition = "none";
-        canvas.style.transformOrigin = "0 0";
-        canvas.style.left = "0px";
-        canvas.style.top = "0px";
-        canvas.style.imageRendering = "crisp-edges";
+        configureCanvas(canvas);
         this.ctx = canvas.getContext("2d") ?? raise`context 2d`;
+        const rangeCanvas = document.createElement("canvas");
+        configureCanvas(rangeCanvas);
+        rangeCanvas.style.pointerEvents = "none";
+        this.rangeCtx = rangeCanvas.getContext("2d") ?? raise`range context 2d`;
       }
       async init(handleAsyncError3) {
-        const scope = createAsyncCancelScope(handleAsyncError3);
-        this.drawer = await createDrawerForWorker(
+        const imageScope = createAsyncCancelScope(handleAsyncError3);
+        const rangeScope = createAsyncCancelScope(handleAsyncError3);
+        const onRenderUpdated = (image, port) => imageScope(async (signal) => {
+          try {
+            await this.commitImage(image, port, signal);
+          } finally {
+            image.close();
+          }
+        });
+        const onRangeRenderUpdated = (image, port, planRevision, renderId) => rangeScope(async (signal) => {
+          try {
+            await this.commitRangeImage(
+              image,
+              port,
+              planRevision,
+              renderId,
+              signal
+            );
+          } finally {
+            image.close();
+          }
+        });
+        const createDrawer = typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined" ? createDrawerForMainThread : createDrawerForWorker;
+        this.drawer = await createDrawer(
           handleAsyncError3,
-          (image, port) => scope(async (signal) => {
-            try {
-              await this.commitImage(image, port, signal);
-            } finally {
-              image.close();
-            }
-          })
+          onRenderUpdated,
+          onRangeRenderUpdated
         );
       }
       onAdd() {
         const panes = this.getPanes();
+        panes.overlayLayer.appendChild(this.rangeCtx.canvas);
         panes.overlayLayer.appendChild(this.ctx.canvas);
       }
       onRemove() {
         this.ctx.canvas.remove();
+        this.rangeCtx.canvas.remove();
       }
       renderedViewport = null;
+      rangeRenderedViewport = null;
       draw() {
         const projection = this.getProjection();
         const map = this.getMap();
         if (!projection || !(map instanceof google.maps.Map)) return;
         const currentZoom = map.getZoom();
         const currentBounds = map.getBounds();
-        if (this.renderedViewport) {
-          const currentWorldWidth = projection.getWorldWidth();
-          const renderedWorldWidth = 256 * 2 ** this.renderedViewport.zoom;
-          const scale = currentWorldWidth / renderedWorldWidth;
-          const currentPos = projection.fromLatLngToDivPixel(
-            this.renderedViewport.nwLatLng
-          );
-          this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
-        }
+        this.applyCanvasViewportTransform(
+          this.ctx.canvas,
+          this.renderedViewport,
+          projection
+        );
+        this.applyCanvasViewportTransform(
+          this.rangeCtx.canvas,
+          this.rangeRenderedViewport,
+          projection
+        );
         const renderedViewport = this.renderedViewport;
         const needsRedraw = !renderedViewport || renderedViewport.zoom !== currentZoom || !containsBounds(
           renderedViewport.bounds,
@@ -21722,8 +23223,10 @@
         const nePixel = projection.fromLatLngToDivPixel(ne);
         const canvasWidth = Math.abs(nePixel.x - swPixel.x) | 0;
         const canvasHeight = Math.abs(swPixel.y - nePixel.y) | 0;
-        this.ctx.canvas.style.width = `${canvasWidth}px`;
-        this.ctx.canvas.style.height = `${canvasHeight}px`;
+        for (const canvas of [this.ctx.canvas, this.rangeCtx.canvas]) {
+          canvas.style.width = `${canvasWidth}px`;
+          canvas.style.height = `${canvasHeight}px`;
+        }
         const nwWorld = pointClassToRecord(
           map.getProjection().fromLatLngToPoint(nw)
         );
@@ -21737,7 +23240,17 @@
           height: canvasHeight,
           devicePixelRatio: window.devicePixelRatio || 1
         };
-        await this.drawer(signal, port);
+        await this.drawer.draw(signal, port);
+      }
+      applyCanvasViewportTransform(canvas, renderedViewport, projection) {
+        if (!renderedViewport) return;
+        const currentWorldWidth = projection.getWorldWidth();
+        const renderedWorldWidth = 256 * 2 ** renderedViewport.zoom;
+        const scale = currentWorldWidth / renderedWorldWidth;
+        const currentPos = projection.fromLatLngToDivPixel(
+          renderedViewport.nwLatLng
+        );
+        canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(${scale})`;
       }
       async commitImage(image, port, signal) {
         await waitAnimationFrame(signal);
@@ -21752,6 +23265,37 @@
           );
           this.ctx.canvas.style.transform = `translate(${currentPos.x | 0}px, ${currentPos.y | 0}px) scale(1)`;
         }
+      }
+      async commitRangeImage(image, port, planRevision, renderId, signal) {
+        if (planRevision !== this.rangePlanRevision || renderId < this.lastRangeRenderId) {
+          return;
+        }
+        await waitAnimationFrame(signal);
+        if (planRevision !== this.rangePlanRevision || renderId < this.lastRangeRenderId) {
+          return;
+        }
+        initCanvas(this.rangeCtx, port);
+        this.rangeCtx.drawImage(
+          image,
+          0,
+          0,
+          this.rangeCtx.canvas.width,
+          this.rangeCtx.canvas.height
+        );
+        this.rangeRenderedViewport = port;
+        this.lastRangeRenderId = renderId;
+        const projection = this.getProjection();
+        if (projection) {
+          this.applyCanvasViewportTransform(
+            this.rangeCtx.canvas,
+            port,
+            projection
+          );
+        }
+      }
+      setRangeDisplayPlan(plan) {
+        const revision = ++this.rangePlanRevision;
+        this.drawer.setRangeDisplayPlan(plan, revision).then(() => this.notifyDrawNeeded()).catch(handleAsyncError2);
       }
     }
     const overlay = new PoiRecordsCanvasOverlay();
@@ -22478,6 +24022,18 @@ ${formatRemoteFailure(error)}`;
     label: "label-6adc694ea38ca16a7e81027d243b7c13b1c6aa05"
   };
 
+  // source/draft-marker-outline.ts
+  function createDraftMarkerOutlineSegments(colors) {
+    if (colors.length < 2) return [];
+    const segmentAngle = Math.PI * 2 / colors.length;
+    const gap = Math.min(0.06, segmentAngle / 4);
+    return colors.map((color, index) => ({
+      color,
+      startAngle: -Math.PI / 2 + index * segmentAngle + gap / 2,
+      endAngle: -Math.PI / 2 + (index + 1) * segmentAngle - gap / 2
+    }));
+  }
+
   // source/drafts-canvas-overlay.ts
   function getPixelsPerMeter(center, projection) {
     const offsetLatLng = google.maps.geometry.spherical.computeOffset(
@@ -22498,6 +24054,7 @@ ${formatRemoteFailure(error)}`;
         this.selectedDraftId = selectedDraftId2;
       }
       canvas = null;
+      highlightedDraftColors = /* @__PURE__ */ new Map();
       // Overlay が地図に追加された時に呼ばれる
       onAdd() {
         this.canvas = document.createElement("canvas");
@@ -22534,6 +24091,7 @@ ${formatRemoteFailure(error)}`;
           renderDrafts(
             ctx,
             this.drafts,
+            this.highlightedDraftColors,
             this.config.draftMarker,
             projection,
             deviceX,
@@ -22552,6 +24110,10 @@ ${formatRemoteFailure(error)}`;
             deviceY
           );
         }
+      }
+      setHighlightedDrafts(colors) {
+        this.highlightedDraftColors = colors;
+        this.draw();
       }
     }
     return new CanvasOverlay(config2, drafts, selectedDraftId);
@@ -22626,8 +24188,7 @@ ${formatRemoteFailure(error)}`;
     }
     ctx.closePath();
   }
-  function renderDrafts(ctx, drafts, config2, projection, deviceX, deviceY) {
-    const strokeStyle = config2.strokeColor;
+  function renderDrafts(ctx, drafts, highlightedDraftColors, config2, projection, deviceX, deviceY) {
     const fillStyle = config2.fillColor;
     const radius = config2.scale;
     const lineWidth = config2.strokeWeight;
@@ -22640,11 +24201,28 @@ ${formatRemoteFailure(error)}`;
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = fillStyle;
       ctx.fill();
+      const colors = highlightedDraftColors.get(draft.draft.id);
+      const outlineColors = colors == null ? [] : colors.length === 0 ? [config2.highlightColor] : colors;
       ctx.beginPath();
       ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
       ctx.lineWidth = lineWidth;
-      ctx.strokeStyle = strokeStyle;
+      ctx.strokeStyle = config2.strokeColor;
       ctx.stroke();
+      if (outlineColors.length === 1) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
+        ctx.strokeStyle = outlineColors[0];
+        ctx.stroke();
+      } else if (outlineColors.length > 1) {
+        for (const segment of createDraftMarkerOutlineSegments(
+          outlineColors
+        )) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 2, segment.startAngle, segment.endAngle);
+          ctx.strokeStyle = segment.color;
+          ctx.stroke();
+        }
+      }
     }
   }
   function renderCircle(ctx, center, config2, projection, pixelsPerMeter, deviceX, deviceY) {
@@ -22677,7 +24255,68 @@ ${formatRemoteFailure(error)}`;
     ctx.stroke();
   }
 
+  // source/category-colors.ts
+  var HUE_COUNT = 360;
+  var MIN_CATEGORY_HUE_SEPARATION = 60;
+  function normalizeCategoryName(name2) {
+    return name2.normalize("NFC").trim();
+  }
+  function getBaseHue(name2) {
+    let hash = 2166136261;
+    for (let i = 0; i < name2.length; i++) {
+      hash ^= name2.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % HUE_COUNT;
+  }
+  function hueDistance(a, b) {
+    const distance2 = Math.abs(a - b);
+    return Math.min(distance2, HUE_COUNT - distance2);
+  }
+  function minimumDistance(hue, assignedHues) {
+    let minimum = HUE_COUNT / 2;
+    for (const assignedHue of assignedHues) {
+      minimum = Math.min(minimum, hueDistance(hue, assignedHue));
+    }
+    return minimum;
+  }
+  function createCategoryColorMap(categoryNames) {
+    const names = [
+      ...new Set(
+        Array.from(categoryNames, normalizeCategoryName).filter(Boolean)
+      )
+    ].sort();
+    const assignedHues = [];
+    const colors = /* @__PURE__ */ new Map();
+    for (const name2 of names) {
+      const baseHue = getBaseHue(name2);
+      const candidates = Array.from(
+        { length: HUE_COUNT },
+        (_, hue2) => hue2
+      ).sort(
+        (a, b) => hueDistance(a, baseHue) - hueDistance(b, baseHue) || a - b
+      );
+      const separatedHue = candidates.find(
+        (hue2) => assignedHues.every(
+          (assigned) => hueDistance(hue2, assigned) >= MIN_CATEGORY_HUE_SEPARATION
+        )
+      );
+      const hue = separatedHue ?? candidates.reduce((best, candidate) => {
+        const candidateDistance = minimumDistance(
+          candidate,
+          assignedHues
+        );
+        const bestDistance = minimumDistance(best, assignedHues);
+        return candidateDistance > bestDistance ? candidate : best;
+      }, baseHue);
+      assignedHues.push(hue);
+      colors.set(name2, `hsl(${hue}, 100%, 45%)`);
+    }
+    return colors;
+  }
+
   // source/drafts-overlay.ts
+  var noDraftMarkerColors = [];
   function createDefaultViewConfig() {
     const cell = {
       strokeColor: "rgba(240, 252, 249, 0.7)",
@@ -22710,6 +24349,7 @@ ${formatRemoteFailure(error)}`;
         fillColor: "#00ffb380",
         strokeColor: "#ffffff80",
         strokeWeight: 2,
+        highlightColor: "#ffdf00",
         label: {
           fillColor: "#FFFFBB",
           fontSize: "11px",
@@ -22754,18 +24394,59 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
+  function createDraftMarkerIcon(config2, strokeColor) {
+    return {
+      scale: config2.draftMarker.scale,
+      fillColor: config2.draftMarker.fillColor,
+      strokeColor,
+      strokeWeight: config2.draftMarker.strokeWeight,
+      labelOrigin: new google.maps.Point(0, 2),
+      path: 0,
+      fillOpacity: 1,
+      strokeOpacity: 1
+    };
+  }
+  function createDraftMarkerIconWithSegments(config2, colors) {
+    const center = 16;
+    const radius = config2.draftMarker.scale;
+    const strokeWidth = config2.draftMarker.strokeWeight;
+    const paths = createDraftMarkerOutlineSegments(colors).map(({ color, startAngle, endAngle }) => {
+      const startX = center + radius * Math.cos(startAngle);
+      const startY = center + radius * Math.sin(startAngle);
+      const endX = center + radius * Math.cos(endAngle);
+      const endY = center + radius * Math.sin(endAngle);
+      const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+      return `<path d="M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="butt"/>`;
+    }).join("");
+    const svg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="${center}" cy="${center}" r="${radius}" fill="${config2.draftMarker.fillColor}" stroke="${config2.draftMarker.strokeColor}" stroke-width="${strokeWidth}"/>${paths}</svg>`;
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg2)}`,
+      scaledSize: new google.maps.Size(32, 32),
+      anchor: new google.maps.Point(center, center),
+      labelOrigin: new google.maps.Point(center, center + 2)
+    };
+  }
   function createOptionsCache(config2) {
+    const draftMarkerIcon = createDraftMarkerIcon(
+      config2,
+      config2.draftMarker.strokeColor
+    );
+    const highlightedDraftMarkerIcon = createDraftMarkerIcon(
+      config2,
+      config2.draftMarker.highlightColor
+    );
     return {
       draftMarkerOptions: {
         zIndex: config2.baseZIndex,
-        icon: {
-          ...config2.draftMarker,
-          labelOrigin: new google.maps.Point(0, 2),
-          path: 0,
-          fillOpacity: 1,
-          strokeOpacity: 1
-        }
+        icon: draftMarkerIcon
       },
+      draftMarkerIcon,
+      highlightedDraftMarkerIcon,
+      draftMarkerIconsByStrokeColor: /* @__PURE__ */ new Map([
+        [config2.draftMarker.strokeColor, draftMarkerIcon],
+        [config2.draftMarker.highlightColor, highlightedDraftMarkerIcon]
+      ]),
+      draftMarkerIconsByColorSet: /* @__PURE__ */ new Map(),
       draftMarkerLabel: {
         ...config2.draftMarker.label,
         text: "",
@@ -22837,7 +24518,8 @@ ${formatRemoteFailure(error)}`;
     });
     return {
       label,
-      marker
+      marker,
+      currentIcon: overlay.cachedOptions.draftMarkerIcon
     };
   }
   function isNeedDetail(map, config2) {
@@ -22906,6 +24588,7 @@ ${formatRemoteFailure(error)}`;
     const config2 = createDefaultViewConfig();
     const drafts = /* @__PURE__ */ new Map();
     const selectedDraftId = { contents: null };
+    const cachedOptions = createOptionsCache(config2);
     const draftsCanvasOverlay = createCanvasOverlay(
       drafts,
       config2,
@@ -22914,7 +24597,7 @@ ${formatRemoteFailure(error)}`;
     return {
       events: createTypedEventTarget(),
       config: config2,
-      cachedOptions: createOptionsCache(config2),
+      cachedOptions,
       map,
       drafts,
       selectedDraftId,
@@ -22943,6 +24626,89 @@ ${formatRemoteFailure(error)}`;
           }
           notifyMapRangeChanged(this);
         }
+      },
+      setHighlightedDrafts(categoriesByDraftId) {
+        const categoryColors = createCategoryColorMap(
+          Array.from(categoriesByDraftId.values()).flat()
+        );
+        const colorsByDraftId = /* @__PURE__ */ new Map();
+        const colorsBySingleCategory = /* @__PURE__ */ new Map();
+        for (const [draftId, categories] of categoriesByDraftId) {
+          let colors;
+          if (categories.length === 0) {
+            colors = noDraftMarkerColors;
+          } else if (categories.length === 1) {
+            const category = categories[0];
+            const existingColors = colorsBySingleCategory.get(category);
+            if (existingColors != null) {
+              colors = existingColors;
+            } else {
+              const color = categoryColors.get(category);
+              if (color == null) {
+                throw new Error(
+                  `No color assigned to category "${category}".`
+                );
+              }
+              colors = [color];
+              colorsBySingleCategory.set(category, colors);
+            }
+          } else {
+            colors = Array.from(new Set(categories)).sort().map((category) => {
+              const color = categoryColors.get(category);
+              if (color == null) {
+                throw new Error(
+                  `No color assigned to category "${category}".`
+                );
+              }
+              return color;
+            });
+          }
+          colorsByDraftId.set(draftId, colors);
+        }
+        for (const [draftId, draftWithView] of this.drafts) {
+          const colors = colorsByDraftId.get(draftId);
+          let icon = cachedOptions.draftMarkerIcon;
+          if (colors != null) {
+            if (colors.length === 0) {
+              icon = cachedOptions.highlightedDraftMarkerIcon;
+            } else if (colors.length === 1) {
+              const color = colors[0];
+              const cachedIcon = cachedOptions.draftMarkerIconsByStrokeColor.get(
+                color
+              );
+              if (cachedIcon == null) {
+                icon = createDraftMarkerIcon(config2, color);
+                cachedOptions.draftMarkerIconsByStrokeColor.set(
+                  color,
+                  icon
+                );
+              } else {
+                icon = cachedIcon;
+              }
+            } else {
+              const key = colors.join("\0");
+              const cachedIcon = cachedOptions.draftMarkerIconsByColorSet.get(key);
+              if (cachedIcon == null) {
+                icon = createDraftMarkerIconWithSegments(
+                  config2,
+                  colors
+                );
+                cachedOptions.draftMarkerIconsByColorSet.set(
+                  key,
+                  icon
+                );
+              } else {
+                icon = cachedIcon;
+              }
+            }
+          }
+          if (draftWithView.mapView.currentIcon !== icon) {
+            draftWithView.mapView.marker.setIcon(icon);
+            draftWithView.mapView.currentIcon = icon;
+          }
+        }
+        this.draftsCanvasOverlay.setHighlightedDrafts(colorsByDraftId);
+        return categoryColors;
       },
       async addDrafts(drafts2, scheduler) {
         for (const draft of drafts2) {
@@ -27343,14 +29109,14 @@ ${formatRemoteFailure(error)}`;
     safari_version: safari ? +(/* @__PURE__ */ /\bVersion\/(\d+(\.\d+)?)/.exec(nav.userAgent) || [0, 0])[1] : 0,
     tabSize: doc.documentElement.style.tabSize != null ? "tab-size" : "-moz-tab-size"
   };
-  function combineAttrs(source, target) {
-    for (let name2 in source) {
+  function combineAttrs(source5, target) {
+    for (let name2 in source5) {
       if (name2 == "class" && target.class)
-        target.class += " " + source.class;
+        target.class += " " + source5.class;
       else if (name2 == "style" && target.style)
-        target.style += ";" + source.style;
+        target.style += ";" + source5.style;
       else
-        target[name2] = source[name2];
+        target[name2] = source5[name2];
     }
     return target;
   }
@@ -27659,10 +29425,10 @@ ${formatRemoteFailure(error)}`;
       ranges.push(from, to);
   }
   var BlockWrapper = class _BlockWrapper extends RangeValue {
-    constructor(tagName, attributes) {
+    constructor(tagName, attributes5) {
       super();
       this.tagName = tagName;
-      this.attributes = attributes;
+      this.attributes = attributes5;
     }
     eq(other) {
       return other == this || other instanceof _BlockWrapper && this.tagName == other.tagName && attrsEq(this.attributes, other.attributes);
@@ -28602,8 +30368,8 @@ ${formatRemoteFailure(error)}`;
   var scrollMargins = /* @__PURE__ */ Facet.define();
   function getScrollMargins(view) {
     let left = 0, right = 0, top2 = 0, bottom = 0;
-    for (let source of view.state.facet(scrollMargins)) {
-      let m = source(view);
+    for (let source5 of view.state.facet(scrollMargins)) {
+      let m = source5(view);
       if (m) {
         if (m.left != null)
           left = Math.max(left, m.left);
@@ -29926,9 +31692,9 @@ ${formatRemoteFailure(error)}`;
     return node;
   }
   var NullWidget = class extends WidgetType {
-    constructor(tag) {
+    constructor(tag2) {
       super();
-      this.tag = tag;
+      this.tag = tag2;
     }
     eq(other) {
       return other.tag == this.tag;
@@ -35367,7 +37133,7 @@ ${formatRemoteFailure(error)}`;
   };
   function attrsFromFacet(view, facet, base2) {
     for (let sources = view.state.facet(facet), i = sources.length - 1; i >= 0; i--) {
-      let source = sources[i], value = typeof source == "function" ? source(view) : source;
+      let source5 = sources[i], value = typeof source5 == "function" ? source5(view) : source5;
       if (value)
         combineAttrs(value, base2);
     }
@@ -36869,9 +38635,9 @@ ${formatRemoteFailure(error)}`;
     };
   });
   var HoverPlugin = class {
-    constructor(view, source, field, setHover, hoverTime) {
+    constructor(view, source5, field, setHover, hoverTime) {
       this.view = view;
-      this.source = source;
+      this.source = source5;
       this.field = field;
       this.setHover = setHover;
       this.hoverTime = hoverTime;
@@ -37002,7 +38768,7 @@ ${formatRemoteFailure(error)}`;
     let pos = view.posAtCoords({ x, y }, false);
     return pos >= from && pos <= to;
   }
-  function hoverTooltip(source, options = {}) {
+  function hoverTooltip(source5, options = {}) {
     let setHover = StateEffect.define();
     let hoverState = StateField.define({
       create() {
@@ -37045,7 +38811,7 @@ ${formatRemoteFailure(error)}`;
         hoverState,
         ViewPlugin.define((view) => new HoverPlugin(
           view,
-          source,
+          source5,
           hoverState,
           setHover,
           options.hoverTime || 300
@@ -39333,12 +41099,12 @@ ${formatRemoteFailure(error)}`;
         parent = nameOrParent;
       if (parent === null || parent === void 0 ? void 0 : parent.base)
         throw new Error("Can not derive from a modified tag");
-      let tag = new _Tag(name2, [], null, []);
-      tag.set.push(tag);
+      let tag2 = new _Tag(name2, [], null, []);
+      tag2.set.push(tag2);
       if (parent)
         for (let t2 of parent.set)
-          tag.set.push(t2);
-      return tag;
+          tag2.set.push(t2);
+      return tag2;
     }
     /**
     Define a tag _modifier_, which is a function that, given a tag,
@@ -39354,10 +41120,10 @@ ${formatRemoteFailure(error)}`;
     */
     static defineModifier(name2) {
       let mod = new Modifier(name2);
-      return (tag) => {
-        if (tag.modified.indexOf(mod) > -1)
-          return tag;
-        return Modifier.get(tag.base || tag, tag.modified.concat(mod).sort((a, b) => a.id - b.id));
+      return (tag2) => {
+        if (tag2.modified.indexOf(mod) > -1)
+          return tag2;
+        return Modifier.get(tag2.base || tag2, tag2.modified.concat(mod).sort((a, b) => a.id - b.id));
       };
     }
   };
@@ -39374,15 +41140,15 @@ ${formatRemoteFailure(error)}`;
       let exists = mods[0].instances.find((t2) => t2.base == base2 && sameArray2(mods, t2.modified));
       if (exists)
         return exists;
-      let set = [], tag = new Tag(base2.name, set, base2, mods);
+      let set = [], tag2 = new Tag(base2.name, set, base2, mods);
       for (let m of mods)
-        m.instances.push(tag);
+        m.instances.push(tag2);
       let configs = powerSet(mods);
       for (let parent of base2.set)
         if (!parent.modified.length)
           for (let config2 of configs)
             set.push(_Modifier.get(parent, config2));
-      return tag;
+      return tag2;
     }
   };
   function sameArray2(a, b) {
@@ -39491,15 +41257,15 @@ ${formatRemoteFailure(error)}`;
       if (!Array.isArray(style.tag))
         map[style.tag.id] = style.class;
       else
-        for (let tag of style.tag)
-          map[tag.id] = style.class;
+        for (let tag2 of style.tag)
+          map[tag2.id] = style.class;
     }
     let { scope, all = null } = options || {};
     return {
       style: (tags3) => {
         let cls = all;
-        for (let tag of tags3) {
-          for (let sub of tag.set) {
+        for (let tag2 of tags3) {
+          for (let sub of tag2.set) {
             let tagClass = map[sub.id];
             if (tagClass) {
               cls = cls ? cls + " " + tagClass : tagClass;
@@ -41447,8 +43213,8 @@ ${formatRemoteFailure(error)}`;
             found = Array.isArray(value) ? value : [value];
         }
       }
-      for (let tag of found)
-        tags$1.push(tag);
+      for (let tag2 of found)
+        tags$1.push(tag2);
     }
     if (!tags$1.length)
       return 0;
@@ -41965,8 +43731,8 @@ ${formatRemoteFailure(error)}`;
     let selfScroll = view.scrollDOM.clientHeight < view.scrollDOM.scrollHeight - 2;
     let marginTop = 0, marginBottom = 0, height;
     if (selfScroll) {
-      for (let source of view.state.facet(EditorView.scrollMargins)) {
-        let margins = source(view);
+      for (let source5 of view.state.facet(EditorView.scrollMargins)) {
+        let margins = source5(view);
         if (margins === null || margins === void 0 ? void 0 : margins.top)
           marginTop = Math.max(margins === null || margins === void 0 ? void 0 : margins.top, marginTop);
         if (margins === null || margins === void 0 ? void 0 : margins.bottom)
@@ -42634,8 +44400,8 @@ ${formatRemoteFailure(error)}`;
       for (let i = 1; i < label.length; i++)
         rest[label[i]] = true;
     }
-    let source = toSet(first) + toSet(rest) + "*$";
-    return [new RegExp("^" + source), new RegExp(source)];
+    let source5 = toSet(first) + toSet(rest) + "*$";
+    return [new RegExp("^" + source5), new RegExp(source5)];
   }
   function completeFromList(list) {
     let options = list.map((o) => typeof o == "string" ? { label: o } : o);
@@ -42646,9 +44412,9 @@ ${formatRemoteFailure(error)}`;
     };
   }
   var Option = class {
-    constructor(completion, source, match, score2) {
+    constructor(completion, source5, match, score2) {
       this.completion = completion;
-      this.source = source;
+      this.source = source5;
       this.match = match;
       this.score = score2;
     }
@@ -42658,11 +44424,11 @@ ${formatRemoteFailure(error)}`;
   }
   function ensureAnchor(expr, start) {
     var _a2;
-    let { source } = expr;
-    let addStart = start && source[0] != "^", addEnd = source[source.length - 1] != "$";
+    let { source: source5 } = expr;
+    let addStart = start && source5[0] != "^", addEnd = source5[source5.length - 1] != "$";
     if (!addStart && !addEnd)
       return expr;
-    return new RegExp(`${addStart ? "^" : ""}(?:${source})${addEnd ? "$" : ""}`, (_a2 = expr.flags) !== null && _a2 !== void 0 ? _a2 : expr.ignoreCase ? "i" : "");
+    return new RegExp(`${addStart ? "^" : ""}(?:${source5})${addEnd ? "$" : ""}`, (_a2 = expr.flags) !== null && _a2 !== void 0 ? _a2 : expr.ignoreCase ? "i" : "");
   }
   var pickedCompletion = /* @__PURE__ */ Annotation.define();
   function insertCompletionText(state, text, from, to) {
@@ -42682,12 +44448,12 @@ ${formatRemoteFailure(error)}`;
     };
   }
   var SourceCache = /* @__PURE__ */ new WeakMap();
-  function asSource(source) {
-    if (!Array.isArray(source))
-      return source;
-    let known = SourceCache.get(source);
+  function asSource(source5) {
+    if (!Array.isArray(source5))
+      return source5;
+    let known = SourceCache.get(source5);
     if (!known)
-      SourceCache.set(source, known = completeFromList(source));
+      SourceCache.set(source5, known = completeFromList(source5));
     return known;
   }
   var startCompletionEffect = /* @__PURE__ */ StateEffect.define();
@@ -43171,8 +44937,8 @@ ${formatRemoteFailure(error)}`;
         let cls = this.optionClass(completion);
         if (cls)
           li.className = cls;
-        for (let source of this.optionContent) {
-          let node = source(completion, this.view.state, this.view, match);
+        for (let source5 of this.optionContent) {
+          let node = source5(completion, this.view.state, this.view, match);
           if (node)
             li.appendChild(node);
         }
@@ -43328,9 +45094,9 @@ ${formatRemoteFailure(error)}`;
     update(tr) {
       let { state } = tr, conf = state.facet(completionConfig);
       let sources = conf.override || state.languageDataAt("autocomplete", cur(state)).map(asSource);
-      let active = sources.map((source) => {
-        let value = this.active.find((s) => s.source == source) || new ActiveSource(
-          source,
+      let active = sources.map((source5) => {
+        let value = this.active.find((s) => s.source == source5) || new ActiveSource(
+          source5,
           this.active.some(
             (a) => a.state != 0
             /* State.Inactive */
@@ -43406,8 +45172,8 @@ ${formatRemoteFailure(error)}`;
     return typing && conf.activateOnTyping ? 4 | 1 : typing ? 1 : tr.isUserEvent("delete.backward") ? 2 : tr.selection ? 8 : tr.docChanged ? 16 : 0;
   }
   var ActiveSource = class _ActiveSource {
-    constructor(source, state, explicit = false) {
-      this.source = source;
+    constructor(source5, state, explicit = false) {
+      this.source = source5;
       this.state = state;
       this.explicit = explicit;
     }
@@ -43460,8 +45226,8 @@ ${formatRemoteFailure(error)}`;
     }
   };
   var ActiveResult = class _ActiveResult extends ActiveSource {
-    constructor(source, explicit, limit, result, from, to) {
-      super(source, 3, explicit);
+    constructor(source5, explicit, limit, result, from, to) {
+      super(source5, 3, explicit);
       this.limit = limit;
       this.result = result;
       this.from = from;
@@ -44365,9 +46131,9 @@ ${formatRemoteFailure(error)}`;
       return this;
     };
   }
-  function validRegExp(source) {
+  function validRegExp(source5) {
     try {
-      new RegExp(source, baseFlags);
+      new RegExp(source5, baseFlags);
       return true;
     } catch (_a2) {
       return false;
@@ -45491,9 +47257,9 @@ ${formatRemoteFailure(error)}`;
   function combineFilter(a, b) {
     return !a ? b : !b ? a : (d, s) => b(a(d, s), s);
   }
-  function linter(source, config2 = {}) {
+  function linter(source5, config2 = {}) {
     return [
-      lintConfig.of({ source, config: config2 }),
+      lintConfig.of({ source: source5, config: config2 }),
       lintPlugin,
       lintExtensions
     ];
@@ -46802,6 +48568,17 @@ ${formatRemoteFailure(error)}`;
     }
     return cell14s;
   }
+  var notVisible = {
+    isVisible: false,
+    categories: []
+  };
+  var visibleWithoutCategory = {
+    isVisible: true,
+    categories: []
+  };
+  function toQueryMatch(isVisible) {
+    return isVisible ? visibleWithoutCategory : notVisible;
+  }
   function hasTermInString(text, term) {
     return text.toLowerCase().includes(term);
   }
@@ -46816,10 +48593,39 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
+  function combineRangeDisplay(first, second, operator2) {
+    if (first == null && second == null) return;
+    const circles = [...first?.circles ?? [], ...second?.circles ?? []];
+    let expression;
+    if (operator2 === "and") {
+      if (first?.expression && second?.expression) {
+        expression = {
+          type: "and",
+          left: first.expression,
+          right: second.expression
+        };
+      } else {
+        expression = first?.expression ?? second?.expression;
+      }
+    } else if (first?.expression && second?.expression) {
+      if (!first.constraintOnly && !second.constraintOnly) {
+        expression = {
+          type: "or",
+          left: first.expression,
+          right: second.expression
+        };
+      }
+    }
+    const constraintOnly = operator2 === "and" ? expression != null && (first?.constraintOnly === true || second?.constraintOnly === true || first?.expression == null || second?.expression == null) : expression == null;
+    return { expression, circles, constraintOnly };
+  }
   function builderAsValue(builder) {
     return builder;
   }
   function valueAsBuilder(v) {
+    if (!isDraftQueryBuilderValue(v)) {
+      throw new Error("Query expression did not produce a draft query.");
+    }
     return v;
   }
   function stringTermQuery(text) {
@@ -46829,7 +48635,7 @@ ${formatRemoteFailure(error)}`;
         const term = text.toLocaleLowerCase();
         return done({
           isVisible(d) {
-            return done(hasTermInDraft(d, term));
+            return done(toQueryMatch(hasTermInDraft(d, term)));
           }
         });
       }
@@ -46839,7 +48645,7 @@ ${formatRemoteFailure(error)}`;
     return builderAsValue(
       queryAsBuilder({
         isVisible() {
-          return done(true);
+          return done(visibleWithoutCategory);
         }
       })
     );
@@ -46851,13 +48657,94 @@ ${formatRemoteFailure(error)}`;
       *initialize(e) {
         const q = yield* b.initialize(e);
         return {
+          rangeDisplay: {
+            circles: q.rangeDisplay?.circles ?? [],
+            expression: q.rangeDisplay?.expression && !q.rangeDisplay.constraintOnly ? {
+              type: "not",
+              expression: q.rangeDisplay.expression
+            } : void 0
+          },
           *isVisible(d) {
-            return !(yield* q.isVisible(d));
+            const match = yield* q.isVisible(d);
+            return match.isVisible ? notVisible : visibleWithoutCategory;
           },
           isAny: false
         };
       }
     });
+  }
+  function classifyAs(label, builder) {
+    if (builder.isIgnorable) return builder;
+    const categories = [label];
+    return {
+      isIgnorable: false,
+      *initialize(environment) {
+        const query = yield* builder.initialize(environment);
+        return {
+          rangeDisplay: query.rangeDisplay,
+          *isVisible(draft) {
+            const match = yield* query.isVisible(draft);
+            if (!match.isVisible) return match;
+            return {
+              isVisible: true,
+              categories
+            };
+          }
+        };
+      }
+    };
+  }
+  function tag(label, builder) {
+    if (builder.isIgnorable) return builder;
+    const singleCategory = [label];
+    return {
+      isIgnorable: false,
+      *initialize(environment) {
+        const query = yield* builder.initialize(environment);
+        return {
+          rangeDisplay: query.rangeDisplay,
+          *isVisible(draft) {
+            const match = yield* query.isVisible(draft);
+            if (!match.isVisible || match.categories.includes(label)) {
+              return match;
+            }
+            if (match.categories.length === 0) {
+              return {
+                isVisible: true,
+                categories: singleCategory
+              };
+            }
+            return {
+              isVisible: true,
+              categories: [...match.categories, label]
+            };
+          }
+        };
+      }
+    };
+  }
+  function labelQueryFunction(name2, applyLabel) {
+    return (label) => {
+      if (typeof label !== "string") {
+        throw new Error(
+          `${name2} expects a raw string label, for example @"\u795E\u793E".`
+        );
+      }
+      const normalizedLabel = label.normalize("NFC").trim();
+      if (!normalizedLabel) {
+        throw new Error(`${name2} label must not be empty.`);
+      }
+      return done(
+        (query) => done(
+          builderAsValue(
+            applyLabel(normalizedLabel, valueAsBuilder(query))
+          )
+        )
+      );
+    };
+  }
+  function isDraftQueryBuilderValue(value) {
+    return typeof value === "object" && value !== null && "initialize" in value && typeof value["initialize"] === "function" && "isIgnorable" in value && typeof value["isIgnorable"] === "boolean";
   }
   function fromString(x) {
     return done(stringTermQuery(String(x)));
@@ -46871,8 +48758,23 @@ ${formatRemoteFailure(error)}`;
         const q1 = yield* b1.initialize(e);
         const q2 = yield* b2.initialize(e);
         return {
+          rangeDisplay: combineRangeDisplay(
+            q1.rangeDisplay,
+            q2.rangeDisplay,
+            "and"
+          ),
           *isVisible(draft) {
-            return (yield* q1.isVisible(draft)) && (yield* q2.isVisible(draft));
+            const match1 = yield* q1.isVisible(draft);
+            if (!match1.isVisible) return notVisible;
+            const match2 = yield* q2.isVisible(draft);
+            if (!match2.isVisible) return notVisible;
+            const categories = [...match1.categories];
+            for (const category of match2.categories) {
+              if (!categories.includes(category)) {
+                categories.push(category);
+              }
+            }
+            return categories.length === 0 ? visibleWithoutCategory : { isVisible: true, categories };
           }
         };
       }
@@ -46887,27 +48789,47 @@ ${formatRemoteFailure(error)}`;
         const q1 = yield* b1.initialize(e);
         const q2 = yield* b2.initialize(e);
         return {
+          rangeDisplay: combineRangeDisplay(
+            q1.rangeDisplay,
+            q2.rangeDisplay,
+            "or"
+          ),
           *isVisible(d) {
-            return (yield* q1.isVisible(d)) || (yield* q2.isVisible(d));
+            const match1 = yield* q1.isVisible(d);
+            if (match1.isVisible) return match1;
+            return yield* q2.isVisible(d);
           }
         };
       }
     };
   }
-  function reachableWithQuery(center, radius) {
+  function reachableWithQuery(center, radius, id2) {
     return {
+      rangeDisplay: {
+        expression: {
+          type: "circle",
+          id: id2
+        },
+        circles: [
+          {
+            id: id2,
+            center,
+            radius
+          }
+        ]
+      },
       isVisible(d) {
         const [p2] = d.coordinates;
-        return done(distance(center, p2) <= radius);
+        return done(toQueryMatch(distance(center, p2) <= radius));
       }
     };
   }
-  function reachableWith(center, radius) {
+  function reachableWithId(center, radius, id2) {
     return {
       isIgnorable: false,
       initialize() {
         const p1 = { lat: center[0], lng: center[1] };
-        return done(reachableWithQuery(p1, radius));
+        return done(reachableWithQuery(p1, radius, id2));
       }
     };
   }
@@ -46916,8 +48838,8 @@ ${formatRemoteFailure(error)}`;
       isIgnorable: false,
       initialize(e) {
         return done({
-          isVisible(d) {
-            return predicate(e, d);
+          *isVisible(d) {
+            return toQueryMatch(yield* predicate(e, d));
           }
         });
       }
@@ -46945,10 +48867,10 @@ ${formatRemoteFailure(error)}`;
         return done({
           *isVisible(d) {
             const stat17 = yield* getFreshCell17(e, d);
-            if (stat17 == null) return true;
+            if (stat17 == null) return visibleWithoutCategory;
             const stat14 = yield* getFreshStat14(e, d);
-            if (stat14 == null) return true;
-            return predicate(stat14, stat17, d);
+            if (stat14 == null) return visibleWithoutCategory;
+            return toQueryMatch(predicate(stat14, stat17, d));
           }
         });
       }
@@ -47016,13 +48938,16 @@ ${formatRemoteFailure(error)}`;
     return (x) => done((y) => done(f(x, y)));
   }
   function createStandardQueries() {
+    let nextRangeId = 0;
+    const createRangeId = () => `range-${nextRangeId++}`;
+    const reachableId = createRangeId();
     const all = any2();
     const ignorableAll = builderAsValue({
       isIgnorable: true,
       initialize() {
         return done({
           isVisible() {
-            return done(true);
+            return done(visibleWithoutCategory);
           }
         });
       }
@@ -47041,6 +48966,9 @@ ${formatRemoteFailure(error)}`;
       },
       fromString,
       fromWord: fromString,
+      classifyAs: labelQueryFunction("classifyAs", classifyAs),
+      tag: labelQueryFunction("tag", tag),
+      category: labelQueryFunction("category", classifyAs),
       not_(x) {
         return done(not(valueAsBuilder(x)));
       },
@@ -47049,9 +48977,10 @@ ${formatRemoteFailure(error)}`;
       _or_: binaryBuilder(or),
       reachableWith: binaryFunction((center, distanceMeter) => {
         return builderAsValue(
-          reachableWith(
+          reachableWithId(
             center,
-            distanceMeter
+            distanceMeter,
+            createRangeId()
           )
         );
       }),
@@ -47059,7 +48988,7 @@ ${formatRemoteFailure(error)}`;
         isIgnorable: false,
         *initialize(e) {
           const p = yield* e.getUserLocation();
-          return reachableWithQuery(p, 1e4);
+          return reachableWithQuery(p, 1e4, reachableId);
         }
       }),
       duplicated,
@@ -48805,8 +50734,8 @@ ${formatRemoteFailure(error)}`;
     };
     return new Map(Object.entries(globals));
   }
-  function evaluateExpression(source, resolveGlobal, reportError) {
-    const chars = import_antlr4ts2.CharStreams.fromString(source);
+  function evaluateExpression(source5, resolveGlobal, reportError) {
+    const chars = import_antlr4ts2.CharStreams.fromString(source5);
     const lexer = new SalLexer(chars);
     const tokens = new import_antlr4ts2.CommonTokenStream(lexer);
     const parser = new SalParser(tokens);
@@ -48845,12 +50774,12 @@ ${formatRemoteFailure(error)}`;
   }
 
   // source/drafts-view/draft-filter.ts
-  async function getDraftStat(source, cell14, signal) {
-    const cell14Drafts = source.cell14DraftsLazy();
+  async function getDraftStat(source5, cell14, signal) {
+    const cell14Drafts = source5.cell14DraftsLazy();
     const cell14Id = cell14.toString();
     const draft14 = cell14Drafts.get(cell14Id);
     if (draft14 == null) return;
-    const stat14 = await source.cell14StatMemoized(cell14, signal);
+    const stat14 = await source5.cell14StatMemoized(cell14, signal);
     if (stat14 == null) return;
     let potentialStops = 0;
     for (const cell17IdOnDraft of draft14.cell17Drafts) {
@@ -48923,15 +50852,15 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
-  async function filterDrafts(records, drafts, geo, source, signal, reportError) {
+  async function filterDrafts(records, drafts, geo, source5, signal, reportError) {
     const queryGlobals = createStandardQueries();
     const effective = evaluateExpression(
-      source,
+      source5,
       (k) => queryGlobals.get(k),
       reportError
     );
     const filter = await forceAsPromise(effective, signal);
-    const queryBuilder = filter;
+    const queryBuilder = valueAsBuilder(filter);
     const environment = createEnvironment(records, drafts, geo);
     const query = await forceAsPromise(
       queryBuilder.initialize(environment),
@@ -48940,25 +50869,34 @@ ${formatRemoteFailure(error)}`;
     const result = [];
     let error = null;
     for (const d of drafts) {
-      let isVisible = false;
+      let match = {
+        isVisible: false,
+        categories: []
+      };
       try {
-        isVisible = await forceAsPromise(query.isVisible(d), signal);
+        match = await forceAsPromise(query.isVisible(d), signal);
       } catch (e) {
         error ??= e;
       }
-      if (isVisible) {
-        result.push(d);
+      if (match.isVisible) {
+        result.push({
+          draft: d,
+          categories: match.categories
+        });
       }
     }
     if (error) console.error(error);
-    return result;
+    return {
+      drafts: result,
+      rangeDisplayPlan: createRangeDisplayPlan(query.rangeDisplay)
+    };
   }
 
   // source/drafts-view/simple-editor-actions.ts
   function bindAction(rule, action) {
     return {
-      *match(source) {
-        return (yield* rule.match(source)).map((m) => ({
+      *match(source5) {
+        return (yield* rule.match(source5)).map((m) => ({
           ...m,
           action
         }));
@@ -48967,8 +50905,8 @@ ${formatRemoteFailure(error)}`;
   }
   function withLocation(rule, location2) {
     return {
-      match(source) {
-        if (source.location === location2) return rule.match(source);
+      match(source5) {
+        if (source5.location === location2) return rule.match(source5);
         return done([]);
       }
     };
@@ -49005,10 +50943,10 @@ ${formatRemoteFailure(error)}`;
   }
   function mergeRule(rule1, rule2) {
     return {
-      *match(source) {
+      *match(source5) {
         return [
-          ...yield* rule1.match(source),
-          ...yield* rule2.match(source)
+          ...yield* rule1.match(source5),
+          ...yield* rule2.match(source5)
         ];
       }
     };
@@ -49496,12 +51434,12 @@ ${formatRemoteFailure(error)}`;
         positionActionMenu(editor.state.selection.main.head);
       }
     });
-    function dispatchSource(source) {
+    function dispatchSource(source5) {
       editor.dispatch({
         changes: {
           from: 0,
           to: editor.state.doc.length,
-          insert: source
+          insert: source5
         }
       });
     }
@@ -49640,11 +51578,11 @@ ${formatRemoteFailure(error)}`;
     });
     return globals;
   }
-  async function evaluateExternalUrls(source, data, signal) {
-    if (source.trim() === "") return [];
+  async function evaluateExternalUrls(source5, data, signal) {
+    if (source5.trim() === "") return [];
     const globals = createSalExternalUrlGlobals();
     const value = await forceAsPromise(
-      evaluateExpression(source, (name2) => globals.get(name2)),
+      evaluateExpression(source5, (name2) => globals.get(name2)),
       signal
     );
     const definitions = getDefinitions(value);
@@ -49830,16 +51768,16 @@ ${formatRemoteFailure(error)}`;
   function cloneRule(rule, update) {
     return { ...rule, ...update };
   }
-  function matchesForPattern(source, runRegex) {
-    if (source.length > maxPatternLength) {
+  function matchesForPattern(source5, runRegex) {
+    if (source5.length > maxPatternLength) {
       throw new Error(
         `Lint pattern exceeds the ${maxPatternLength} character limit`
       );
     }
-    new RegExp(source, "gmu");
+    new RegExp(source5, "gmu");
     return createMatcher(
-      (text, signal) => runRegex(source, text, signal),
-      containsNamedCaptureGroup(source)
+      (text, signal) => runRegex(source5, text, signal),
+      containsNamedCaptureGroup(source5)
     );
   }
   function matchesMissingSuffix(suffix) {
@@ -49900,8 +51838,8 @@ ${formatRemoteFailure(error)}`;
       fromString: (value) => done(value),
       fromWord: (value) => done(value),
       pattern: createSalFunction(
-        (source) => asValue(
-          matchesForPattern(requireString(source, "pattern"), runRegex)
+        (source5) => asValue(
+          matchesForPattern(requireString(source5, "pattern"), runRegex)
         )
       ),
       "missing-suffix": createSalFunction(
@@ -50127,7 +52065,7 @@ ${formatRemoteFailure(error)}`;
     }
     return { location: location2, from, to, insert: insert2 };
   }
-  async function evaluateLint(source, input, signal, regexRunner) {
+  async function evaluateLint(source5, input, signal, regexRunner) {
     const worker = regexRunner == null ? createRegexRunner(signal) : void 0;
     try {
       const runRegex = regexRunner ?? worker?.run;
@@ -50136,7 +52074,7 @@ ${formatRemoteFailure(error)}`;
       }
       const syntaxErrors = [];
       const expression = evaluateExpression(
-        source,
+        source5,
         createSalGlobals2(runRegex),
         (message) => syntaxErrors.push(message)
       );
@@ -50188,7 +52126,8 @@ ${formatRemoteFailure(error)}`;
     records,
     local,
     geo,
-    handleAsyncError: handleAsyncError2
+    handleAsyncError: handleAsyncError2,
+    setRangeDisplayPlan
   }) {
     setStyle10();
     const events = createTypedEventTarget();
@@ -50196,6 +52135,7 @@ ${formatRemoteFailure(error)}`;
       (view) => view.draft
     );
     let filteredDrafts = [...allDrafts];
+    let filteredCategories = /* @__PURE__ */ new Map();
     let selectedDraft = null;
     let currentSources = local.getConfig().sources || {
       selectedIndex: 0,
@@ -50279,10 +52219,10 @@ ${formatRemoteFailure(error)}`;
         if (activeRuleSourceId == null) {
           activeRuleSource = defaultSalSource;
         } else {
-          const source = currentSources.sources.find(
+          const source5 = currentSources.sources.find(
             (s) => s.id === activeRuleSourceId
           );
-          activeRuleSource = source?.contents ?? defaultSalSource;
+          activeRuleSource = source5?.contents ?? defaultSalSource;
         }
         descriptionEditor.updateRuleSource(activeRuleSource);
         noteEditor.updateRuleSource(activeRuleSource);
@@ -50295,7 +52235,7 @@ ${formatRemoteFailure(error)}`;
         activeSalOpenSourceId: activeOpenSourceId
       };
       activeOpenSource = currentSources.sources.find(
-        (source) => source.id === activeOpenSourceId
+        (source5) => source5.id === activeOpenSourceId
       )?.contents ?? "";
       local.setConfig({ ...local.getConfig(), sources: currentSources });
       updateOpenMapLinks();
@@ -50307,7 +52247,7 @@ ${formatRemoteFailure(error)}`;
         activeSalLintSourceId: activeLintSourceId
       };
       activeLintSource = currentSources.sources.find(
-        (source) => source.id === activeLintSourceId
+        (source5) => source5.id === activeLintSourceId
       )?.contents ?? "";
       local.setConfig({ ...local.getConfig(), sources: currentSources });
       updateLint();
@@ -50315,13 +52255,13 @@ ${formatRemoteFailure(error)}`;
     function setCurrentSourcesAndNotify(newSources, updateEditor = true) {
       currentSources = newSources;
       activeRuleSource = currentSources.sources.find(
-        (source) => source.id === activeRuleSourceId
+        (source5) => source5.id === activeRuleSourceId
       )?.contents ?? defaultSalSource;
       activeOpenSource = currentSources.sources.find(
-        (source) => source.id === activeOpenSourceId
+        (source5) => source5.id === activeOpenSourceId
       )?.contents ?? "";
       activeLintSource = currentSources.sources.find(
-        (source) => source.id === activeLintSourceId
+        (source5) => source5.id === activeLintSourceId
       )?.contents ?? "";
       sourceList.setSources(currentSources);
       const selectedSourceId = getSelectedSourceId() ?? "";
@@ -50345,10 +52285,10 @@ ${formatRemoteFailure(error)}`;
     }
     function setSelectedSourceAndNotify(newContents, updateEditor = true) {
       const index = currentSources.selectedIndex ?? -1;
-      const source = currentSources.sources[index];
-      if (source == null) return;
+      const source5 = currentSources.sources[index];
+      if (source5 == null) return;
       const sources = toSpliced(currentSources.sources, index, 1, {
-        ...source,
+        ...source5,
         contents: newContents
       });
       setCurrentSourcesAndNotify(
@@ -50381,6 +52321,48 @@ ${formatRemoteFailure(error)}`;
           filteredCount: filteredDrafts.length
         })
       );
+    };
+    const categoryLegend = document.createElement("div");
+    categoryLegend.setAttribute("role", "list");
+    categoryLegend.setAttribute("aria-label", "\u5206\u985E\u30FB\u30BF\u30B0\u5225\u306E\u8272");
+    categoryLegend.style.flexWrap = "wrap";
+    categoryLegend.style.gap = "8px";
+    categoryLegend.style.padding = "4px";
+    categoryLegend.style.fontSize = "12px";
+    const updateCategoryLegend = (colors) => {
+      const items = Array.from(colors, ([category, color]) => {
+        const item = document.createElement("span");
+        item.setAttribute("role", "listitem");
+        item.style.display = "inline-flex";
+        item.style.alignItems = "center";
+        item.style.gap = "4px";
+        const swatch = document.createElement("span");
+        swatch.setAttribute("aria-hidden", "true");
+        swatch.style.width = "10px";
+        swatch.style.height = "10px";
+        swatch.style.border = `2px solid ${color}`;
+        swatch.style.borderRadius = "50%";
+        const label = document.createElement("span");
+        label.textContent = category;
+        item.append(swatch, label);
+        return item;
+      });
+      categoryLegend.replaceChildren(...items);
+      categoryLegend.hidden = colors.size === 0;
+      categoryLegend.style.display = colors.size === 0 ? "none" : "flex";
+    };
+    updateCategoryLegend(/* @__PURE__ */ new Map());
+    const updateHighlightedDrafts = (query) => {
+      const highlights = /* @__PURE__ */ new Map();
+      if (query.trim()) {
+        for (const draft of filteredDrafts) {
+          highlights.set(
+            draft.id,
+            filteredCategories.get(draft.id) ?? []
+          );
+        }
+      }
+      updateCategoryLegend(overlay.setHighlightedDrafts(highlights));
     };
     dispatchCountUpdatedEvent();
     const saveDraftChanges = (draft) => {
@@ -50714,20 +52696,20 @@ ${formatRemoteFailure(error)}`;
     }
     async function applyAllLintFixes() {
       const targetDraft = selectedDraft;
-      const source = activeLintSource;
-      if (!source || !targetDraft) return;
+      const source5 = activeLintSource;
+      if (!source5 || !targetDraft) return;
       for (let iteration = 0; iteration < 10; iteration++) {
-        if (selectedDraft !== targetDraft || activeLintSource !== source) {
+        if (selectedDraft !== targetDraft || activeLintSource !== source5) {
           return;
         }
         const input = currentLintInput();
         if (!input) return;
         const diagnostics = await evaluateLint(
-          source,
+          source5,
           input,
           new AbortController().signal
         );
-        if (selectedDraft !== targetDraft || activeLintSource !== source) {
+        if (selectedDraft !== targetDraft || activeLintSource !== source5) {
           return;
         }
         if (JSON.stringify(currentLintInput()?.fields) !== JSON.stringify(input.fields)) {
@@ -50971,6 +52953,8 @@ ${formatRemoteFailure(error)}`;
       overlay.deleteDraft(draftId);
       allDrafts = allDrafts.filter((d) => d.id !== draftId);
       filteredDrafts = filteredDrafts.filter((d) => d.id !== draftId);
+      filteredCategories.delete(draftId);
+      updateHighlightedDrafts(getSelectedSource() ?? "");
       if (selectedDraft?.id === draftId) {
         selectedDraft = null;
         updateDetailPane();
@@ -50985,6 +52969,7 @@ ${formatRemoteFailure(error)}`;
     };
     const container = /* @__PURE__ */ jsxs("div", { class: draft_list_default["container"], children: [
       filterInput.element,
+      categoryLegend,
       /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"], children: virtualListElement }),
       /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], children: [
         /* @__PURE__ */ jsxs("summary", { class: draft_list_default["detail-summary"], children: [
@@ -51130,7 +53115,7 @@ ${formatRemoteFailure(error)}`;
       );
       const diagnostics = [];
       try {
-        filteredDrafts = await filterDrafts(
+        const filteredResult = await filterDrafts(
           records,
           allDrafts,
           geo,
@@ -51146,6 +53131,15 @@ ${formatRemoteFailure(error)}`;
             });
           }
         );
+        const filteredMatches = filteredResult.drafts;
+        setRangeDisplayPlan(filteredResult.rangeDisplayPlan);
+        filteredDrafts = filteredMatches.map(({ draft }) => draft);
+        filteredCategories = new Map(
+          filteredMatches.map(
+            ({ draft, categories }) => [draft.id, categories]
+          )
+        );
+        updateHighlightedDrafts(query);
         editor.setErrors(queryId, diagnostics);
         filterInput.setErrors(diagnostics);
       } catch (e) {
@@ -51531,7 +53525,8 @@ ${formatRemoteFailure(error)}`;
       records: page.records,
       geo: page.geo,
       local: page.local,
-      handleAsyncError
+      handleAsyncError,
+      setRangeDisplayPlan: (plan) => page.overlay.canvasOverlay.setRangeDisplayPlan(plan)
     });
     const title = createDraftsDialogTitle({
       title: getDictionaryEntry(page, "draftsTitle")
