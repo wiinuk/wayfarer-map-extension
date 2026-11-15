@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wayfarer-map-extension
 // @namespace    http://tampermonkey.net/
-// @version      0.8.4
+// @version      0.9.1
 // @description  A user script that extends the official Wayfarer map.
 // @author       Wiinuk
 // @match        https://wayfarer.scopely.com/mapview
@@ -14194,12 +14194,12 @@
          * @exception IllegalArgumentException if `tag` is not defined or
          * empty.
          */
-        constructor(tag, label) {
+        constructor(tag2, label) {
           super();
-          if (tag == null || tag.length === 0) {
+          if (tag2 == null || tag2.length === 0) {
             throw new Error("tag cannot be null or empty");
           }
-          this._tag = tag;
+          this._tag = tag2;
           this._label = label;
         }
         /**
@@ -14705,13 +14705,13 @@
             chunks.push(new TextChunk_1.TextChunk(text));
           }
           for (let i = 0; i < ntags; i++) {
-            let tag = pattern2.substring(starts[i] + this.start.length, stops[i]);
-            let ruleOrToken = tag;
+            let tag2 = pattern2.substring(starts[i] + this.start.length, stops[i]);
+            let ruleOrToken = tag2;
             let label;
-            let colon = tag.indexOf(":");
+            let colon = tag2.indexOf(":");
             if (colon >= 0) {
-              label = tag.substring(0, colon);
-              ruleOrToken = tag.substring(colon + 1, tag.length);
+              label = tag2.substring(0, colon);
+              ruleOrToken = tag2.substring(colon + 1, tag2.length);
             }
             chunks.push(new TagChunk_1.TagChunk(ruleOrToken, label));
             if (i + 1 < ntags) {
@@ -22478,6 +22478,18 @@ ${formatRemoteFailure(error)}`;
     label: "label-6adc694ea38ca16a7e81027d243b7c13b1c6aa05"
   };
 
+  // source/draft-marker-outline.ts
+  function createDraftMarkerOutlineSegments(colors) {
+    if (colors.length < 2) return [];
+    const segmentAngle = Math.PI * 2 / colors.length;
+    const gap = Math.min(0.06, segmentAngle / 4);
+    return colors.map((color, index) => ({
+      color,
+      startAngle: -Math.PI / 2 + index * segmentAngle + gap / 2,
+      endAngle: -Math.PI / 2 + (index + 1) * segmentAngle - gap / 2
+    }));
+  }
+
   // source/drafts-canvas-overlay.ts
   function getPixelsPerMeter(center, projection) {
     const offsetLatLng = google.maps.geometry.spherical.computeOffset(
@@ -22498,6 +22510,7 @@ ${formatRemoteFailure(error)}`;
         this.selectedDraftId = selectedDraftId2;
       }
       canvas = null;
+      highlightedDraftColors = /* @__PURE__ */ new Map();
       // Overlay が地図に追加された時に呼ばれる
       onAdd() {
         this.canvas = document.createElement("canvas");
@@ -22534,6 +22547,7 @@ ${formatRemoteFailure(error)}`;
           renderDrafts(
             ctx,
             this.drafts,
+            this.highlightedDraftColors,
             this.config.draftMarker,
             projection,
             deviceX,
@@ -22552,6 +22566,10 @@ ${formatRemoteFailure(error)}`;
             deviceY
           );
         }
+      }
+      setHighlightedDrafts(colors) {
+        this.highlightedDraftColors = colors;
+        this.draw();
       }
     }
     return new CanvasOverlay(config2, drafts, selectedDraftId);
@@ -22626,8 +22644,7 @@ ${formatRemoteFailure(error)}`;
     }
     ctx.closePath();
   }
-  function renderDrafts(ctx, drafts, config2, projection, deviceX, deviceY) {
-    const strokeStyle = config2.strokeColor;
+  function renderDrafts(ctx, drafts, highlightedDraftColors, config2, projection, deviceX, deviceY) {
     const fillStyle = config2.fillColor;
     const radius = config2.scale;
     const lineWidth = config2.strokeWeight;
@@ -22640,11 +22657,28 @@ ${formatRemoteFailure(error)}`;
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = fillStyle;
       ctx.fill();
+      const colors = highlightedDraftColors.get(draft.draft.id);
+      const outlineColors = colors == null ? [] : colors.length === 0 ? [config2.highlightColor] : colors;
       ctx.beginPath();
       ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
       ctx.lineWidth = lineWidth;
-      ctx.strokeStyle = strokeStyle;
+      ctx.strokeStyle = config2.strokeColor;
       ctx.stroke();
+      if (outlineColors.length === 1) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
+        ctx.strokeStyle = outlineColors[0];
+        ctx.stroke();
+      } else if (outlineColors.length > 1) {
+        for (const segment of createDraftMarkerOutlineSegments(
+          outlineColors
+        )) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 2, segment.startAngle, segment.endAngle);
+          ctx.strokeStyle = segment.color;
+          ctx.stroke();
+        }
+      }
     }
   }
   function renderCircle(ctx, center, config2, projection, pixelsPerMeter, deviceX, deviceY) {
@@ -22677,7 +22711,68 @@ ${formatRemoteFailure(error)}`;
     ctx.stroke();
   }
 
+  // source/category-colors.ts
+  var HUE_COUNT = 360;
+  var MIN_CATEGORY_HUE_SEPARATION = 60;
+  function normalizeCategoryName(name2) {
+    return name2.normalize("NFC").trim();
+  }
+  function getBaseHue(name2) {
+    let hash = 2166136261;
+    for (let i = 0; i < name2.length; i++) {
+      hash ^= name2.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % HUE_COUNT;
+  }
+  function hueDistance(a, b) {
+    const distance2 = Math.abs(a - b);
+    return Math.min(distance2, HUE_COUNT - distance2);
+  }
+  function minimumDistance(hue, assignedHues) {
+    let minimum = HUE_COUNT / 2;
+    for (const assignedHue of assignedHues) {
+      minimum = Math.min(minimum, hueDistance(hue, assignedHue));
+    }
+    return minimum;
+  }
+  function createCategoryColorMap(categoryNames) {
+    const names = [
+      ...new Set(
+        Array.from(categoryNames, normalizeCategoryName).filter(Boolean)
+      )
+    ].sort();
+    const assignedHues = [];
+    const colors = /* @__PURE__ */ new Map();
+    for (const name2 of names) {
+      const baseHue = getBaseHue(name2);
+      const candidates = Array.from(
+        { length: HUE_COUNT },
+        (_, hue2) => hue2
+      ).sort(
+        (a, b) => hueDistance(a, baseHue) - hueDistance(b, baseHue) || a - b
+      );
+      const separatedHue = candidates.find(
+        (hue2) => assignedHues.every(
+          (assigned) => hueDistance(hue2, assigned) >= MIN_CATEGORY_HUE_SEPARATION
+        )
+      );
+      const hue = separatedHue ?? candidates.reduce((best, candidate) => {
+        const candidateDistance = minimumDistance(
+          candidate,
+          assignedHues
+        );
+        const bestDistance = minimumDistance(best, assignedHues);
+        return candidateDistance > bestDistance ? candidate : best;
+      }, baseHue);
+      assignedHues.push(hue);
+      colors.set(name2, `hsl(${hue}, 100%, 45%)`);
+    }
+    return colors;
+  }
+
   // source/drafts-overlay.ts
+  var noDraftMarkerColors = [];
   function createDefaultViewConfig() {
     const cell = {
       strokeColor: "rgba(240, 252, 249, 0.7)",
@@ -22710,6 +22805,7 @@ ${formatRemoteFailure(error)}`;
         fillColor: "#00ffb380",
         strokeColor: "#ffffff80",
         strokeWeight: 2,
+        highlightColor: "#ffdf00",
         label: {
           fillColor: "#FFFFBB",
           fontSize: "11px",
@@ -22754,18 +22850,59 @@ ${formatRemoteFailure(error)}`;
       }
     };
   }
+  function createDraftMarkerIcon(config2, strokeColor) {
+    return {
+      scale: config2.draftMarker.scale,
+      fillColor: config2.draftMarker.fillColor,
+      strokeColor,
+      strokeWeight: config2.draftMarker.strokeWeight,
+      labelOrigin: new google.maps.Point(0, 2),
+      path: 0,
+      fillOpacity: 1,
+      strokeOpacity: 1
+    };
+  }
+  function createDraftMarkerIconWithSegments(config2, colors) {
+    const center = 16;
+    const radius = config2.draftMarker.scale;
+    const strokeWidth = config2.draftMarker.strokeWeight;
+    const paths = createDraftMarkerOutlineSegments(colors).map(({ color, startAngle, endAngle }) => {
+      const startX = center + radius * Math.cos(startAngle);
+      const startY = center + radius * Math.sin(startAngle);
+      const endX = center + radius * Math.cos(endAngle);
+      const endY = center + radius * Math.sin(endAngle);
+      const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+      return `<path d="M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="butt"/>`;
+    }).join("");
+    const svg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="${center}" cy="${center}" r="${radius}" fill="${config2.draftMarker.fillColor}" stroke="${config2.draftMarker.strokeColor}" stroke-width="${strokeWidth}"/>${paths}</svg>`;
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg2)}`,
+      scaledSize: new google.maps.Size(32, 32),
+      anchor: new google.maps.Point(center, center),
+      labelOrigin: new google.maps.Point(center, center + 2)
+    };
+  }
   function createOptionsCache(config2) {
+    const draftMarkerIcon = createDraftMarkerIcon(
+      config2,
+      config2.draftMarker.strokeColor
+    );
+    const highlightedDraftMarkerIcon = createDraftMarkerIcon(
+      config2,
+      config2.draftMarker.highlightColor
+    );
     return {
       draftMarkerOptions: {
         zIndex: config2.baseZIndex,
-        icon: {
-          ...config2.draftMarker,
-          labelOrigin: new google.maps.Point(0, 2),
-          path: 0,
-          fillOpacity: 1,
-          strokeOpacity: 1
-        }
+        icon: draftMarkerIcon
       },
+      draftMarkerIcon,
+      highlightedDraftMarkerIcon,
+      draftMarkerIconsByStrokeColor: /* @__PURE__ */ new Map([
+        [config2.draftMarker.strokeColor, draftMarkerIcon],
+        [config2.draftMarker.highlightColor, highlightedDraftMarkerIcon]
+      ]),
+      draftMarkerIconsByColorSet: /* @__PURE__ */ new Map(),
       draftMarkerLabel: {
         ...config2.draftMarker.label,
         text: "",
@@ -22837,7 +22974,8 @@ ${formatRemoteFailure(error)}`;
     });
     return {
       label,
-      marker
+      marker,
+      currentIcon: overlay.cachedOptions.draftMarkerIcon
     };
   }
   function isNeedDetail(map, config2) {
@@ -22906,6 +23044,7 @@ ${formatRemoteFailure(error)}`;
     const config2 = createDefaultViewConfig();
     const drafts = /* @__PURE__ */ new Map();
     const selectedDraftId = { contents: null };
+    const cachedOptions = createOptionsCache(config2);
     const draftsCanvasOverlay = createCanvasOverlay(
       drafts,
       config2,
@@ -22914,7 +23053,7 @@ ${formatRemoteFailure(error)}`;
     return {
       events: createTypedEventTarget(),
       config: config2,
-      cachedOptions: createOptionsCache(config2),
+      cachedOptions,
       map,
       drafts,
       selectedDraftId,
@@ -22943,6 +23082,89 @@ ${formatRemoteFailure(error)}`;
           }
           notifyMapRangeChanged(this);
         }
+      },
+      setHighlightedDrafts(categoriesByDraftId) {
+        const categoryColors = createCategoryColorMap(
+          Array.from(categoriesByDraftId.values()).flat()
+        );
+        const colorsByDraftId = /* @__PURE__ */ new Map();
+        const colorsBySingleCategory = /* @__PURE__ */ new Map();
+        for (const [draftId, categories] of categoriesByDraftId) {
+          let colors;
+          if (categories.length === 0) {
+            colors = noDraftMarkerColors;
+          } else if (categories.length === 1) {
+            const category = categories[0];
+            const existingColors = colorsBySingleCategory.get(category);
+            if (existingColors != null) {
+              colors = existingColors;
+            } else {
+              const color = categoryColors.get(category);
+              if (color == null) {
+                throw new Error(
+                  `No color assigned to category "${category}".`
+                );
+              }
+              colors = [color];
+              colorsBySingleCategory.set(category, colors);
+            }
+          } else {
+            colors = Array.from(new Set(categories)).sort().map((category) => {
+              const color = categoryColors.get(category);
+              if (color == null) {
+                throw new Error(
+                  `No color assigned to category "${category}".`
+                );
+              }
+              return color;
+            });
+          }
+          colorsByDraftId.set(draftId, colors);
+        }
+        for (const [draftId, draftWithView] of this.drafts) {
+          const colors = colorsByDraftId.get(draftId);
+          let icon = cachedOptions.draftMarkerIcon;
+          if (colors != null) {
+            if (colors.length === 0) {
+              icon = cachedOptions.highlightedDraftMarkerIcon;
+            } else if (colors.length === 1) {
+              const color = colors[0];
+              const cachedIcon = cachedOptions.draftMarkerIconsByStrokeColor.get(
+                color
+              );
+              if (cachedIcon == null) {
+                icon = createDraftMarkerIcon(config2, color);
+                cachedOptions.draftMarkerIconsByStrokeColor.set(
+                  color,
+                  icon
+                );
+              } else {
+                icon = cachedIcon;
+              }
+            } else {
+              const key = colors.join("\0");
+              const cachedIcon = cachedOptions.draftMarkerIconsByColorSet.get(key);
+              if (cachedIcon == null) {
+                icon = createDraftMarkerIconWithSegments(
+                  config2,
+                  colors
+                );
+                cachedOptions.draftMarkerIconsByColorSet.set(
+                  key,
+                  icon
+                );
+              } else {
+                icon = cachedIcon;
+              }
+            }
+          }
+          if (draftWithView.mapView.currentIcon !== icon) {
+            draftWithView.mapView.marker.setIcon(icon);
+            draftWithView.mapView.currentIcon = icon;
+          }
+        }
+        this.draftsCanvasOverlay.setHighlightedDrafts(colorsByDraftId);
+        return categoryColors;
       },
       async addDrafts(drafts2, scheduler) {
         for (const draft of drafts2) {
@@ -29926,9 +30148,9 @@ ${formatRemoteFailure(error)}`;
     return node;
   }
   var NullWidget = class extends WidgetType {
-    constructor(tag) {
+    constructor(tag2) {
       super();
-      this.tag = tag;
+      this.tag = tag2;
     }
     eq(other) {
       return other.tag == this.tag;
@@ -39333,12 +39555,12 @@ ${formatRemoteFailure(error)}`;
         parent = nameOrParent;
       if (parent === null || parent === void 0 ? void 0 : parent.base)
         throw new Error("Can not derive from a modified tag");
-      let tag = new _Tag(name2, [], null, []);
-      tag.set.push(tag);
+      let tag2 = new _Tag(name2, [], null, []);
+      tag2.set.push(tag2);
       if (parent)
         for (let t2 of parent.set)
-          tag.set.push(t2);
-      return tag;
+          tag2.set.push(t2);
+      return tag2;
     }
     /**
     Define a tag _modifier_, which is a function that, given a tag,
@@ -39354,10 +39576,10 @@ ${formatRemoteFailure(error)}`;
     */
     static defineModifier(name2) {
       let mod = new Modifier(name2);
-      return (tag) => {
-        if (tag.modified.indexOf(mod) > -1)
-          return tag;
-        return Modifier.get(tag.base || tag, tag.modified.concat(mod).sort((a, b) => a.id - b.id));
+      return (tag2) => {
+        if (tag2.modified.indexOf(mod) > -1)
+          return tag2;
+        return Modifier.get(tag2.base || tag2, tag2.modified.concat(mod).sort((a, b) => a.id - b.id));
       };
     }
   };
@@ -39374,15 +39596,15 @@ ${formatRemoteFailure(error)}`;
       let exists = mods[0].instances.find((t2) => t2.base == base2 && sameArray2(mods, t2.modified));
       if (exists)
         return exists;
-      let set = [], tag = new Tag(base2.name, set, base2, mods);
+      let set = [], tag2 = new Tag(base2.name, set, base2, mods);
       for (let m of mods)
-        m.instances.push(tag);
+        m.instances.push(tag2);
       let configs = powerSet(mods);
       for (let parent of base2.set)
         if (!parent.modified.length)
           for (let config2 of configs)
             set.push(_Modifier.get(parent, config2));
-      return tag;
+      return tag2;
     }
   };
   function sameArray2(a, b) {
@@ -39491,15 +39713,15 @@ ${formatRemoteFailure(error)}`;
       if (!Array.isArray(style.tag))
         map[style.tag.id] = style.class;
       else
-        for (let tag of style.tag)
-          map[tag.id] = style.class;
+        for (let tag2 of style.tag)
+          map[tag2.id] = style.class;
     }
     let { scope, all = null } = options || {};
     return {
       style: (tags3) => {
         let cls = all;
-        for (let tag of tags3) {
-          for (let sub of tag.set) {
+        for (let tag2 of tags3) {
+          for (let sub of tag2.set) {
             let tagClass = map[sub.id];
             if (tagClass) {
               cls = cls ? cls + " " + tagClass : tagClass;
@@ -41447,8 +41669,8 @@ ${formatRemoteFailure(error)}`;
             found = Array.isArray(value) ? value : [value];
         }
       }
-      for (let tag of found)
-        tags$1.push(tag);
+      for (let tag2 of found)
+        tags$1.push(tag2);
     }
     if (!tags$1.length)
       return 0;
@@ -46802,6 +47024,17 @@ ${formatRemoteFailure(error)}`;
     }
     return cell14s;
   }
+  var notVisible = {
+    isVisible: false,
+    categories: []
+  };
+  var visibleWithoutCategory = {
+    isVisible: true,
+    categories: []
+  };
+  function toQueryMatch(isVisible) {
+    return isVisible ? visibleWithoutCategory : notVisible;
+  }
   function hasTermInString(text, term) {
     return text.toLowerCase().includes(term);
   }
@@ -46820,6 +47053,9 @@ ${formatRemoteFailure(error)}`;
     return builder;
   }
   function valueAsBuilder(v) {
+    if (!isDraftQueryBuilderValue(v)) {
+      throw new Error("Query expression did not produce a draft query.");
+    }
     return v;
   }
   function stringTermQuery(text) {
@@ -46829,7 +47065,7 @@ ${formatRemoteFailure(error)}`;
         const term = text.toLocaleLowerCase();
         return done({
           isVisible(d) {
-            return done(hasTermInDraft(d, term));
+            return done(toQueryMatch(hasTermInDraft(d, term)));
           }
         });
       }
@@ -46839,7 +47075,7 @@ ${formatRemoteFailure(error)}`;
     return builderAsValue(
       queryAsBuilder({
         isVisible() {
-          return done(true);
+          return done(visibleWithoutCategory);
         }
       })
     );
@@ -46852,12 +47088,84 @@ ${formatRemoteFailure(error)}`;
         const q = yield* b.initialize(e);
         return {
           *isVisible(d) {
-            return !(yield* q.isVisible(d));
+            const match = yield* q.isVisible(d);
+            return match.isVisible ? notVisible : visibleWithoutCategory;
           },
           isAny: false
         };
       }
     });
+  }
+  function classifyAs(label, builder) {
+    if (builder.isIgnorable) return builder;
+    const categories = [label];
+    return {
+      isIgnorable: false,
+      *initialize(environment) {
+        const query = yield* builder.initialize(environment);
+        return {
+          *isVisible(draft) {
+            const match = yield* query.isVisible(draft);
+            if (!match.isVisible) return match;
+            return {
+              isVisible: true,
+              categories
+            };
+          }
+        };
+      }
+    };
+  }
+  function tag(label, builder) {
+    if (builder.isIgnorable) return builder;
+    const singleCategory = [label];
+    return {
+      isIgnorable: false,
+      *initialize(environment) {
+        const query = yield* builder.initialize(environment);
+        return {
+          *isVisible(draft) {
+            const match = yield* query.isVisible(draft);
+            if (!match.isVisible || match.categories.includes(label)) {
+              return match;
+            }
+            if (match.categories.length === 0) {
+              return {
+                isVisible: true,
+                categories: singleCategory
+              };
+            }
+            return {
+              isVisible: true,
+              categories: [...match.categories, label]
+            };
+          }
+        };
+      }
+    };
+  }
+  function labelQueryFunction(name2, applyLabel) {
+    return (label) => {
+      if (typeof label !== "string") {
+        throw new Error(
+          `${name2} expects a raw string label, for example @"\u795E\u793E".`
+        );
+      }
+      const normalizedLabel = label.normalize("NFC").trim();
+      if (!normalizedLabel) {
+        throw new Error(`${name2} label must not be empty.`);
+      }
+      return done(
+        (query) => done(
+          builderAsValue(
+            applyLabel(normalizedLabel, valueAsBuilder(query))
+          )
+        )
+      );
+    };
+  }
+  function isDraftQueryBuilderValue(value) {
+    return typeof value === "object" && value !== null && "initialize" in value && typeof value["initialize"] === "function" && "isIgnorable" in value && typeof value["isIgnorable"] === "boolean";
   }
   function fromString(x) {
     return done(stringTermQuery(String(x)));
@@ -46872,7 +47180,17 @@ ${formatRemoteFailure(error)}`;
         const q2 = yield* b2.initialize(e);
         return {
           *isVisible(draft) {
-            return (yield* q1.isVisible(draft)) && (yield* q2.isVisible(draft));
+            const match1 = yield* q1.isVisible(draft);
+            if (!match1.isVisible) return notVisible;
+            const match2 = yield* q2.isVisible(draft);
+            if (!match2.isVisible) return notVisible;
+            const categories = [...match1.categories];
+            for (const category of match2.categories) {
+              if (!categories.includes(category)) {
+                categories.push(category);
+              }
+            }
+            return categories.length === 0 ? visibleWithoutCategory : { isVisible: true, categories };
           }
         };
       }
@@ -46888,7 +47206,9 @@ ${formatRemoteFailure(error)}`;
         const q2 = yield* b2.initialize(e);
         return {
           *isVisible(d) {
-            return (yield* q1.isVisible(d)) || (yield* q2.isVisible(d));
+            const match1 = yield* q1.isVisible(d);
+            if (match1.isVisible) return match1;
+            return yield* q2.isVisible(d);
           }
         };
       }
@@ -46898,7 +47218,7 @@ ${formatRemoteFailure(error)}`;
     return {
       isVisible(d) {
         const [p2] = d.coordinates;
-        return done(distance(center, p2) <= radius);
+        return done(toQueryMatch(distance(center, p2) <= radius));
       }
     };
   }
@@ -46916,8 +47236,8 @@ ${formatRemoteFailure(error)}`;
       isIgnorable: false,
       initialize(e) {
         return done({
-          isVisible(d) {
-            return predicate(e, d);
+          *isVisible(d) {
+            return toQueryMatch(yield* predicate(e, d));
           }
         });
       }
@@ -46945,10 +47265,10 @@ ${formatRemoteFailure(error)}`;
         return done({
           *isVisible(d) {
             const stat17 = yield* getFreshCell17(e, d);
-            if (stat17 == null) return true;
+            if (stat17 == null) return visibleWithoutCategory;
             const stat14 = yield* getFreshStat14(e, d);
-            if (stat14 == null) return true;
-            return predicate(stat14, stat17, d);
+            if (stat14 == null) return visibleWithoutCategory;
+            return toQueryMatch(predicate(stat14, stat17, d));
           }
         });
       }
@@ -47022,7 +47342,7 @@ ${formatRemoteFailure(error)}`;
       initialize() {
         return done({
           isVisible() {
-            return done(true);
+            return done(visibleWithoutCategory);
           }
         });
       }
@@ -47041,6 +47361,9 @@ ${formatRemoteFailure(error)}`;
       },
       fromString,
       fromWord: fromString,
+      classifyAs: labelQueryFunction("classifyAs", classifyAs),
+      tag: labelQueryFunction("tag", tag),
+      category: labelQueryFunction("category", classifyAs),
       not_(x) {
         return done(not(valueAsBuilder(x)));
       },
@@ -48931,7 +49254,7 @@ ${formatRemoteFailure(error)}`;
       reportError
     );
     const filter = await forceAsPromise(effective, signal);
-    const queryBuilder = filter;
+    const queryBuilder = valueAsBuilder(filter);
     const environment = createEnvironment(records, drafts, geo);
     const query = await forceAsPromise(
       queryBuilder.initialize(environment),
@@ -48940,14 +49263,20 @@ ${formatRemoteFailure(error)}`;
     const result = [];
     let error = null;
     for (const d of drafts) {
-      let isVisible = false;
+      let match = {
+        isVisible: false,
+        categories: []
+      };
       try {
-        isVisible = await forceAsPromise(query.isVisible(d), signal);
+        match = await forceAsPromise(query.isVisible(d), signal);
       } catch (e) {
         error ??= e;
       }
-      if (isVisible) {
-        result.push(d);
+      if (match.isVisible) {
+        result.push({
+          draft: d,
+          categories: match.categories
+        });
       }
     }
     if (error) console.error(error);
@@ -50196,6 +50525,7 @@ ${formatRemoteFailure(error)}`;
       (view) => view.draft
     );
     let filteredDrafts = [...allDrafts];
+    let filteredCategories = /* @__PURE__ */ new Map();
     let selectedDraft = null;
     let currentSources = local.getConfig().sources || {
       selectedIndex: 0,
@@ -50381,6 +50711,48 @@ ${formatRemoteFailure(error)}`;
           filteredCount: filteredDrafts.length
         })
       );
+    };
+    const categoryLegend = document.createElement("div");
+    categoryLegend.setAttribute("role", "list");
+    categoryLegend.setAttribute("aria-label", "\u5206\u985E\u30FB\u30BF\u30B0\u5225\u306E\u8272");
+    categoryLegend.style.flexWrap = "wrap";
+    categoryLegend.style.gap = "8px";
+    categoryLegend.style.padding = "4px";
+    categoryLegend.style.fontSize = "12px";
+    const updateCategoryLegend = (colors) => {
+      const items = Array.from(colors, ([category, color]) => {
+        const item = document.createElement("span");
+        item.setAttribute("role", "listitem");
+        item.style.display = "inline-flex";
+        item.style.alignItems = "center";
+        item.style.gap = "4px";
+        const swatch = document.createElement("span");
+        swatch.setAttribute("aria-hidden", "true");
+        swatch.style.width = "10px";
+        swatch.style.height = "10px";
+        swatch.style.border = `2px solid ${color}`;
+        swatch.style.borderRadius = "50%";
+        const label = document.createElement("span");
+        label.textContent = category;
+        item.append(swatch, label);
+        return item;
+      });
+      categoryLegend.replaceChildren(...items);
+      categoryLegend.hidden = colors.size === 0;
+      categoryLegend.style.display = colors.size === 0 ? "none" : "flex";
+    };
+    updateCategoryLegend(/* @__PURE__ */ new Map());
+    const updateHighlightedDrafts = (query) => {
+      const highlights = /* @__PURE__ */ new Map();
+      if (query.trim()) {
+        for (const draft of filteredDrafts) {
+          highlights.set(
+            draft.id,
+            filteredCategories.get(draft.id) ?? []
+          );
+        }
+      }
+      updateCategoryLegend(overlay.setHighlightedDrafts(highlights));
     };
     dispatchCountUpdatedEvent();
     const saveDraftChanges = (draft) => {
@@ -50971,6 +51343,8 @@ ${formatRemoteFailure(error)}`;
       overlay.deleteDraft(draftId);
       allDrafts = allDrafts.filter((d) => d.id !== draftId);
       filteredDrafts = filteredDrafts.filter((d) => d.id !== draftId);
+      filteredCategories.delete(draftId);
+      updateHighlightedDrafts(getSelectedSource() ?? "");
       if (selectedDraft?.id === draftId) {
         selectedDraft = null;
         updateDetailPane();
@@ -50985,6 +51359,7 @@ ${formatRemoteFailure(error)}`;
     };
     const container = /* @__PURE__ */ jsxs("div", { class: draft_list_default["container"], children: [
       filterInput.element,
+      categoryLegend,
       /* @__PURE__ */ jsx("div", { class: draft_list_default["list-container"], children: virtualListElement }),
       /* @__PURE__ */ jsxs("details", { class: draft_list_default["detail-pane"], children: [
         /* @__PURE__ */ jsxs("summary", { class: draft_list_default["detail-summary"], children: [
@@ -51130,7 +51505,7 @@ ${formatRemoteFailure(error)}`;
       );
       const diagnostics = [];
       try {
-        filteredDrafts = await filterDrafts(
+        const filteredMatches = await filterDrafts(
           records,
           allDrafts,
           geo,
@@ -51146,6 +51521,13 @@ ${formatRemoteFailure(error)}`;
             });
           }
         );
+        filteredDrafts = filteredMatches.map(({ draft }) => draft);
+        filteredCategories = new Map(
+          filteredMatches.map(
+            ({ draft, categories }) => [draft.id, categories]
+          )
+        );
+        updateHighlightedDrafts(query);
         editor.setErrors(queryId, diagnostics);
         filterInput.setErrors(diagnostics);
       } catch (e) {
