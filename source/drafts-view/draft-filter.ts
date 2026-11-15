@@ -7,9 +7,10 @@ import {
     buildDraftMap,
     createStandardQueries,
     type Cell14DraftStat,
-    type DraftQueryBuilder,
+    type DraftQueryMatch,
     type Cell14DraftMap,
     type QueryEnvironment,
+    valueAsBuilder,
 } from "../query/standard-queries";
 import type { Draft } from "../remote";
 import {
@@ -147,7 +148,7 @@ export async function filterDrafts(
     source: string,
     signal: AbortSignal,
     reportError: ErrorReporter,
-): Promise<Draft[]> {
+): Promise<FilteredDraft[]> {
     const queryGlobals = createStandardQueries();
     const effective = evaluateExpression(
         source,
@@ -155,26 +156,37 @@ export async function filterDrafts(
         reportError,
     );
     const filter = await forceAsPromise(effective, signal);
-    const queryBuilder = filter as unknown as DraftQueryBuilder;
+    const queryBuilder = valueAsBuilder(filter);
     const environment = createEnvironment(records, drafts, geo);
     const query = await forceAsPromise(
         queryBuilder.initialize(environment),
         signal,
     );
 
-    const result = [];
+    const result: FilteredDraft[] = [];
     let error = null;
     for (const d of drafts) {
-        let isVisible = false;
+        let match: DraftQueryMatch = {
+            isVisible: false,
+            category: null,
+        };
         try {
-            isVisible = await forceAsPromise(query.isVisible(d), signal);
+            match = await forceAsPromise(query.isVisible(d), signal);
         } catch (e) {
             error ??= e;
         }
-        if (isVisible) {
-            result.push(d);
+        if (match.isVisible) {
+            result.push({
+                draft: d,
+                category: match.category,
+            });
         }
     }
     if (error) console.error(error);
     return result;
+}
+
+export interface FilteredDraft {
+    readonly draft: Draft;
+    readonly category: string | null;
 }

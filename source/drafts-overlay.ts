@@ -19,6 +19,7 @@ import {
     createCanvasOverlay,
     type DraftCanvasOverlay,
 } from "./drafts-canvas-overlay";
+import { createCategoryColorMap } from "./category-colors";
 
 export interface DraftWithView {
     readonly draft: Draft;
@@ -84,6 +85,10 @@ interface ViewOptionsCache {
     readonly draftMarkerIcon: NonNullable<google.maps.MarkerOptions["icon"]>;
     readonly highlightedDraftMarkerIcon: NonNullable<
         google.maps.MarkerOptions["icon"]
+    >;
+    readonly draftMarkerIconsByStrokeColor: Map<
+        string,
+        NonNullable<google.maps.MarkerOptions["icon"]>
     >;
     readonly draftMarkerLabel: google.maps.MarkerLabel;
 }
@@ -167,25 +172,38 @@ function createDefaultViewConfig(): ViewConfig {
         },
     };
 }
-function createOptionsCache(config: ViewConfig): ViewOptionsCache {
-    const { highlightColor, ...draftMarkerConfig } = config.draftMarker;
-    const draftMarkerIcon = {
-        ...draftMarkerConfig,
+function createDraftMarkerIcon(config: ViewConfig, strokeColor: string) {
+    return {
+        scale: config.draftMarker.scale,
+        fillColor: config.draftMarker.fillColor,
+        strokeColor,
+        strokeWeight: config.draftMarker.strokeWeight,
         labelOrigin: new google.maps.Point(0, 2),
         path: 0,
         fillOpacity: 1,
         strokeOpacity: 1,
     };
+}
+function createOptionsCache(config: ViewConfig): ViewOptionsCache {
+    const draftMarkerIcon = createDraftMarkerIcon(
+        config,
+        config.draftMarker.strokeColor,
+    );
+    const highlightedDraftMarkerIcon = createDraftMarkerIcon(
+        config,
+        config.draftMarker.highlightColor,
+    );
     return {
         draftMarkerOptions: {
             zIndex: config.baseZIndex,
             icon: draftMarkerIcon,
         },
         draftMarkerIcon,
-        highlightedDraftMarkerIcon: {
-            ...draftMarkerIcon,
-            strokeColor: highlightColor,
-        },
+        highlightedDraftMarkerIcon,
+        draftMarkerIconsByStrokeColor: new Map([
+            [config.draftMarker.strokeColor, draftMarkerIcon],
+            [config.draftMarker.highlightColor, highlightedDraftMarkerIcon],
+        ]),
         draftMarkerLabel: {
             ...config.draftMarker.label,
             text: "",
@@ -218,7 +236,9 @@ export interface DraftsOverlay {
     readonly events: TypedEventTarget<DraftsOverlayEventMap>;
     updateDraftTitle(draft: Draft): void;
     updateDraftCoordinates(draft: Draft): void;
-    setHighlightedDrafts(drafts: readonly Draft[]): void;
+    setHighlightedDrafts(
+        categoriesByDraftId: ReadonlyMap<DraftId, string | null>,
+    ): ReadonlyMap<string, string>;
     addDraft(draft: Draft): void;
     addDrafts(draft: Iterable<Draft>, scheduler: Scheduler): Promise<void>;
     deleteDraft(draftId: Draft["id"]): void;
@@ -391,7 +411,6 @@ export function createDraftsOverlay(
         config,
         selectedDraftId,
     );
-    const highlightedDraftIds = new Set<DraftId>();
     return {
         events: createTypedEventTarget(),
         config,
@@ -425,21 +444,45 @@ export function createDraftsOverlay(
                 notifyMapRangeChanged(this);
             }
         },
-        setHighlightedDrafts(drafts) {
-            highlightedDraftIds.clear();
-            for (const draft of drafts) {
-                highlightedDraftIds.add(draft.id);
+        setHighlightedDrafts(categoriesByDraftId) {
+            const categoryColors = createCategoryColorMap(
+                Array.from(categoriesByDraftId.values()).filter(
+                    (category): category is string => category !== null,
+                ),
+            );
+            const colorsByDraftId = new Map<DraftId, string>();
+            for (const [draftId, category] of categoriesByDraftId) {
+                const color =
+                    category === null
+                        ? config.draftMarker.highlightColor
+                        : categoryColors.get(category);
+                if (color == null) {
+                    throw new Error(
+                        `No color assigned to category "${category}".`,
+                    );
+                }
+                colorsByDraftId.set(draftId, color);
             }
             for (const [draftId, draftWithView] of this.drafts) {
-                draftWithView.mapView.marker.setIcon(
-                    highlightedDraftIds.has(draftId)
-                        ? cachedOptions.highlightedDraftMarkerIcon
-                        : cachedOptions.draftMarkerIcon,
-                );
+                const color = colorsByDraftId.get(draftId);
+                let icon = cachedOptions.draftMarkerIcon;
+                if (color != null) {
+                    const cachedIcon =
+                        cachedOptions.draftMarkerIconsByStrokeColor.get(color);
+                    if (cachedIcon == null) {
+                        icon = createDraftMarkerIcon(config, color);
+                        cachedOptions.draftMarkerIconsByStrokeColor.set(
+                            color,
+                            icon,
+                        );
+                    } else {
+                        icon = cachedIcon;
+                    }
+                }
+                draftWithView.mapView.marker.setIcon(icon);
             }
-            this.draftsCanvasOverlay.setHighlightedDrafts(
-                highlightedDraftIds,
-            );
+            this.draftsCanvasOverlay.setHighlightedDrafts(colorsByDraftId);
+            return categoryColors;
         },
         async addDrafts(drafts, scheduler) {
             for (const draft of drafts) {

@@ -35,7 +35,8 @@ export function createCanvasOverlay(
 ) {
     class CanvasOverlay extends google.maps.OverlayView {
         private canvas: HTMLCanvasElement | null = null;
-        private highlightedDraftIds: ReadonlySet<DraftId> = new Set();
+        private highlightedDraftColors: ReadonlyMap<DraftId, string> =
+            new Map();
         constructor(
             private config: ViewConfig,
             private drafts: DraftViews,
@@ -90,7 +91,7 @@ export function createCanvasOverlay(
                 renderDrafts(
                     ctx,
                     this.drafts,
-                    this.highlightedDraftIds,
+                    this.highlightedDraftColors,
                     this.config.draftMarker,
                     projection,
                     deviceX,
@@ -113,8 +114,8 @@ export function createCanvasOverlay(
             }
         }
 
-        setHighlightedDrafts(ids: ReadonlySet<DraftId>) {
-            this.highlightedDraftIds = ids;
+        setHighlightedDrafts(colors: ReadonlyMap<DraftId, string>) {
+            this.highlightedDraftColors = colors;
             this.draw();
         }
     }
@@ -231,7 +232,7 @@ function setPath(
 function renderDrafts(
     ctx: CanvasRenderingContext2D,
     drafts: DraftViews,
-    highlightedDraftIds: ReadonlySet<DraftId>,
+    highlightedDraftColors: ReadonlyMap<DraftId, string>,
     config: ViewConfig["draftMarker"],
     projection: google.maps.MapCanvasProjection,
     deviceX: number,
@@ -258,9 +259,8 @@ function renderDrafts(
         ctx.beginPath();
         ctx.arc(x, y, radius + 2, 0, 2 * Math.PI);
         ctx.lineWidth = lineWidth;
-        ctx.strokeStyle = highlightedDraftIds.has(draft.draft.id)
-            ? config.highlightColor
-            : config.strokeColor;
+        ctx.strokeStyle =
+            highlightedDraftColors.get(draft.draft.id) ?? config.strokeColor;
         ctx.stroke();
     }
 }

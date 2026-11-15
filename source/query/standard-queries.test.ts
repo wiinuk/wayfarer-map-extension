@@ -63,25 +63,82 @@ describe("Queries", () => {
 
     it("- operator", async () => {
         const isVisible = await parseToPredicate("-coffee");
-        expect(await isVisible({ ...emptyDraft(), name: "coffee" })).toBe(
-            false,
-        );
-        expect(await isVisible({ ...emptyDraft(), name: "coff" })).toBe(true);
+        expect(
+            (await isVisible({ ...emptyDraft(), name: "coffee" })).isVisible,
+        ).toBe(false);
+        expect(await isVisible({ ...emptyDraft(), name: "coff" })).toEqual({
+            isVisible: true,
+            category: null,
+        });
     });
 
     it("reachableWith", async () => {
         const isVisible = await builderAsPredicate(reachableWith([0, 0], 1));
         expect(
-            await isVisible({
-                ...emptyDraft(),
-                coordinates: [{ lat: 0, lng: 0 }],
-            }),
+            (
+                await isVisible({
+                    ...emptyDraft(),
+                    coordinates: [{ lat: 0, lng: 0 }],
+                })
+            ).isVisible,
         ).toBe(true);
         expect(
-            await isVisible({
-                ...emptyDraft(),
-                coordinates: [{ lat: 30, lng: 30 }],
-            }),
+            (
+                await isVisible({
+                    ...emptyDraft(),
+                    coordinates: [{ lat: 30, lng: 30 }],
+                })
+            ).isVisible,
         ).toBe(false);
+    });
+
+    it("searches a built-in name when quoted as a term", async () => {
+        const query = await parseToPredicate('"category"');
+
+        await expect(
+            query({ ...emptyDraft(), name: "category" }),
+        ).resolves.toEqual({
+            isVisible: true,
+            category: null,
+        });
+    });
+
+    it("attaches a category to a matching query", async () => {
+        const query = await parseToPredicate(
+            'category: @"神社": 神社 or category: @"寺院": 寺院',
+        );
+
+        await expect(query({ ...emptyDraft(), name: "寺院" })).resolves.toEqual(
+            {
+                isVisible: true,
+                category: "寺院",
+            },
+        );
+    });
+
+    it("uses the first matching category when both alternatives match", async () => {
+        const query = await parseToPredicate(
+            'category: @"神社": 神社 or category: @"寺院": 寺院',
+        );
+
+        await expect(
+            query({ ...emptyDraft(), name: "神社 寺院" }),
+        ).resolves.toEqual({
+            isVisible: true,
+            category: "神社",
+        });
+    });
+
+    it("lets a category group multiple alternatives", async () => {
+        const query = await parseToPredicate(
+            'category: @"寺社": (神社 or 寺院)',
+        );
+
+        await expect(query({ ...emptyDraft(), name: "寺院" })).resolves.toEqual(
+            {
+                isVisible: true,
+                category: "寺社",
+            },
+        );
     });
 });

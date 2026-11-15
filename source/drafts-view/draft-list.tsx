@@ -149,6 +149,7 @@ export async function createDraftList({
         (view) => view.draft,
     );
     let filteredDrafts: Draft[] = [...allDrafts];
+    let filteredCategories = new Map<Draft["id"], string | null>();
     let selectedDraft: Draft | null = null;
     let currentSources: SourcesWithSelection = local.getConfig().sources || {
         selectedIndex: 0,
@@ -389,10 +390,49 @@ export async function createDraftList({
             }),
         );
     };
+    const categoryLegend = document.createElement("div");
+    categoryLegend.setAttribute("role", "list");
+    categoryLegend.setAttribute("aria-label", "カテゴリ別の色");
+    categoryLegend.style.flexWrap = "wrap";
+    categoryLegend.style.gap = "8px";
+    categoryLegend.style.padding = "4px";
+    categoryLegend.style.fontSize = "12px";
+    const updateCategoryLegend = (colors: ReadonlyMap<string, string>) => {
+        const items = Array.from(colors, ([category, color]) => {
+            const item = document.createElement("span");
+            item.setAttribute("role", "listitem");
+            item.style.display = "inline-flex";
+            item.style.alignItems = "center";
+            item.style.gap = "4px";
+
+            const swatch = document.createElement("span");
+            swatch.setAttribute("aria-hidden", "true");
+            swatch.style.width = "10px";
+            swatch.style.height = "10px";
+            swatch.style.border = `2px solid ${color}`;
+            swatch.style.borderRadius = "50%";
+
+            const label = document.createElement("span");
+            label.textContent = category;
+            item.append(swatch, label);
+            return item;
+        });
+        categoryLegend.replaceChildren(...items);
+        categoryLegend.hidden = colors.size === 0;
+        categoryLegend.style.display = colors.size === 0 ? "none" : "flex";
+    };
+    updateCategoryLegend(new Map());
     const updateHighlightedDrafts = (query: string) => {
-        overlay.setHighlightedDrafts(
-            query.trim() ? filteredDrafts : [],
-        );
+        const highlights = new Map<Draft["id"], string | null>();
+        if (query.trim()) {
+            for (const draft of filteredDrafts) {
+                highlights.set(
+                    draft.id,
+                    filteredCategories.get(draft.id) ?? null,
+                );
+            }
+        }
+        updateCategoryLegend(overlay.setHighlightedDrafts(highlights));
     };
     dispatchCountUpdatedEvent();
 
@@ -1084,6 +1124,7 @@ export async function createDraftList({
         overlay.deleteDraft(draftId);
         allDrafts = allDrafts.filter((d) => d.id !== draftId);
         filteredDrafts = filteredDrafts.filter((d) => d.id !== draftId);
+        filteredCategories.delete(draftId);
         updateHighlightedDrafts(getSelectedSource() ?? "");
 
         if (selectedDraft?.id === draftId) {
@@ -1103,6 +1144,7 @@ export async function createDraftList({
     const container = (
         <div class={classNames["container"]}>
             {filterInput.element}
+            {categoryLegend}
             <div class={classNames["list-container"]}>{virtualListElement}</div>
             <details class={classNames["detail-pane"]}>
                 <summary class={classNames["detail-summary"]}>
@@ -1256,7 +1298,7 @@ export async function createDraftList({
             );
             const diagnostics: SalDiagnostic[] = [];
             try {
-                filteredDrafts = await filterDrafts(
+                const filteredMatches = await filterDrafts(
                     records,
                     allDrafts,
                     geo,
@@ -1271,6 +1313,12 @@ export async function createDraftList({
                             source: "parser",
                         });
                     },
+                );
+                filteredDrafts = filteredMatches.map(({ draft }) => draft);
+                filteredCategories = new Map(
+                    filteredMatches.map(
+                        ({ draft, category }) => [draft.id, category] as const,
+                    ),
                 );
                 updateHighlightedDrafts(query);
                 editor.setErrors(queryId, diagnostics);

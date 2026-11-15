@@ -48,11 +48,28 @@ export function buildDraftMap(drafts: readonly Draft[]) {
 }
 
 export interface DraftQuery {
-    isVisible(draft: Draft): Effective<boolean>;
+    isVisible(draft: Draft): Effective<DraftQueryMatch>;
+}
+export interface DraftQueryMatch {
+    readonly isVisible: boolean;
+    readonly category: string | null;
 }
 export interface DraftQueryBuilder {
     initialize(environment: QueryEnvironment): Effective<DraftQuery>;
     isIgnorable: boolean;
+}
+
+const notVisible: DraftQueryMatch = {
+    isVisible: false,
+    category: null,
+};
+const visibleWithoutCategory: DraftQueryMatch = {
+    isVisible: true,
+    category: null,
+};
+
+function toQueryMatch(isVisible: boolean): DraftQueryMatch {
+    return isVisible ? visibleWithoutCategory : notVisible;
 }
 
 function hasTermInString(text: string, term: string): boolean {
@@ -81,7 +98,10 @@ function queryAsBuilder(query: DraftQuery): DraftQueryBuilder {
 function builderAsValue(builder: DraftQueryBuilder) {
     return builder as unknown as Value; // TODO:
 }
-function valueAsBuilder(v: Value) {
+export function valueAsBuilder(v: Value): DraftQueryBuilder {
+    if (!isDraftQueryBuilderValue(v)) {
+        throw new Error("Query expression did not produce a draft query.");
+    }
     return v as unknown as DraftQueryBuilder;
 }
 
@@ -92,7 +112,7 @@ function stringTermQuery(text: string) {
             const term = text.toLocaleLowerCase();
             return done({
                 isVisible(d) {
-                    return done(hasTermInDraft(d, term));
+                    return done(toQueryMatch(hasTermInDraft(d, term)));
                 },
             });
         },
@@ -102,7 +122,7 @@ function any() {
     return builderAsValue(
         queryAsBuilder({
             isVisible() {
-                return done(true);
+                return done(visibleWithoutCategory);
             },
         }),
     );
@@ -116,12 +136,49 @@ function not(b: DraftQueryBuilder) {
             const q = yield* b.initialize(e);
             return {
                 *isVisible(d) {
-                    return !(yield* q.isVisible(d));
+                    const match = yield* q.isVisible(d);
+                    return match.isVisible
+                        ? notVisible
+                        : visibleWithoutCategory;
                 },
                 isAny: false,
             };
         },
     });
+}
+
+function withCategory(label: string, builder: DraftQueryBuilder) {
+    if (builder.isIgnorable) return builder;
+
+    return {
+        isIgnorable: false,
+        *initialize(environment: QueryEnvironment) {
+            const query = yield* builder.initialize(environment);
+            return {
+                *isVisible(draft: Draft) {
+                    const match = yield* query.isVisible(draft);
+                    if (!match.isVisible) return match;
+                    return {
+                        ...match,
+                        category: label,
+                    };
+                },
+            };
+        },
+    };
+}
+
+function isDraftQueryBuilderValue(
+    value: Value,
+): value is { readonly [k: string]: Value } {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "initialize" in value &&
+        typeof value["initialize"] === "function" &&
+        "isIgnorable" in value &&
+        typeof value["isIgnorable"] === "boolean"
+    );
 }
 
 function fromString(x: Value) {
@@ -139,10 +196,16 @@ function and(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
             const q2 = yield* b2.initialize(e);
             return {
                 *isVisible(draft) {
-                    return (
-                        (yield* q1.isVisible(draft)) &&
-                        (yield* q2.isVisible(draft))
-                    );
+                    const match1 = yield* q1.isVisible(draft);
+                    if (!match1.isVisible) return notVisible;
+
+                    const match2 = yield* q2.isVisible(draft);
+                    if (!match2.isVisible) return notVisible;
+
+                    const category = match1.category ?? match2.category;
+                    return category === null
+                        ? visibleWithoutCategory
+                        : { isVisible: true, category };
                 },
             };
         },
@@ -160,7 +223,9 @@ function or(b1: DraftQueryBuilder, b2: DraftQueryBuilder): DraftQueryBuilder {
             const q2 = yield* b2.initialize(e);
             return {
                 *isVisible(d) {
-                    return (yield* q1.isVisible(d)) || (yield* q2.isVisible(d));
+                    const match1 = yield* q1.isVisible(d);
+                    if (match1.isVisible) return match1;
+                    return yield* q2.isVisible(d);
                 },
             };
         },
@@ -174,7 +239,7 @@ function reachableWithQuery(
     return {
         isVisible(d: Draft) {
             const [p2] = d.coordinates;
-            return done(distance(center, p2) <= radius);
+            return done(toQueryMatch(distance(center, p2) <= radius));
         },
     };
 }
@@ -199,8 +264,8 @@ function builderOfPredicate(
         isIgnorable: false,
         initialize(e) {
             return done({
-                isVisible(d) {
-                    return predicate(e, d);
+                *isVisible(d) {
+                    return toQueryMatch(yield* predicate(e, d));
                 },
             });
         },
@@ -244,12 +309,12 @@ function builderOfCellPredicate(
                     const stat17 = yield* getFreshCell17(e, d);
 
                     // セル情報が取得されていないか古いなら検索にヒットさせる
-                    if (stat17 == null) return true;
+                    if (stat17 == null) return visibleWithoutCategory;
 
                     const stat14 = yield* getFreshStat14(e, d);
-                    if (stat14 == null) return true;
+                    if (stat14 == null) return visibleWithoutCategory;
 
-                    return predicate(stat14, stat17, d);
+                    return toQueryMatch(predicate(stat14, stat17, d));
                 },
             });
         },
@@ -338,7 +403,7 @@ export function createStandardQueries() {
         initialize() {
             return done({
                 isVisible() {
-                    return done(true);
+                    return done(visibleWithoutCategory);
                 },
             });
         },
@@ -357,6 +422,24 @@ export function createStandardQueries() {
         },
         fromString,
         fromWord: fromString,
+        category(label) {
+            if (typeof label !== "string") {
+                throw new Error(
+                    'category expects a raw string label, for example @"神社".',
+                );
+            }
+            const normalizedLabel = label.normalize("NFC").trim();
+            if (!normalizedLabel) {
+                throw new Error("category label must not be empty.");
+            }
+            return done((query: Value) => {
+                return done(
+                    builderAsValue(
+                        withCategory(normalizedLabel, valueAsBuilder(query)),
+                    ),
+                );
+            });
+        },
         not_(x) {
             return done(not(valueAsBuilder(x)));
         },
