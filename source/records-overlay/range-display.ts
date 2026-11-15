@@ -354,6 +354,7 @@ function evaluateMask(
     height: number,
     viewport: Viewport,
     scale: number,
+    override?: { readonly id: string; readonly value: boolean },
 ): RangeCanvas {
     const stack: RangeCanvas[] = [];
     const operations: (
@@ -378,7 +379,12 @@ function evaluateMask(
                 const circle = circles.get(node.id);
                 if (!circle)
                     throw new Error(`Missing range circle: ${node.id}`);
-                if (circle.radius >= Math.PI * EARTH_RADIUS_METERS) {
+                if (node.id === override?.id) {
+                    if (override.value) {
+                        context.fillStyle = "#fff";
+                        context.fillRect(0, 0, width, height);
+                    }
+                } else if (circle.radius >= Math.PI * EARTH_RADIUS_METERS) {
                     context.fillStyle = "#fff";
                     context.fillRect(0, 0, width, height);
                 } else if (circle.radius > 0) {
@@ -429,6 +435,20 @@ function evaluateMask(
     return stack[0]!;
 }
 
+function getExpressionCircleIds(
+    expression: RangeDisplayExpression,
+): Set<string> {
+    const ids = new Set<string>();
+    const pending = [expression];
+    while (pending.length > 0) {
+        const node = pending.pop()!;
+        if (node.type === "circle") ids.add(node.id);
+        else if (node.type === "not") pending.push(node.expression);
+        else pending.push(node.left, node.right);
+    }
+    return ids;
+}
+
 export function renderRangeDisplay(
     canvas: RangeCanvas,
     pool: RangeCanvasPool,
@@ -476,18 +496,72 @@ export function renderRangeDisplay(
         }
     }
 
-    for (const circle of plan.circles) {
-        context.save();
-        createCirclePath(context, circle, viewport, mapScale);
-        context.strokeStyle =
-            circle.contribution === "contributing"
-                ? "rgba(255, 255, 255, 0.72)"
-                : "rgba(255, 255, 255, 0.3)";
-        context.lineWidth = circle.contribution === "contributing" ? 1 : 1.5;
-        context.setLineDash(
-            circle.contribution === "contributing" ? [] : [5, 5],
+    if (plan.expression === null) {
+        for (const circle of plan.circles) {
+            context.save();
+            createCirclePath(context, circle, viewport, mapScale);
+            context.strokeStyle =
+                circle.contribution === "contributing"
+                    ? "rgba(255, 255, 255, 0.72)"
+                    : "rgba(255, 255, 255, 0.3)";
+            context.lineWidth =
+                circle.contribution === "contributing" ? 1 : 1.5;
+            context.setLineDash(
+                circle.contribution === "contributing" ? [] : [5, 5],
+            );
+            context.stroke();
+            context.restore();
+        }
+        return;
+    }
+
+    if (typeof plan.expression === "boolean") return;
+
+    for (const id of getExpressionCircleIds(plan.expression)) {
+        const circle = circles.get(id);
+        if (!circle) throw new Error(`Missing range circle: ${id}`);
+        const outsideMask = evaluateMask(
+            plan.expression,
+            circles,
+            pool,
+            width,
+            height,
+            viewport,
+            mapScale,
+            { id, value: false },
         );
-        context.stroke();
-        context.restore();
+        const insideMask = evaluateMask(
+            plan.expression,
+            circles,
+            pool,
+            width,
+            height,
+            viewport,
+            mapScale,
+            { id, value: true },
+        );
+        const maskContext = outsideMask.getContext("2d");
+        if (!maskContext)
+            throw new Error("2D canvas context is unavailable.");
+        maskContext.globalCompositeOperation = "xor";
+        maskContext.drawImage(insideMask as CanvasImageSource, 0, 0);
+        maskContext.globalCompositeOperation = "source-over";
+        pool.release(insideMask);
+
+        const outline = pool.acquire(width, height);
+        const outlineContext = outline.getContext("2d");
+        if (!outlineContext)
+            throw new Error("2D canvas context is unavailable.");
+        outlineContext.clearRect(0, 0, width, height);
+        createCirclePath(outlineContext, circle, viewport, mapScale);
+        outlineContext.strokeStyle = "rgba(255, 255, 255, 0.72)";
+        outlineContext.lineWidth = 1;
+        outlineContext.stroke();
+        outlineContext.globalCompositeOperation = "destination-in";
+        outlineContext.drawImage(outsideMask as CanvasImageSource, 0, 0);
+        outlineContext.globalCompositeOperation = "source-over";
+        context.drawImage(outline as CanvasImageSource, 0, 0);
+        pool.release(outline);
+        pool.release(outsideMask);
     }
 }
