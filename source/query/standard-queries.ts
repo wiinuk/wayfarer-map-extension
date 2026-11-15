@@ -149,6 +149,7 @@ function not(b: DraftQueryBuilder) {
 
 function classifyAs(label: string, builder: DraftQueryBuilder) {
     if (builder.isIgnorable) return builder;
+    const categories = [label];
 
     return {
         isIgnorable: false,
@@ -160,7 +161,7 @@ function classifyAs(label: string, builder: DraftQueryBuilder) {
                     if (!match.isVisible) return match;
                     return {
                         isVisible: true,
-                        categories: [label],
+                        categories,
                     };
                 },
             };
@@ -170,6 +171,7 @@ function classifyAs(label: string, builder: DraftQueryBuilder) {
 
 function tag(label: string, builder: DraftQueryBuilder) {
     if (builder.isIgnorable) return builder;
+    const singleCategory = [label];
 
     return {
         isIgnorable: false,
@@ -180,6 +182,12 @@ function tag(label: string, builder: DraftQueryBuilder) {
                     const match = yield* query.isVisible(draft);
                     if (!match.isVisible || match.categories.includes(label)) {
                         return match;
+                    }
+                    if (match.categories.length === 0) {
+                        return {
+                            isVisible: true,
+                            categories: singleCategory,
+                        };
                     }
                     return {
                         isVisible: true,

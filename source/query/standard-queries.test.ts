@@ -116,6 +116,18 @@ describe("Queries", () => {
         );
     });
 
+    it("shares single-category results across matches", async () => {
+        for (const source of [
+            'classifyAs: @"神社": 神社',
+            'tag: @"神社": 神社',
+        ]) {
+            const query = await parseToPredicate(source);
+            const first = await query({ ...emptyDraft(), name: "神社 1" });
+            const second = await query({ ...emptyDraft(), name: "神社 2" });
+            expect(first.categories).toBe(second.categories);
+        }
+    });
+
     it("uses the first matching classification when both alternatives match", async () => {
         const query = await parseToPredicate(
             'classifyAs: @"神社": 神社 or classifyAs: @"寺院": 寺院',

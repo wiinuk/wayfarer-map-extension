@@ -29,6 +29,7 @@ export interface DraftWithView {
 interface MapView {
     readonly marker: google.maps.Marker;
     readonly label: google.maps.MarkerLabel;
+    currentIcon: NonNullable<google.maps.MarkerOptions["icon"]>;
 }
 
 export interface CircleConfig {
@@ -97,6 +98,8 @@ interface ViewOptionsCache {
     >;
     readonly draftMarkerLabel: google.maps.MarkerLabel;
 }
+const noDraftMarkerColors: readonly string[] = [];
+
 function createDefaultViewConfig(): ViewConfig {
     const cell: PolygonConfig = {
         strokeColor: "rgba(240, 252, 249, 0.7)",
@@ -346,6 +349,7 @@ function createMapView(overlay: DraftsOverlay, draft: remote.Draft): MapView {
     return {
         label,
         marker,
+        currentIcon: overlay.cachedOptions.draftMarkerIcon,
     };
 }
 
@@ -481,21 +485,39 @@ export function createDraftsOverlay(
                 Array.from(categoriesByDraftId.values()).flat(),
             );
             const colorsByDraftId = new Map<DraftId, readonly string[]>();
+            const colorsBySingleCategory = new Map<string, readonly string[]>();
             for (const [draftId, categories] of categoriesByDraftId) {
-                const colors =
-                    categories.length === 0
-                        ? []
-                        : Array.from(new Set(categories))
-                              .sort()
-                              .map((category) => {
-                                  const color = categoryColors.get(category);
-                                  if (color == null) {
-                                      throw new Error(
-                                          `No color assigned to category "${category}".`,
-                                      );
-                                  }
-                                  return color;
-                              });
+                let colors: readonly string[];
+                if (categories.length === 0) {
+                    colors = noDraftMarkerColors;
+                } else if (categories.length === 1) {
+                    const category = categories[0]!;
+                    const existingColors = colorsBySingleCategory.get(category);
+                    if (existingColors != null) {
+                        colors = existingColors;
+                    } else {
+                        const color = categoryColors.get(category);
+                        if (color == null) {
+                            throw new Error(
+                                `No color assigned to category "${category}".`,
+                            );
+                        }
+                        colors = [color];
+                        colorsBySingleCategory.set(category, colors);
+                    }
+                } else {
+                    colors = Array.from(new Set(categories))
+                        .sort()
+                        .map((category) => {
+                            const color = categoryColors.get(category);
+                            if (color == null) {
+                                throw new Error(
+                                    `No color assigned to category "${category}".`,
+                                );
+                            }
+                            return color;
+                        });
+                }
                 colorsByDraftId.set(draftId, colors);
             }
             for (const [draftId, draftWithView] of this.drafts) {
@@ -537,7 +559,10 @@ export function createDraftsOverlay(
                         }
                     }
                 }
-                draftWithView.mapView.marker.setIcon(icon);
+                if (draftWithView.mapView.currentIcon !== icon) {
+                    draftWithView.mapView.marker.setIcon(icon);
+                    draftWithView.mapView.currentIcon = icon;
+                }
             }
             this.draftsCanvasOverlay.setHighlightedDrafts(colorsByDraftId);
             return categoryColors;
